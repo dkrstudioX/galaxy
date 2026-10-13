@@ -32,7 +32,7 @@
     }).filter(function (p) { return p.name; });
 
     out.slots = arr(data.slots).filter(isObj).map(function (s) {
-      return { id: str(s.id) || uid(), name: str(s.name).trim() };
+      return { id: str(s.id) || uid(), name: str(s.name).trim(), capacity: str(s.capacity).trim() };
     }).filter(function (s) { return s.name; });
 
     out.categories = arr(data.categories).filter(isObj).map(function (c) {
@@ -41,7 +41,7 @@
     }).filter(function (c) { return c.name; });
 
     out.ships = arr(data.ships).filter(isObj).map(function (s) {
-      return { id: str(s.id) || uid(), name: str(s.name).trim(), categoryId: str(s.categoryId), values: obj(s.values), slotIds: arr(s.slotIds).map(str) };
+      return { id: str(s.id) || uid(), name: str(s.name).trim(), categoryId: str(s.categoryId), values: obj(s.values), slots: makeShipSlots(s) };
     }).filter(function (s) { return s.name; });
 
     out.resources = arr(data.resources).filter(isObj).map(makeItem).filter(function (r) { return r.name; });
@@ -51,23 +51,50 @@
     return out;
 
     function makeItem(o) {
-      return { id: str(o.id) || uid(), name: str(o.name).trim(), categoryId: str(o.categoryId), values: obj(o.values), slotId: o.slotId ? str(o.slotId) : null };
+      return { id: str(o.id) || uid(), name: str(o.name).trim(), categoryId: str(o.categoryId), values: obj(o.values), mass: str(o.mass).trim(), slotId: o.slotId ? str(o.slotId) : null };
+    }
+
+    /* Слоты корабля: [{slotId, contents:[{kind, itemId, qty}]}].
+       Старый формат (slotIds: [id]) мигрирует — содержимое остаётся пустым. */
+    function makeShipSlots(s) {
+      var entries = arr(s.slots);
+      if (!entries.length && Array.isArray(s.slotIds)) {
+        entries = s.slotIds.map(function (id) { return { slotId: str(id), contents: [] }; });
+      }
+      return entries.filter(isObj).map(function (e) {
+        return {
+          slotId: str(e.slotId),
+          contents: arr(e.contents).filter(isObj).map(function (c) {
+            var qty = Math.floor(Number(str(c.qty).replace(',', '.')));
+            if (!isFinite(qty) || qty < 1) qty = 1;
+            return { kind: c.kind === 'resource' ? 'resource' : 'equipment', itemId: str(c.itemId), qty: String(qty) };
+          }).filter(function (c) { return c.itemId; })
+        };
+      });
     }
   }
 
   /* Убираем ссылки на несуществующие записи, чтобы база всегда была согласованной. */
   function pruneRefs(out) {
     var propIds = {}, catIds = {}, slotIds = {};
+    var itemIds = { resources: {}, equipments: {} };
     out.props.forEach(function (p) { propIds[p.id] = true; });
     out.categories.forEach(function (c) { catIds[c.id] = true; });
     out.slots.forEach(function (s) { slotIds[s.id] = true; });
+    out.resources.forEach(function (r) { itemIds.resources[r.id] = true; });
+    out.equipments.forEach(function (e) { itemIds.equipments[e.id] = true; });
 
     out.categories.forEach(function (c) {
       c.propIds = c.propIds.filter(function (id) { return propIds[id]; });
     });
     out.ships.forEach(function (s) {
       if (!catIds[s.categoryId]) s.categoryId = '';
-      s.slotIds = s.slotIds.filter(function (id) { return slotIds[id]; });
+      s.slots = s.slots.filter(function (e) { return slotIds[e.slotId]; });
+      s.slots.forEach(function (e) {
+        e.contents = e.contents.filter(function (c) {
+          return itemIds[c.kind === 'resource' ? 'resources' : 'equipments'][c.itemId];
+        });
+      });
     });
     out.resources.concat(out.equipments).forEach(function (item) {
       if (!catIds[item.categoryId]) item.categoryId = '';
@@ -141,7 +168,9 @@
 
   function slotUsage(slotId) {
     return {
-      ships: all('ships').filter(function (s) { return s.slotIds.indexOf(slotId) > -1; }).map(function (s) { return s.name; }),
+      ships: all('ships').filter(function (s) {
+        return s.slots.some(function (e) { return e.slotId === slotId; });
+      }).map(function (s) { return s.name; }),
       resources: all('resources').filter(function (r) { return r.slotId === slotId; }).map(function (r) { return r.name; }),
       equipments: all('equipments').filter(function (e) { return e.slotId === slotId; }).map(function (e) { return e.name; })
     };
@@ -186,18 +215,29 @@
     var d = blank();
 
     function addProp(name, value) { var p = { id: uid(), name: name, value: value }; d.props.push(p); return p; }
-    function addSlot(name) { var s = { id: uid(), name: name }; d.slots.push(s); return s; }
+    function addSlot(name, capacity) { var s = { id: uid(), name: name, capacity: capacity || '' }; d.slots.push(s); return s; }
     function addCat(type, name, propIds) { var c = { id: uid(), type: type, name: name, propIds: propIds }; d.categories.push(c); return c; }
     function vals(pairs) {
       var out = {};
       for (var i = 0; i < pairs.length; i++) out[pairs[i][0].id] = pairs[i][1];
       return out;
     }
-    function addShip(name, cat, valuePairs, slotList) {
-      d.ships.push({ id: uid(), name: name, categoryId: cat.id, values: vals(valuePairs), slotIds: slotList.map(function (s) { return s.id; }) });
+    /* Слоты корабля с содержимым по умолчанию: [{ slot, contents: [{ kind, item, qty }] }] */
+    function addShip(name, cat, valuePairs, slotEntries) {
+      d.ships.push({
+        id: uid(), name: name, categoryId: cat.id, values: vals(valuePairs),
+        slots: slotEntries.map(function (e) {
+          return {
+            slotId: e.slot.id,
+            contents: (e.contents || []).map(function (c) { return { kind: c.kind, itemId: c.item.id, qty: String(c.qty) }; })
+          };
+        })
+      });
     }
-    function addItem(coll, name, cat, valuePairs, slot) {
-      d[coll].push({ id: uid(), name: name, categoryId: cat.id, values: vals(valuePairs), slotId: slot ? slot.id : null });
+    function addItem(coll, name, cat, valuePairs, mass, slot) {
+      var item = { id: uid(), name: name, categoryId: cat.id, values: vals(valuePairs), mass: mass, slotId: slot ? slot.id : null };
+      d[coll].push(item);
+      return item;
     }
 
     var durability = addProp('Прочность', '100');
@@ -209,33 +249,48 @@
     var fuel = addProp('Расход топлива', '2');
     var rarity = addProp('Редкость', 'Обычный');
 
-    var slotWeapon = addSlot('Оружие');
-    var slotEngine = addSlot('Двигатель');
-    var slotShield = addSlot('Щит');
-    var slotCargo = addSlot('Грузовой отсек');
+    var slotWeapon = addSlot('Оружие', '30');
+    var slotEngine = addSlot('Двигатель', '40');
+    var slotShield = addSlot('Щит', '25');
+    var slotCargo = addSlot('Грузовой отсек', '200');
 
     var catFrigate = addCat('ship', 'Фрегат', [durability.id, speed.id, mass.id]);
     var catCruiser = addCat('ship', 'Крейсер', [durability.id, speed.id, mass.id, cargo.id]);
-    var catMetals = addCat('resource', 'Металлы', [mass.id, rarity.id]);
+    var catMetals = addCat('resource', 'Металлы', [rarity.id]);
     var catCrystals = addCat('resource', 'Кристаллы', [rarity.id]);
-    var catWeapons = addCat('equipment', 'Оружие', [damage.id, mass.id]);
+    var catWeapons = addCat('equipment', 'Оружие', [damage.id]);
     var catEngines = addCat('equipment', 'Двигатели', [speed.id, fuel.id]);
-    var catDefense = addCat('equipment', 'Защита', [defense.id, mass.id]);
-    var catOther = addCat('equipment', 'Прочее', [mass.id]);
+    var catDefense = addCat('equipment', 'Защита', [defense.id]);
+    var catOther = addCat('equipment', 'Прочее', []);
+
+    /* Масса предмета — базовое поле, именно она учитывается вместимостью слотов. */
+    var iron = addItem('resources', 'Железо', catMetals, [[rarity, 'Обычный']], '8', null);
+    var iridium = addItem('resources', 'Иридий', catMetals, [[rarity, 'Редкий']], '12', null);
+    addItem('resources', 'Плазменный боеприпас', catCrystals, [[rarity, 'Необычный']], '3', slotWeapon);
+
+    var laser = addItem('equipments', 'Лазер Mk I', catWeapons, [[damage, '35']], '6', slotWeapon);
+    var rockets = addItem('equipments', 'Ракетная установка', catWeapons, [[damage, '70']], '18', slotWeapon);
+    var engine = addItem('equipments', 'Ионный двигатель', catEngines, [[speed, '32'], [fuel, '3']], '25', slotEngine);
+    var shield = addItem('equipments', 'Плазменный щит', catDefense, [[defense, '28']], '14', slotShield);
+    var repairKit = addItem('equipments', 'Ремкомплект', catOther, [], '2', null);
 
     /* У корабля слоты могут повторяться — порядок и повторы сохраняются как заданы. */
-    addShip('Сокол', catFrigate, [[durability, '90'], [speed, '26'], [mass, '45']], [slotWeapon, slotWeapon, slotEngine]);
-    addShip('Титан', catCruiser, [[durability, '160'], [speed, '14'], [mass, '220'], [cargo, '400']], [slotWeapon, slotWeapon, slotShield, slotCargo, slotCargo, slotCargo]);
-
-    addItem('resources', 'Железо', catMetals, [[mass, '8'], [rarity, 'Обычный']], null);
-    addItem('resources', 'Иридий', catMetals, [[mass, '12'], [rarity, 'Редкий']], null);
-    addItem('resources', 'Плазменный боеприпас', catCrystals, [[rarity, 'Необычный']], slotWeapon);
-
-    addItem('equipments', 'Лазер Mk I', catWeapons, [[damage, '35'], [mass, '6']], slotWeapon);
-    addItem('equipments', 'Ракетная установка', catWeapons, [[damage, '70'], [mass, '18']], slotWeapon);
-    addItem('equipments', 'Ионный двигатель', catEngines, [[speed, '32'], [fuel, '3']], slotEngine);
-    addItem('equipments', 'Плазменный щит', catDefense, [[defense, '28'], [mass, '14']], slotShield);
-    addItem('equipments', 'Ремкомплект', catOther, [[mass, '2']], null);
+    addShip('Сокол', catFrigate, [[durability, '90'], [speed, '26'], [mass, '45']], [
+      { slot: slotWeapon, contents: [{ kind: 'equipment', item: laser, qty: 2 }] },
+      { slot: slotWeapon, contents: [{ kind: 'equipment', item: rockets, qty: 1 }] },
+      { slot: slotEngine, contents: [{ kind: 'equipment', item: engine, qty: 1 }] }
+    ]);
+    addShip('Титан', catCruiser, [[durability, '160'], [speed, '14'], [mass, '220'], [cargo, '400']], [
+      { slot: slotWeapon, contents: [{ kind: 'equipment', item: rockets, qty: 1 }] },
+      { slot: slotWeapon, contents: [{ kind: 'equipment', item: laser, qty: 2 }] },
+      { slot: slotShield, contents: [{ kind: 'equipment', item: shield, qty: 1 }] },
+      { slot: slotCargo, contents: [
+        { kind: 'resource', item: iron, qty: 10 },
+        { kind: 'resource', item: iridium, qty: 5 }
+      ] },
+      { slot: slotCargo, contents: [{ kind: 'equipment', item: repairKit, qty: 5 }] },
+      { slot: slotCargo, contents: [] }
+    ]);
 
     return d;
   }
@@ -261,18 +316,53 @@
     drop: drop,
 
     createProp: function (name, value) { return insert('props', { name: name, value: value }); },
-    createSlot: function (name) { return insert('slots', { name: name }); },
+    createSlot: function (name, capacity) { return insert('slots', { name: name, capacity: capacity || '' }); },
     createCategory: function (type, name, propIds) { return insert('categories', { type: type, name: name, propIds: (propIds || []).slice() }); },
     createObject: function (coll, data) {
       var item = { name: data.name, categoryId: data.categoryId, values: data.values || {} };
-      if (coll === 'ships') item.slotIds = (data.slotIds || []).slice();
-      else item.slotId = data.slotId || null;
+      if (coll === 'ships') {
+        item.slots = (data.slots || []).map(function (e) {
+          return {
+            slotId: e.slotId,
+            contents: (e.contents || []).map(function (c) { return { kind: c.kind, itemId: c.itemId, qty: String(c.qty) }; })
+          };
+        });
+      } else {
+        item.mass = data.mass || '';
+        item.slotId = data.slotId || null;
+      }
       return insert(coll, item);
     },
 
     propUsage: propUsage,
     slotUsage: slotUsage,
     categoryUsage: categoryUsage,
+
+    /* Вместимость слота: пусто или не число — без ограничения. */
+    slotCapacity: function (slot) {
+      if (!slot) return Infinity;
+      var n = parseFloat(str(slot.capacity).replace(',', '.'));
+      return isFinite(n) && n >= 0 ? n : Infinity;
+    },
+    /* Масса одной единицы предмета: пусто или не число — 0. */
+    massOf: function (item) {
+      if (!item) return 0;
+      var n = parseFloat(str(item.mass).replace(',', '.'));
+      return isFinite(n) && n > 0 ? n : 0;
+    },
+    /* Суммарная масса содержимого слота: масса предмета × количество. */
+    usedMass: function (contents) {
+      var sum = 0;
+      (contents || []).forEach(function (c) {
+        var item = byId(c.kind === 'resource' ? 'resources' : 'equipments', c.itemId);
+        sum += (parseInt(c.qty, 10) || 0) * Store.massOf(item);
+      });
+      return sum;
+    },
+    fmtNum: function (n) {
+      if (!isFinite(n)) return '∞';
+      return String(Math.round(n * 100) / 100);
+    },
 
     exportJSON: exportJSON,
     importJSON: importJSON,

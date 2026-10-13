@@ -95,7 +95,7 @@
   function renderSlots(root) {
     root.appendChild(UI.pageHead({
       title: 'Слоты',
-      subtitle: 'Справочник слотов: слоты назначаются кораблям, предметы привязываются к слоту.',
+      subtitle: 'Справочник слотов: слоты назначаются кораблям, вместимость ограничивает массу их содержимого.',
       addLabel: 'Добавить слот',
       onAdd: function () { openSlotModal(null); }
     }));
@@ -112,7 +112,14 @@
 
     root.appendChild(UI.table({
       columns: [
-        { title: 'Название', render: function (s) { return h('span', { class: 'cell-main', text: s.name }); } }
+        { title: 'Название', render: function (s) { return h('span', { class: 'cell-main', text: s.name }); } },
+        {
+          title: 'Вместимость',
+          render: function (s) {
+            var cap = Store.slotCapacity(s);
+            return h('span', { class: isFinite(cap) ? '' : 'muted', text: isFinite(cap) ? Store.fmtNum(cap) + ' кг' : '∞' });
+          }
+        }
       ],
       rows: items,
       actions: function (s) {
@@ -126,7 +133,15 @@
 
   function openSlotModal(existing) {
     var nameInput = UI.input({ value: existing ? existing.name : '', placeholder: 'Например: Оружие' });
-    var body = h('div', {}, UI.field('Название', nameInput));
+    var capInput = UI.input({
+      type: 'number', min: 0, step: 'any',
+      value: existing ? existing.capacity : '',
+      placeholder: 'Без ограничения'
+    });
+    var body = h('div', {},
+      UI.field('Название', nameInput),
+      UI.field('Вместимость, кг', capInput, 'Сколько массы содержимого помещается в слот корабля. Пусто — без ограничения.')
+    );
 
     UI.modal({
       title: existing ? 'Изменить слот' : 'Новый слот',
@@ -135,11 +150,12 @@
         var name = nameInput.value.trim();
         if (!name) return 'Укажите название слота.';
         if (Store.nameTaken('slots', name, existing ? existing.id : null)) return 'Слот с таким названием уже есть.';
+        var capacity = capInput.value.trim();
         if (existing) {
-          Store.patch('slots', existing.id, { name: name });
+          Store.patch('slots', existing.id, { name: name, capacity: capacity });
           UI.toast('Слот изменён', 'ok');
         } else {
-          Store.createSlot(name);
+          Store.createSlot(name, capacity);
           UI.toast('Слот добавлен', 'ok');
         }
         App.refresh();

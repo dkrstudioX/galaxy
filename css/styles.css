@@ -351,11 +351,43 @@ select.input { cursor: pointer; }
   background: rgba(13, 21, 38, 0.6);
   padding: 6px;
 }
-.slot-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 7px; }
+.slot-item { display: flex; flex-direction: column; gap: 6px; padding: 6px; border-radius: 7px; }
 .slot-item:hover { background: rgba(124, 92, 255, 0.06); }
 .slot-item.dragging { opacity: 0.4; }
-.slot-item .input { flex: 1; min-width: 0; }
 .slot-item .icon-btn { flex: none; font-size: 13px; }
+
+.slot-item-head { display: flex; align-items: center; gap: 6px; }
+.slot-item-head .slot-select { flex: 1; min-width: 0; }
+
+.cap-badge {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(124, 92, 255, 0.1);
+  border: 1px solid var(--border-soft);
+  border-radius: 20px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+.cap-badge.cap-over { color: #fff; background: rgba(255, 95, 122, 0.75); border-color: transparent; }
+
+.slot-contents {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(13, 21, 38, 0.45);
+}
+.content-row { display: flex; align-items: center; gap: 6px; }
+.content-row .content-kind { flex: none; width: 128px; }
+.content-row .content-item { flex: 1; min-width: 0; }
+.content-row .content-qty { flex: none; width: 64px; }
+.content-row .icon-btn { flex: none; font-size: 13px; }
+.content-new { padding-top: 4px; border-top: 1px dashed var(--border-soft); }
+.content-add-btn { flex: none; white-space: nowrap; }
 .drag-handle {
   flex: none;
   display: flex;
@@ -407,6 +439,7 @@ select.input { cursor: pointer; }
 }
 .toast-ok { border-left-color: var(--ok); }
 .toast-err { border-left-color: var(--danger); }
+.toast-warn { border-left-color: #ffb020; }
 .toast-out { opacity: 0; transform: translateX(8px); transition: opacity 0.35s ease, transform 0.35s ease; }
 @keyframes slide-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
 

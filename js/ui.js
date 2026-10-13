@@ -154,7 +154,11 @@
 
   function input(opts) {
     opts = opts || {};
-    return h('input', { class: 'input', type: opts.type || 'text', placeholder: opts.placeholder || '', value: opts.value || '' });
+    var el = h('input', { class: 'input', type: opts.type || 'text', placeholder: opts.placeholder || '', value: opts.value || '' });
+    if (opts.min !== undefined) el.setAttribute('min', opts.min);
+    if (opts.max !== undefined) el.setAttribute('max', opts.max);
+    if (opts.step !== undefined) el.setAttribute('step', opts.step);
+    return el;
   }
 
   function select(opts) {

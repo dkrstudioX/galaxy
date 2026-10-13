@@ -63,7 +63,7 @@
   function renderShips(root) {
     root.appendChild(UI.pageHead({
       title: 'Корабли',
-      subtitle: 'Корабли: категория, значения свойств и набор слотов.',
+      subtitle: 'Корабли: категория, значения свойств и слоты с содержимым по умолчанию.',
       addLabel: 'Добавить корабль',
       onAdd: function () { openShipModal(null); }
     }));
@@ -93,11 +93,16 @@
         {
           title: 'Слоты',
           render: function (s) {
-            var names = (s.slotIds || []).map(function (id) {
-              var sl = Store.byId('slots', id);
-              return sl ? sl.name : null;
+            var parts = (s.slots || []).map(function (e) {
+              var sl = Store.byId('slots', e.slotId);
+              if (!sl) return null;
+              var names = e.contents.map(function (c) {
+                var it = Store.byId(c.kind === 'resource' ? 'resources' : 'equipments', c.itemId);
+                return it ? it.name + ' ×' + c.qty : null;
+              }).filter(Boolean);
+              return names.length ? sl.name + ' (' + names.join(', ') + ')' : sl.name;
             }).filter(Boolean);
-            return h('span', { class: names.length ? '' : 'muted', text: names.length ? names.join(', ') : '—' });
+            return h('span', { class: parts.length ? '' : 'muted', text: parts.length ? parts.join(', ') : '—' });
           }
         }
       ],
@@ -111,9 +116,24 @@
     }));
   }
 
+  var KIND_LABELS = { equipment: 'Оборудование', resource: 'Ресурс' };
+
+  /* Предметы, подходящие в слот: привязанные к такому же слоту или «Без слота». */
+  function compatibleItems(kind, slotId) {
+    var coll = kind === 'resource' ? 'resources' : 'equipments';
+    return Store[coll]().filter(function (it) { return !it.slotId || it.slotId === slotId; });
+  }
+
+  function itemLabel(it) {
+    var m = Store.massOf(it);
+    return it.name + (m ? ' (' + Store.fmtNum(m) + ' кг)' : '');
+  }
+
   /* Редактор слотов корабля: одинаковые слоты можно добавлять сколько угодно,
-     порядок меняется перетаскиванием за ручку или кнопками ↑ ↓. */
-  function buildSlotsSection(slots, selectedIds) {
+     порядок меняется перетаскиванием за ручку или кнопками ↑ ↓.
+     У каждого слота — содержимое по умолчанию; сумма масс (масса × количество)
+     не должна превышать вместимость слота. */
+  function buildSlotsSection(slots, slotEntries) {
     if (!slots.length) {
       return {
         el: h('div', { class: 'hint-box', text: 'Слотов пока нет. Создайте их на странице «Слоты».' }),
@@ -123,6 +143,7 @@
 
     var listEl = h('div', { class: 'slot-edit-list' });
     var dragRow = null;
+    var rowStates = [];
 
     function move(row, dir) {
       if (dir < 0 && row.previousElementSibling) {
@@ -132,8 +153,9 @@
       }
     }
 
-    function addRow(slotId) {
+    function addRow(slotId, contents) {
       var row = h('div', { class: 'slot-item' });
+      var contentRows = [];
 
       var handle = h('span', { class: 'drag-handle', title: 'Перетащить, чтобы изменить порядок' });
       handle.setAttribute('draggable', 'true');
@@ -142,16 +164,218 @@
         '<circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/>' +
         '<circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/></svg>';
 
-      var sel = UI.select({
+      var slotSelect = UI.select({
         options: slots.map(function (sl) { return { value: sl.id, label: sl.name }; }),
         value: slotId || slots[0].id
       });
+      slotSelect.classList.add('slot-select');
 
-      row.appendChild(handle);
-      row.appendChild(sel);
-      row.appendChild(h('button', { class: 'icon-btn', text: '\u2191', title: 'Выше', onclick: function () { move(row, -1); } }));
-      row.appendChild(h('button', { class: 'icon-btn', text: '\u2193', title: 'Ниже', onclick: function () { move(row, 1); } }));
-      row.appendChild(h('button', { class: 'icon-btn', text: '\u2715', title: 'Убрать слот', onclick: function () { listEl.removeChild(row); } }));
+      var capBadge = h('span', { class: 'cap-badge' });
+
+      function currentSlot() { return Store.byId('slots', slotSelect.value); }
+
+      function usedNow() {
+        var sum = 0;
+        contentRows.forEach(function (cr) {
+          var it = Store.byId(cr.kindSelect.value === 'resource' ? 'resources' : 'equipments', cr.itemSelect.value);
+          sum += (parseInt(cr.qtyInput.value, 10) || 0) * Store.massOf(it);
+        });
+        return sum;
+      }
+
+      function refreshBadge() {
+        var cap = Store.slotCapacity(currentSlot());
+        var used = usedNow();
+        var over = used > cap + 1e-9;
+        capBadge.textContent = Store.fmtNum(used) + ' / ' + (isFinite(cap) ? Store.fmtNum(cap) + ' кг' : '∞');
+        capBadge.classList.toggle('cap-over', over);
+        capBadge.title = over ? 'Слот перегружен' : 'Занято массы в слоте';
+      }
+
+      /* Сколько единиц предмета ещё помещается в слот. */
+      function maxQtyFor(item) {
+        var cap = Store.slotCapacity(currentSlot());
+        if (!isFinite(cap)) return Infinity;
+        var m = Store.massOf(item);
+        if (m <= 0) return Infinity;
+        return Math.max(0, Math.floor((cap - usedNow()) / m));
+      }
+
+      function removeContentRow(cr) {
+        var i = contentRows.indexOf(cr);
+        if (i > -1) contentRows.splice(i, 1);
+        if (cr.el.parentNode) cr.el.parentNode.removeChild(cr.el);
+        refreshBadge();
+      }
+
+      function refreshItemOptions(cr) {
+        var items = compatibleItems(cr.kindSelect.value, slotSelect.value);
+        var current = cr.itemSelect.value || cr.preferredId || '';
+        UI.clear(cr.itemSelect);
+        cr.itemSelect.appendChild(h('option', { value: '', text: items.length ? '— выберите предмет —' : '— нет подходящих предметов —' }));
+        items.forEach(function (it) {
+          cr.itemSelect.appendChild(h('option', { value: it.id, text: itemLabel(it) }));
+        });
+        cr.itemSelect.value = items.some(function (it) { return it.id === current; }) ? current : '';
+        cr.preferredId = '';
+      }
+
+      function addContentRow(kind, itemId, qty) {
+        var cr = {};
+        cr.kindSelect = UI.select({
+          options: [
+            { value: 'equipment', label: KIND_LABELS.equipment },
+            { value: 'resource', label: KIND_LABELS.resource }
+          ],
+          value: kind === 'resource' ? 'resource' : 'equipment'
+        });
+        cr.kindSelect.classList.add('content-kind');
+        cr.itemSelect = UI.select({ options: [] });
+        cr.itemSelect.classList.add('content-item');
+        cr.preferredId = itemId || '';
+        cr.qtyInput = UI.input({ type: 'number', min: 1, step: 1, value: qty || 1 });
+        cr.qtyInput.classList.add('content-qty');
+        cr.qtyInput.title = 'Количество единиц';
+
+        /* Количество не должно превышать остаток вместимости. */
+        function syncQty() {
+          var it = Store.byId(cr.kindSelect.value === 'resource' ? 'resources' : 'equipments', cr.itemSelect.value);
+          if (!it) { refreshBadge(); return; }
+          var q = parseInt(cr.qtyInput.value, 10);
+          if (!q || q < 1) q = 1;
+          var cap = Store.slotCapacity(currentSlot());
+          if (isFinite(cap) && Store.massOf(it) > 0) {
+            var own = q * Store.massOf(it);
+            var limit = Math.max(0, Math.floor((cap - (usedNow() - own)) / Store.massOf(it)));
+            if (q > limit) {
+              q = Math.max(1, limit);
+              UI.toast('В слоте хватает места только на ' + q + ' шт.', 'warn');
+            }
+          }
+          cr.qtyInput.value = String(q);
+          refreshBadge();
+        }
+
+        cr.kindSelect.addEventListener('change', function () {
+          refreshItemOptions(cr);
+          syncQty();
+        });
+        cr.itemSelect.addEventListener('change', syncQty);
+        cr.qtyInput.addEventListener('change', syncQty);
+
+        cr.el = h('div', { class: 'content-row' },
+          cr.kindSelect, cr.itemSelect, cr.qtyInput,
+          h('button', {
+            class: 'icon-btn', text: '\u2715', title: 'Убрать содержимое',
+            onclick: function () { removeContentRow(cr); }
+          })
+        );
+
+        refreshItemOptions(cr);
+
+        contentRows.push(cr);
+        contentsEl.insertBefore(cr.el, addRowEl);
+        return cr;
+      }
+
+      var contentsEl = h('div', { class: 'slot-contents' });
+      var addKind = UI.select({
+        options: [
+          { value: 'equipment', label: KIND_LABELS.equipment },
+          { value: 'resource', label: KIND_LABELS.resource }
+        ],
+        value: 'equipment'
+      });
+      addKind.classList.add('content-kind');
+      var addItemSel = UI.select({ options: [] });
+      addItemSel.classList.add('content-item');
+      var addQty = UI.input({ type: 'number', min: 1, step: 1, value: 1 });
+      addQty.classList.add('content-qty');
+      addQty.title = 'Количество единиц';
+      var addBtn = h('button', { class: 'btn btn-sm content-add-btn', text: '+ Добавить', onclick: tryAdd, disabled: true });
+
+      function refreshAddOptions() {
+        var items = compatibleItems(addKind.value, slotSelect.value);
+        UI.clear(addItemSel);
+        addItemSel.appendChild(h('option', { value: '', text: items.length ? '— выберите предмет —' : '— нет подходящих предметов —' }));
+        items.forEach(function (it) {
+          addItemSel.appendChild(h('option', { value: it.id, text: itemLabel(it) }));
+        });
+        addItemSel.value = '';
+        addBtn.disabled = true;
+      }
+
+      addKind.addEventListener('change', refreshAddOptions);
+      addItemSel.addEventListener('change', function () {
+        var it = Store.byId(addKind.value === 'resource' ? 'resources' : 'equipments', addItemSel.value);
+        addBtn.disabled = !it;
+        if (!it) return;
+        var maxQ = maxQtyFor(it);
+        if (maxQ < 1) {
+          UI.toast('В слоте нет места для «' + it.name + '»', 'warn');
+          addBtn.disabled = true;
+          return;
+        }
+        if (maxQ < (parseInt(addQty.value, 10) || 1)) addQty.value = String(maxQ);
+      });
+
+      function tryAdd() {
+        var it = Store.byId(addKind.value === 'resource' ? 'resources' : 'equipments', addItemSel.value);
+        if (!it) return;
+        var maxQ = maxQtyFor(it);
+        if (maxQ < 1) {
+          UI.toast('В слоте нет места для «' + it.name + '»', 'warn');
+          return;
+        }
+        var q = parseInt(addQty.value, 10) || 1;
+        if (q > maxQ) {
+          q = maxQ;
+          UI.toast('В слоте хватает места только на ' + q + ' шт.', 'warn');
+        }
+        addContentRow(addKind.value, it.id, String(q));
+        addItemSel.value = '';
+        addBtn.disabled = true;
+        addQty.value = '1';
+        refreshBadge();
+      }
+
+      var addRowEl = h('div', { class: 'content-row content-new' }, addKind, addItemSel, addQty, addBtn);
+      contentsEl.appendChild(addRowEl);
+
+      /* При смене типа слота несовместимое содержимое убирается. */
+      slotSelect.addEventListener('change', function () {
+        var dropped = 0;
+        contentRows.slice().forEach(function (cr) {
+          var prev = cr.itemSelect.value;
+          refreshItemOptions(cr);
+          if (prev && !cr.itemSelect.value) {
+            removeContentRow(cr);
+            dropped++;
+          }
+        });
+        refreshAddOptions();
+        refreshBadge();
+        if (dropped) UI.toast('Содержимое, не подходящее к новому слоту, убрано', 'warn');
+      });
+
+      var headEl = h('div', { class: 'slot-item-head' },
+        handle,
+        slotSelect,
+        capBadge,
+        h('button', { class: 'icon-btn', text: '\u2191', title: 'Выше', onclick: function () { move(row, -1); } }),
+        h('button', { class: 'icon-btn', text: '\u2193', title: 'Ниже', onclick: function () { move(row, 1); } }),
+        h('button', {
+          class: 'icon-btn', text: '\u2715', title: 'Убрать слот',
+          onclick: function () {
+            var i = rowStates.indexOf(state);
+            if (i > -1) rowStates.splice(i, 1);
+            if (row.parentNode) row.parentNode.removeChild(row);
+          }
+        })
+      );
+
+      row.appendChild(headEl);
+      row.appendChild(contentsEl);
 
       handle.addEventListener('dragstart', function (e) {
         dragRow = row;
@@ -166,6 +390,14 @@
         row.classList.remove('dragging');
         dragRow = null;
       });
+
+      (contents || []).forEach(function (c) { addContentRow(c.kind, c.itemId, c.qty); });
+
+      var state = { row: row, slotSelect: slotSelect, contentRows: contentRows };
+      rowStates.push(state);
+
+      refreshAddOptions();
+      refreshBadge();
 
       listEl.appendChild(row);
       return row;
@@ -183,8 +415,8 @@
     });
     listEl.addEventListener('drop', function (e) { e.preventDefault(); });
 
-    selectedIds.forEach(function (id) {
-      if (Store.byId('slots', id)) addRow(id);
+    slotEntries.forEach(function (e) {
+      if (Store.byId('slots', e.slotId)) addRow(e.slotId, e.contents || []);
     });
 
     var addSelect = UI.select({
@@ -195,7 +427,7 @@
     });
     addSelect.addEventListener('change', function () {
       if (!addSelect.value) return;
-      addRow(addSelect.value);
+      addRow(addSelect.value, []);
       addSelect.value = '';
     });
 
@@ -203,16 +435,21 @@
       el: h('div', {},
         listEl,
         h('div', { class: 'slot-add-row' }, addSelect),
-        h('div', { class: 'hint', text: 'Одинаковые слоты можно добавлять сколько угодно. Порядок меняется перетаскиванием за ручку слева или кнопками ↑ ↓.' })
+        h('div', { class: 'hint', text: 'Одинаковые слоты можно добавлять сколько угодно. Порядок меняется перетаскиванием за ручку слева или кнопками ↑ ↓. Сумма масс содержимого не должна превышать вместимость слота.' })
       ),
       collect: function () {
-        var ids = [];
-        var rows = listEl.querySelectorAll('.slot-item');
-        for (var i = 0; i < rows.length; i++) {
-          var sel = rows[i].querySelector('select');
-          if (sel && sel.value) ids.push(sel.value);
-        }
-        return ids;
+        return rowStates.map(function (st) {
+          return {
+            slotId: st.slotSelect.value,
+            contents: st.contentRows.map(function (cr) {
+              return {
+                kind: cr.kindSelect.value,
+                itemId: cr.itemSelect.value,
+                qty: String(parseInt(cr.qtyInput.value, 10) || 1)
+              };
+            }).filter(function (c) { return c.itemId; })
+          };
+        }).filter(function (e) { return e.slotId; });
       }
     };
   }
@@ -242,7 +479,7 @@
       rebuildProps(catSelect.value, snapshotInputs(inputs));
     });
 
-    var slotsSection = buildSlotsSection(Store.slots(), isEdit ? (existing.slotIds || []) : []);
+    var slotsSection = buildSlotsSection(Store.slots(), isEdit ? (existing.slots || []) : []);
 
     var body = h('div', {},
       UI.field('Название', nameInput),
@@ -252,7 +489,7 @@
         propsHost
       ),
       h('div', { class: 'field' },
-        h('label', { class: 'field-label', text: 'Слоты корабля' }),
+        h('label', { class: 'field-label', text: 'Слоты корабля и их содержимое по умолчанию' }),
         slotsSection.el
       )
     );
@@ -265,8 +502,19 @@
         var name = nameInput.value.trim();
         if (!name) return 'Укажите название корабля.';
         if (!catSelect.value) return 'Выберите категорию.';
-        var slotIds = slotsSection.collect();
-        var data = { name: name, categoryId: catSelect.value, values: collectInputs(inputs), slotIds: slotIds };
+        var slotEntries = slotsSection.collect();
+
+        for (var i = 0; i < slotEntries.length; i++) {
+          var sl = Store.byId('slots', slotEntries[i].slotId);
+          if (!sl) return 'Выберите слот в каждой строке списка слотов.';
+          var used = Store.usedMass(slotEntries[i].contents);
+          var cap = Store.slotCapacity(sl);
+          if (used > cap + 1e-9) {
+            return 'Слот «' + sl.name + '» перегружен: ' + Store.fmtNum(used) + ' кг из ' + Store.fmtNum(cap) + ' кг.';
+          }
+        }
+
+        var data = { name: name, categoryId: catSelect.value, values: collectInputs(inputs), slots: slotEntries };
         if (isEdit) {
           Store.patch('ships', existing.id, data);
           UI.toast('Корабль изменён', 'ok');
@@ -284,7 +532,7 @@
 
   var RES_META = {
     listTitle: 'Ресурсы',
-    listSub: 'Ресурсы: категория, значения свойств и слот (если задан).',
+    listSub: 'Ресурсы: категория, масса, значения свойств и слот (если задан).',
     addLabel: 'Добавить ресурс',
     emptyText: 'Ресурсы пока не добавлены.',
     newTitle: 'Новый ресурс',
@@ -298,7 +546,7 @@
 
   var EQ_META = {
     listTitle: 'Оборудование',
-    listSub: 'Оборудование: категория, значения свойств и слот (если задан).',
+    listSub: 'Оборудование: категория, масса, значения свойств и слот (если задан).',
     addLabel: 'Добавить оборудование',
     emptyText: 'Оборудование пока не добавлено.',
     newTitle: 'Новое оборудование',
@@ -339,6 +587,13 @@
           }
         },
         {
+          title: 'Масса',
+          render: function (it) {
+            var m = Store.massOf(it);
+            return h('span', { class: m ? '' : 'muted', text: m ? Store.fmtNum(m) + ' кг' : '—' });
+          }
+        },
+        {
           title: 'Слот',
           render: function (it) {
             var sl = it.slotId ? Store.byId('slots', it.slotId) : null;
@@ -361,6 +616,11 @@
     var categories = Store.categories(type);
 
     var nameInput = UI.input({ value: isEdit ? existing.name : '', placeholder: meta.namePlaceholder });
+    var massInput = UI.input({
+      type: 'number', min: 0, step: 'any',
+      value: isEdit ? existing.mass : '',
+      placeholder: 'Например: 10'
+    });
     var catSelect = UI.select({
       options: [{ value: '', label: '— выберите категорию —' }].concat(categories.map(function (c) {
         return { value: c.id, label: c.name };
@@ -404,6 +664,7 @@
     var body = h('div', {},
       UI.field('Название', nameInput),
       UI.field('Категория', catSelect, categories.length ? null : 'Категорий пока нет — создайте их на странице категорий.'),
+      UI.field('Масса, кг', massInput, 'Масса одной единицы предмета. Учитывается при наполнении слотов корабля.'),
       h('div', { class: 'field' },
         h('label', { class: 'field-label', text: 'Свойства категории' }),
         propsHost
@@ -427,6 +688,7 @@
         var data = {
           name: name,
           categoryId: catSelect.value,
+          mass: massInput.value.trim(),
           values: collectInputs(inputs),
           slotId: noSlotRow.input.checked ? null : slotSelect.value
         };
