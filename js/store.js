@@ -4,12 +4,12 @@
   'use strict';
 
   var KEY = 'galaxy_admin_db_v1';
-  var TYPE_LABEL = { ship: 'корабли', resource: 'ресурсы', equipment: 'оборудование' };
+  var TYPE_LABEL = { ship: 'корабли', goods: 'товары' };
 
   var db = null;
 
   function blank() {
-    return { props: [], slots: [], categories: [], ships: [], resources: [], equipments: [] };
+    return { props: [], slots: [], categories: [], ships: [], goods: [] };
   }
 
   function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
@@ -36,7 +36,8 @@
     }).filter(function (s) { return s.name; });
 
     out.categories = arr(data.categories).filter(isObj).map(function (c) {
-      var type = c.type === 'resource' || c.type === 'equipment' ? c.type : 'ship';
+      /* Ресурсы и оборудование объединены в товары: старые типы мигрируют. */
+      var type = c.type === 'ship' ? 'ship' : 'goods';
       return { id: str(c.id) || uid(), type: type, name: str(c.name).trim(), propIds: arr(c.propIds).map(str) };
     }).filter(function (c) { return c.name; });
 
@@ -44,8 +45,9 @@
       return { id: str(s.id) || uid(), name: str(s.name).trim(), categoryId: str(s.categoryId), values: obj(s.values), slots: makeShipSlots(s) };
     }).filter(function (s) { return s.name; });
 
-    out.resources = arr(data.resources).filter(isObj).map(makeItem).filter(function (r) { return r.name; });
-    out.equipments = arr(data.equipments).filter(isObj).map(makeItem).filter(function (e) { return e.name; });
+    /* Товары: единая коллекция; старые выгрузки с resources/equipments склеиваются. */
+    out.goods = arr(data.goods).concat(arr(data.resources), arr(data.equipments))
+      .filter(isObj).map(makeItem).filter(function (g) { return g.name; });
 
     pruneRefs(out);
     return out;
@@ -54,8 +56,9 @@
       return { id: str(o.id) || uid(), name: str(o.name).trim(), categoryId: str(o.categoryId), values: obj(o.values), mass: str(o.mass).trim(), slotId: o.slotId ? str(o.slotId) : null };
     }
 
-    /* Слоты корабля: [{slotId, contents:[{kind, itemId, qty}]}].
-       Старый формат (slotIds: [id]) мигрирует — содержимое остаётся пустым. */
+    /* Слоты корабля: [{slotId, contents:[{itemId, qty}]}].
+       Старый формат (slotIds: [id]) мигрирует — содержимое остаётся пустым;
+       поле kind из прежних выгрузок отбрасывается (id товаров уникальны). */
     function makeShipSlots(s) {
       var entries = arr(s.slots);
       if (!entries.length && Array.isArray(s.slotIds)) {
@@ -67,7 +70,7 @@
           contents: arr(e.contents).filter(isObj).map(function (c) {
             var qty = Math.floor(Number(str(c.qty).replace(',', '.')));
             if (!isFinite(qty) || qty < 1) qty = 1;
-            return { kind: c.kind === 'resource' ? 'resource' : 'equipment', itemId: str(c.itemId), qty: String(qty) };
+            return { itemId: str(c.itemId), qty: String(qty) };
           }).filter(function (c) { return c.itemId; })
         };
       });
@@ -76,13 +79,11 @@
 
   /* Убираем ссылки на несуществующие записи, чтобы база всегда была согласованной. */
   function pruneRefs(out) {
-    var propIds = {}, catIds = {}, slotIds = {};
-    var itemIds = { resources: {}, equipments: {} };
+    var propIds = {}, catIds = {}, slotIds = {}, goodsIds = {};
     out.props.forEach(function (p) { propIds[p.id] = true; });
     out.categories.forEach(function (c) { catIds[c.id] = true; });
     out.slots.forEach(function (s) { slotIds[s.id] = true; });
-    out.resources.forEach(function (r) { itemIds.resources[r.id] = true; });
-    out.equipments.forEach(function (e) { itemIds.equipments[e.id] = true; });
+    out.goods.forEach(function (g) { goodsIds[g.id] = true; });
 
     out.categories.forEach(function (c) {
       c.propIds = c.propIds.filter(function (id) { return propIds[id]; });
@@ -91,14 +92,12 @@
       if (!catIds[s.categoryId]) s.categoryId = '';
       s.slots = s.slots.filter(function (e) { return slotIds[e.slotId]; });
       s.slots.forEach(function (e) {
-        e.contents = e.contents.filter(function (c) {
-          return itemIds[c.kind === 'resource' ? 'resources' : 'equipments'][c.itemId];
-        });
+        e.contents = e.contents.filter(function (c) { return goodsIds[c.itemId]; });
       });
     });
-    out.resources.concat(out.equipments).forEach(function (item) {
-      if (!catIds[item.categoryId]) item.categoryId = '';
-      if (item.slotId && !slotIds[item.slotId]) item.slotId = null;
+    out.goods.forEach(function (g) {
+      if (!catIds[g.categoryId]) g.categoryId = '';
+      if (g.slotId && !slotIds[g.slotId]) g.slotId = null;
     });
   }
 
@@ -171,15 +170,14 @@
       ships: all('ships').filter(function (s) {
         return s.slots.some(function (e) { return e.slotId === slotId; });
       }).map(function (s) { return s.name; }),
-      resources: all('resources').filter(function (r) { return r.slotId === slotId; }).map(function (r) { return r.name; }),
-      equipments: all('equipments').filter(function (e) { return e.slotId === slotId; }).map(function (e) { return e.name; })
+      goods: all('goods').filter(function (g) { return g.slotId === slotId; }).map(function (g) { return g.name; })
     };
   }
 
   function categoryUsage(categoryId) {
     var cat = byId('categories', categoryId);
     if (!cat) return [];
-    var coll = cat.type === 'ship' ? 'ships' : (cat.type === 'resource' ? 'resources' : 'equipments');
+    var coll = cat.type === 'ship' ? 'ships' : 'goods';
     return all(coll).filter(function (o) { return o.categoryId === categoryId; }).map(function (o) { return o.name; });
   }
 
