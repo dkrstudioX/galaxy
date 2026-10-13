@@ -1,0 +1,10 @@
+# ZCode workspace artifacts
+.zwork/
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Editor
+.vscode/
+.idea/

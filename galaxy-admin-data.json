@@ -1,0 +1,236 @@
+{
+  "props": [
+    {
+      "name": "Масса",
+      "value": "кг",
+      "id": "idmv6mnzbekksrz"
+    },
+    {
+      "name": "Скорость движения",
+      "value": "",
+      "id": "idmv6moa82mbglz"
+    },
+    {
+      "name": "Скорость вращения",
+      "value": "",
+      "id": "idmv6mogijazoa8"
+    },
+    {
+      "name": "Ускорение",
+      "value": "",
+      "id": "idmv6mopqqeuerz"
+    },
+    {
+      "name": "Значение",
+      "value": "",
+      "id": "idmv6mvbmqjm1t3"
+    },
+    {
+      "name": "Выстрелов в секунду",
+      "value": "",
+      "id": "idmv6mvo4i33ih8"
+    },
+    {
+      "name": "Одиночный выстрел",
+      "value": "",
+      "id": "idmv6mwbru8ys6e"
+    },
+    {
+      "name": "Скорость добычи",
+      "value": "",
+      "id": "idmv6my3xme2wh1"
+    },
+    {
+      "name": "Поглощение урона",
+      "value": "",
+      "id": "idmv6myrtmpvnat"
+    }
+  ],
+  "slots": [
+    {
+      "name": "Грузовой",
+      "id": "idmv6mn8s2cwfqe"
+    },
+    {
+      "name": "Топливо",
+      "id": "idmv6mngbm9uiwq"
+    },
+    {
+      "name": "Оружие",
+      "id": "idmv6mnkfmcvqob"
+    },
+    {
+      "name": "Щиты",
+      "id": "idmv6mnrxuq4fci"
+    }
+  ],
+  "categories": [
+    {
+      "type": "ship",
+      "name": "Фрегат",
+      "propIds": [
+        "idmv6mnzbekksrz",
+        "idmv6moa82mbglz",
+        "idmv6mogijazoa8",
+        "idmv6mopqqeuerz"
+      ],
+      "id": "idmv6mp8fux6l10"
+    },
+    {
+      "type": "ship",
+      "name": "Линкор",
+      "propIds": [
+        "idmv6mnzbekksrz",
+        "idmv6moa82mbglz",
+        "idmv6mogijazoa8",
+        "idmv6mopqqeuerz"
+      ],
+      "id": "idmv6mrx3m7mk18"
+    },
+    {
+      "type": "ship",
+      "name": "Шаттл",
+      "propIds": [
+        "idmv6mnzbekksrz",
+        "idmv6moa82mbglz",
+        "idmv6mogijazoa8",
+        "idmv6mopqqeuerz"
+      ],
+      "id": "idmv6ms8dems6da"
+    },
+    {
+      "type": "ship",
+      "name": "Корвет",
+      "propIds": [
+        "idmv6mnzbekksrz",
+        "idmv6moa82mbglz",
+        "idmv6mogijazoa8",
+        "idmv6mopqqeuerz"
+      ],
+      "id": "idmv6msi0q38un5"
+    },
+    {
+      "type": "ship",
+      "name": "Крейсер",
+      "propIds": [
+        "idmv6mnzbekksrz",
+        "idmv6moa82mbglz",
+        "idmv6mogijazoa8",
+        "idmv6mopqqeuerz"
+      ],
+      "id": "idmv6msrajkn6ls"
+    },
+    {
+      "type": "ship",
+      "name": "Дредноут",
+      "propIds": [
+        "idmv6mnzbekksrz",
+        "idmv6moa82mbglz",
+        "idmv6mogijazoa8",
+        "idmv6mopqqeuerz"
+      ],
+      "id": "idmv6mtqwa6lnsu"
+    },
+    {
+      "type": "resource",
+      "name": "Инструменты",
+      "propIds": [
+        "idmv6mnzbekksrz"
+      ],
+      "id": "idmv6mu5w2p14rh"
+    },
+    {
+      "type": "resource",
+      "name": "Топливо",
+      "propIds": [
+        "idmv6mnzbekksrz"
+      ],
+      "id": "idmv6mubiiqdqo4"
+    },
+    {
+      "type": "resource",
+      "name": "Ресурсы",
+      "propIds": [
+        "idmv6mnzbekksrz"
+      ],
+      "id": "idmv6muo0ylhr64"
+    },
+    {
+      "type": "equipment",
+      "name": "Оружие",
+      "propIds": [
+        "idmv6mnzbekksrz",
+        "idmv6mvbmqjm1t3",
+        "idmv6mvo4i33ih8",
+        "idmv6mwbru8ys6e"
+      ],
+      "id": "idmv6mv1eakbyy3"
+    },
+    {
+      "type": "equipment",
+      "name": "Оборудование",
+      "propIds": [
+        "idmv6mnzbekksrz",
+        "idmv6my3xme2wh1"
+      ],
+      "id": "idmv6mxjsyfnz8q"
+    },
+    {
+      "type": "equipment",
+      "name": "Щиты",
+      "propIds": [
+        "idmv6mnzbekksrz",
+        "idmv6mvbmqjm1t3",
+        "idmv6myrtmpvnat"
+      ],
+      "id": "idmv6mzm6yrprh5"
+    },
+    {
+      "type": "equipment",
+      "name": "Двигатели",
+      "propIds": [
+        "idmv6mnzbekksrz",
+        "idmv6mvbmqjm1t3"
+      ],
+      "id": "idmv6n10qi56or3"
+    }
+  ],
+  "ships": [
+    {
+      "name": "Фрегат1",
+      "categoryId": "idmv6mp8fux6l10",
+      "values": {
+        "idmv6mnzbekksrz": "1000",
+        "idmv6moa82mbglz": "100",
+        "idmv6mogijazoa8": "10",
+        "idmv6mopqqeuerz": "10"
+      },
+      "slotIds": [
+        "idmv6mn8s2cwfqe",
+        "idmv6mngbm9uiwq",
+        "idmv6mnkfmcvqob",
+        "idmv6mnrxuq4fci"
+      ],
+      "id": "idmv6n1vgjytkms"
+    },
+    {
+      "name": "Линкор1",
+      "categoryId": "idmv6mrx3m7mk18",
+      "values": {
+        "idmv6mnzbekksrz": "1",
+        "idmv6moa82mbglz": "1",
+        "idmv6mogijazoa8": "1",
+        "idmv6mopqqeuerz": "1"
+      },
+      "slotIds": [
+        "idmv6mn8s2cwfqe",
+        "idmv6mngbm9uiwq",
+        "idmv6mnkfmcvqob",
+        "idmv6mnrxuq4fci"
+      ],
+      "id": "idmv6n3h2rdf3nq"
+    }
+  ],
+  "resources": [],
+  "equipments": []
+}
