@@ -66,7 +66,7 @@
     var c = Store.counts();
 
     root.appendChild(UI.pageHead({
-      title: 'Главная',
+      title: 'Админка',
       subtitle: 'Обзор базы Galaxy Admin. Все данные хранятся локально, в этом браузере.'
     }));
 

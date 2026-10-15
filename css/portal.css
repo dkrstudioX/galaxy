@@ -1,15 +1,17 @@
 /* Galaxy — страница входа и заглушка игры.
-   Футуристичное стекло: панели с блюром, светящиеся рамки и текст, звёздный фон. */
+   Fortnite / UE5 style: яркие туманности, стекло с блюром, свечения. */
 
 :root {
-  --bg: #05070f;
+  --bg: #06040e;
   --text: #eaf2ff;
   --muted: #93a4c8;
   --cyan: #4dd9ff;
-  --violet: #8f6bff;
-  --glass-edge: rgba(140, 180, 255, 0.22);
-  --glow-cyan: rgba(77, 217, 255, 0.45);
-  --glow-violet: rgba(143, 107, 255, 0.45);
+  --violet: #a855f7;
+  --pink: #ec4899;
+  --glass-edge: rgba(160, 140, 255, 0.28);
+  --glow-cyan: rgba(77, 217, 255, 0.5);
+  --glow-violet: rgba(168, 85, 247, 0.5);
+  --glow-pink: rgba(236, 72, 153, 0.4);
   color-scheme: dark;
 }
 
@@ -22,8 +24,10 @@ body {
   font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
   color: var(--text);
   background:
-    radial-gradient(1200px 700px at 85% -10%, rgba(143, 107, 255, 0.20), transparent 60%),
-    radial-gradient(1000px 600px at 5% 110%, rgba(77, 217, 255, 0.14), transparent 60%),
+    radial-gradient(1400px 800px at 80% -15%, rgba(168, 85, 247, 0.28), transparent 55%),
+    radial-gradient(1200px 700px at -5% 90%, rgba(236, 72, 153, 0.22), transparent 55%),
+    radial-gradient(1000px 500px at 50% 50%, rgba(77, 217, 255, 0.10), transparent 60%),
+    radial-gradient(800px 400px at 90% 80%, rgba(143, 107, 255, 0.15), transparent 50%),
     var(--bg);
   overflow-x: hidden;
 }
@@ -38,24 +42,28 @@ body {
 }
 .stars {
   background-image:
-    radial-gradient(1px 1px at 25px 35px, rgba(255, 255, 255, 0.85), transparent),
-    radial-gradient(1px 1px at 75px 90px, rgba(255, 255, 255, 0.5), transparent),
-    radial-gradient(1.5px 1.5px at 130px 40px, rgba(255, 255, 255, 0.9), transparent),
-    radial-gradient(1px 1px at 160px 130px, rgba(160, 200, 255, 0.7), transparent);
-  background-size: 200px 200px;
-  opacity: 0.8;
+    radial-gradient(1.5px 1.5px at 25px 35px, rgba(255, 255, 255, 0.9), transparent),
+    radial-gradient(1px 1px at 75px 90px, rgba(200, 210, 255, 0.7), transparent),
+    radial-gradient(2px 2px at 130px 40px, rgba(168, 85, 247, 0.8), transparent),
+    radial-gradient(1px 1px at 160px 130px, rgba(77, 217, 255, 0.75), transparent),
+    radial-gradient(1.5px 1.5px at 50px 180px, rgba(255, 255, 255, 0.65), transparent),
+    radial-gradient(1px 1px at 190px 70px, rgba(236, 72, 153, 0.6), transparent);
+  background-size: 220px 220px;
+  opacity: 0.9;
   animation: twinkle 6s ease-in-out infinite alternate;
 }
 .stars2 {
   background-image:
-    radial-gradient(1px 1px at 45px 15px, rgba(143, 107, 255, 0.8), transparent),
-    radial-gradient(1.5px 1.5px at 100px 60px, rgba(77, 217, 255, 0.7), transparent),
-    radial-gradient(1px 1px at 180px 170px, rgba(255, 255, 255, 0.6), transparent);
-  background-size: 260px 260px;
-  opacity: 0.6;
+    radial-gradient(1.5px 1.5px at 45px 15px, rgba(168, 85, 247, 0.85), transparent),
+    radial-gradient(2px 2px at 100px 60px, rgba(77, 217, 255, 0.75), transparent),
+    radial-gradient(1px 1px at 180px 170px, rgba(255, 255, 255, 0.65), transparent),
+    radial-gradient(1.5px 1.5px at 80px 120px, rgba(236, 72, 153, 0.7), transparent),
+    radial-gradient(1px 1px at 150px 30px, rgba(200, 180, 255, 0.6), transparent);
+  background-size: 280px 280px;
+  opacity: 0.7;
   animation: twinkle 9s ease-in-out infinite alternate-reverse;
 }
-@keyframes twinkle { from { opacity: 0.3; } to { opacity: 0.9; } }
+@keyframes twinkle { from { opacity: 0.35; } to { opacity: 1; } }
 
 /* ---------- Каркас ---------- */
 
@@ -77,13 +85,14 @@ body {
   padding: 42px 44px 32px;
   border-radius: 22px;
   border: 1px solid var(--glass-edge);
-  background: linear-gradient(160deg, rgba(20, 30, 60, 0.62), rgba(10, 14, 30, 0.5));
-  -webkit-backdrop-filter: blur(18px) saturate(1.3);
-  backdrop-filter: blur(18px) saturate(1.3);
+  background: linear-gradient(160deg, rgba(20, 25, 60, 0.35), rgba(10, 12, 30, 0.28));
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
   box-shadow:
-    0 30px 80px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 0 40px rgba(90, 140, 255, 0.06);
+    0 30px 80px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 0 60px rgba(120, 80, 255, 0.05),
+    0 0 80px rgba(168, 85, 247, 0.06);
   animation: rise 0.5s ease both;
 }
 @keyframes rise {
@@ -115,8 +124,8 @@ body {
   font-size: 11px;
   letter-spacing: 0.42em;
   text-transform: uppercase;
-  color: var(--cyan);
-  text-shadow: 0 0 12px var(--glow-cyan);
+  color: var(--violet);
+  text-shadow: 0 0 12px var(--glow-violet);
 }
 .portal-title {
   margin: 0;
@@ -124,11 +133,11 @@ body {
   font-weight: 800;
   letter-spacing: 0.12em;
   line-height: 1;
-  background: linear-gradient(100deg, #cfe4ff 10%, var(--cyan) 48%, var(--violet) 92%);
+  background: linear-gradient(100deg, #d4e4ff 10%, var(--cyan) 35%, var(--violet) 65%, var(--pink) 95%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 0 18px rgba(77, 217, 255, 0.35));
+  filter: drop-shadow(0 0 22px rgba(168, 85, 247, 0.4));
 }
 .title-sm { font-size: clamp(30px, 5vw, 44px); }
 .portal-sub { margin: 14px 0 30px; color: var(--muted); font-size: 14.5px; max-width: 520px; }
@@ -144,8 +153,8 @@ body {
   gap: 16px;
   padding: 18px 20px;
   border-radius: 14px;
-  border: 1px solid rgba(140, 180, 255, 0.16);
-  background: linear-gradient(120deg, rgba(30, 42, 80, 0.5), rgba(14, 20, 42, 0.42));
+  border: 1px solid rgba(140, 180, 255, 0.14);
+  background: linear-gradient(120deg, rgba(30, 35, 70, 0.35), rgba(14, 16, 40, 0.28));
   color: var(--text);
   text-decoration: none;
   overflow: hidden;
@@ -162,12 +171,12 @@ body {
 }
 .menu-btn:hover {
   transform: translateY(-2px);
-  border-color: rgba(120, 220, 255, 0.45);
-  background: linear-gradient(120deg, rgba(36, 52, 96, 0.6), rgba(18, 26, 52, 0.5));
-  box-shadow: 0 12px 34px rgba(20, 40, 90, 0.5), 0 0 24px rgba(77, 217, 255, 0.12);
+  border-color: rgba(160, 140, 255, 0.45);
+  background: linear-gradient(120deg, rgba(40, 48, 96, 0.45), rgba(20, 24, 56, 0.38));
+  box-shadow: 0 12px 40px rgba(80, 40, 140, 0.35), 0 0 30px rgba(168, 85, 247, 0.15);
 }
 .menu-btn:hover::before { opacity: 1; }
-.menu-btn:focus-visible { outline: 2px solid rgba(120, 220, 255, 0.7); outline-offset: 2px; }
+.menu-btn:focus-visible { outline: 2px solid rgba(160, 140, 255, 0.7); outline-offset: 2px; }
 
 .menu-icon {
   flex: none;
@@ -177,21 +186,21 @@ body {
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  border: 1px solid rgba(140, 180, 255, 0.25);
-  background: rgba(8, 12, 26, 0.55);
+  border: 1px solid rgba(140, 180, 255, 0.20);
+  background: rgba(8, 10, 26, 0.40);
   color: var(--cyan);
-  box-shadow: inset 0 0 14px rgba(77, 217, 255, 0.12);
+  box-shadow: inset 0 0 14px rgba(77, 217, 255, 0.10);
   transition: color 0.16s ease, box-shadow 0.16s ease;
 }
 .menu-btn:hover .menu-icon {
   color: #bfefff;
-  box-shadow: inset 0 0 14px rgba(77, 217, 255, 0.25), 0 0 12px rgba(77, 217, 255, 0.2);
+  box-shadow: inset 0 0 14px rgba(168, 85, 247, 0.2), 0 0 14px rgba(168, 85, 247, 0.25);
 }
 .menu-icon svg { display: block; }
 
 .menu-text { flex: 1; min-width: 0; }
 .menu-name { display: block; font-size: 17px; font-weight: 700; letter-spacing: 0.04em; }
-.menu-btn:hover .menu-name { text-shadow: 0 0 14px var(--glow-cyan); }
+.menu-btn:hover .menu-name { text-shadow: 0 0 14px var(--glow-violet); }
 .menu-hint { display: block; margin-top: 3px; font-size: 12.5px; color: var(--muted); }
 
 .menu-arrow {
@@ -200,7 +209,7 @@ body {
   color: var(--muted);
   transition: transform 0.16s ease, color 0.16s ease;
 }
-.menu-btn:hover .menu-arrow { transform: translateX(4px); color: var(--cyan); }
+.menu-btn:hover .menu-arrow { transform: translateX(4px); color: var(--violet); }
 
 /* ---------- Подвал панели и статус ---------- */
 
@@ -229,8 +238,8 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--cyan);
-  box-shadow: 0 0 10px var(--glow-cyan);
+  background: var(--violet);
+  box-shadow: 0 0 10px var(--glow-violet);
   animation: pulse 1.6s ease-in-out infinite;
 }
 @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }

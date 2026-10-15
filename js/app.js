@@ -5,7 +5,7 @@
   var h = UI.h;
 
   var ROUTES = [
-    { hash: '#/home', label: 'Главная', section: null, page: 'home' },
+    { hash: '#/home', label: 'Админка', section: null, page: 'home' },
     { hash: '#/props', label: 'Свойства', section: 'Справочники', page: 'props' },
     { hash: '#/slots', label: 'Слоты', section: 'Справочники', page: 'slots' },
     { hash: '#/categories/ship', label: 'Категории кораблей', section: 'Категории', page: 'catShip' },
