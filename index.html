@@ -3,33 +3,56 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Galaxy Admin</title>
-<link rel="stylesheet" href="css/styles.css">
+<title>Galaxy — вход</title>
+<link rel="stylesheet" href="css/portal.css">
 </head>
 <body>
-<div class="app">
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-title">Galaxy Admin</div>
-      <div class="brand-sub">панель управления данными</div>
-    </div>
-    <nav id="nav"></nav>
-    <div class="sidebar-foot">
-      Данные хранятся локально, в этом браузере.<br>
-      Экспорт и импорт — на странице «Главная».
-    </div>
-  </aside>
-  <main class="content">
-    <div id="page"></div>
-  </main>
-</div>
-<div id="modal-root"></div>
-<div id="toast-root"></div>
-<script src="js/store.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/pages/home.js"></script>
-<script src="js/pages/catalogs.js"></script>
-<script src="js/pages/objects.js"></script>
-<script src="js/app.js"></script>
+<div class="stars" aria-hidden="true"></div>
+<div class="stars2" aria-hidden="true"></div>
+
+<main class="portal-wrap">
+  <section class="glass-panel">
+    <span class="frame" aria-hidden="true"></span>
+
+    <p class="eyebrow">Galaxy Project · Центр управления</p>
+    <h1 class="portal-title">GALAXY</h1>
+    <p class="portal-sub">Настройте вселенную в админке — корабли, товары, слоты — или запустите новую партию.</p>
+
+    <nav class="portal-menu">
+      <a class="menu-btn" href="admin.html">
+        <span class="menu-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </span>
+        <span class="menu-text">
+          <span class="menu-name">Админка</span>
+          <span class="menu-hint">Корабли, товары, категории, свойства и слоты</span>
+        </span>
+        <span class="menu-arrow" aria-hidden="true">→</span>
+      </a>
+
+      <a class="menu-btn" href="game.html">
+        <span class="menu-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"></circle>
+            <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"></polygon>
+          </svg>
+        </span>
+        <span class="menu-text">
+          <span class="menu-name">Новая игра</span>
+          <span class="menu-hint">Запуск новой партии</span>
+        </span>
+        <span class="menu-arrow" aria-hidden="true">→</span>
+      </a>
+    </nav>
+
+    <footer class="portal-foot">
+      <span>Данные хранятся локально, в этом браузере</span>
+      <span class="status-row" style="margin:0"><span class="pulse" aria-hidden="true"></span> система активна</span>
+    </footer>
+  </section>
+</main>
 </body>
 </html>
