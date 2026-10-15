@@ -51,7 +51,7 @@
   function clearAll() {
     UI.confirm({
       title: 'Очистить все данные?',
-      text: 'Будут удалены все корабли, ресурсы, оборудование, категории, свойства и слоты. Действие необратимо.',
+      text: 'Будут удалены все корабли, товары, категории, свойства и слоты. Действие необратимо.',
       danger: true,
       okLabel: 'Удалить всё',
       onOk: function () {
@@ -72,8 +72,7 @@
 
     root.appendChild(h('div', { class: 'stats' },
       statCard('Корабли', c.ships, '#/ships'),
-      statCard('Ресурсы', c.resources, '#/resources'),
-      statCard('Оборудование', c.equipments, '#/equipment'),
+      statCard('Товары', c.goods, '#/goods'),
       statCard('Категории', c.categories, '#/categories/ship'),
       statCard('Свойства', c.props, '#/props'),
       statCard('Слоты', c.slots, '#/slots')
@@ -83,9 +82,9 @@
       h('h2', { class: 'panel-title', text: 'С чего начать' }),
       h('ol', { class: 'steps' },
         h('li', {}, 'Создайте ', link('#/props', 'свойства'), ' — они понадобятся категориям.'),
-        h('li', {}, 'Создайте ', link('#/slots', 'слоты'), ' — их можно будет назначать кораблям и предметам.'),
-        h('li', {}, 'Опишите ', link('#/categories/ship', 'категории'), ' кораблей, ресурсов и оборудования — это наборы свойств.'),
-        h('li', {}, 'Добавьте сами ', link('#/ships', 'корабли'), ', ', link('#/resources', 'ресурсы'), ' и ', link('#/equipment', 'оборудование'), '.')
+        h('li', {}, 'Создайте ', link('#/slots', 'слоты'), ' — их можно будет назначать кораблям и товарам.'),
+        h('li', {}, 'Опишите ', link('#/categories/ship', 'категории'), ' кораблей и товаров — это наборы свойств.'),
+        h('li', {}, 'Добавьте ', link('#/ships', 'корабли'), ' и ', link('#/goods', 'товары'), '.')
       )
     ));
 

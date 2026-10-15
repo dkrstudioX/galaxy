@@ -1,4 +1,4 @@
-/* Страницы объектов: «Корабли», «Ресурсы», «Оборудование». */
+/* Страницы объектов: «Корабли», «Товары». */
 (function () {
   'use strict';
   var h = UI.h;
@@ -97,7 +97,7 @@
               var sl = Store.byId('slots', e.slotId);
               if (!sl) return null;
               var names = e.contents.map(function (c) {
-                var it = Store.byId(c.kind === 'resource' ? 'resources' : 'equipments', c.itemId);
+                var it = Store.byId('goods', c.itemId);
                 return it ? it.name + ' ×' + c.qty : null;
               }).filter(Boolean);
               return names.length ? sl.name + ' (' + names.join(', ') + ')' : sl.name;
@@ -116,12 +116,9 @@
     }));
   }
 
-  var KIND_LABELS = { equipment: 'Оборудование', resource: 'Ресурс' };
-
-  /* Предметы, подходящие в слот: привязанные к такому же слоту или «Без слота». */
-  function compatibleItems(kind, slotId) {
-    var coll = kind === 'resource' ? 'resources' : 'equipments';
-    return Store[coll]().filter(function (it) { return !it.slotId || it.slotId === slotId; });
+  /* Товары, подходящие в слот: привязанные к такому же слоту или «Без слота». */
+  function compatibleItems(slotId) {
+    return Store.goods().filter(function (it) { return !it.slotId || it.slotId === slotId; });
   }
 
   function itemLabel(it) {
@@ -177,7 +174,7 @@
       function usedNow() {
         var sum = 0;
         contentRows.forEach(function (cr) {
-          var it = Store.byId(cr.kindSelect.value === 'resource' ? 'resources' : 'equipments', cr.itemSelect.value);
+          var it = Store.byId('goods', cr.itemSelect.value);
           sum += (parseInt(cr.qtyInput.value, 10) || 0) * Store.massOf(it);
         });
         return sum;
@@ -209,7 +206,7 @@
       }
 
       function refreshItemOptions(cr) {
-        var items = compatibleItems(cr.kindSelect.value, slotSelect.value);
+        var items = compatibleItems(slotSelect.value);
         var current = cr.itemSelect.value || cr.preferredId || '';
         UI.clear(cr.itemSelect);
         cr.itemSelect.appendChild(h('option', { value: '', text: items.length ? '— выберите предмет —' : '— нет подходящих предметов —' }));
@@ -220,16 +217,8 @@
         cr.preferredId = '';
       }
 
-      function addContentRow(kind, itemId, qty) {
+      function addContentRow(itemId, qty) {
         var cr = {};
-        cr.kindSelect = UI.select({
-          options: [
-            { value: 'equipment', label: KIND_LABELS.equipment },
-            { value: 'resource', label: KIND_LABELS.resource }
-          ],
-          value: kind === 'resource' ? 'resource' : 'equipment'
-        });
-        cr.kindSelect.classList.add('content-kind');
         cr.itemSelect = UI.select({ options: [] });
         cr.itemSelect.classList.add('content-item');
         cr.preferredId = itemId || '';
@@ -239,7 +228,7 @@
 
         /* Количество не должно превышать остаток вместимости. */
         function syncQty() {
-          var it = Store.byId(cr.kindSelect.value === 'resource' ? 'resources' : 'equipments', cr.itemSelect.value);
+          var it = Store.byId('goods', cr.itemSelect.value);
           if (!it) { refreshBadge(); return; }
           var q = parseInt(cr.qtyInput.value, 10);
           if (!q || q < 1) q = 1;
@@ -256,15 +245,11 @@
           refreshBadge();
         }
 
-        cr.kindSelect.addEventListener('change', function () {
-          refreshItemOptions(cr);
-          syncQty();
-        });
         cr.itemSelect.addEventListener('change', syncQty);
         cr.qtyInput.addEventListener('change', syncQty);
 
         cr.el = h('div', { class: 'content-row' },
-          cr.kindSelect, cr.itemSelect, cr.qtyInput,
+          cr.itemSelect, cr.qtyInput,
           h('button', {
             class: 'icon-btn', text: '\u2715', title: 'Убрать содержимое',
             onclick: function () { removeContentRow(cr); }
@@ -279,14 +264,6 @@
       }
 
       var contentsEl = h('div', { class: 'slot-contents' });
-      var addKind = UI.select({
-        options: [
-          { value: 'equipment', label: KIND_LABELS.equipment },
-          { value: 'resource', label: KIND_LABELS.resource }
-        ],
-        value: 'equipment'
-      });
-      addKind.classList.add('content-kind');
       var addItemSel = UI.select({ options: [] });
       addItemSel.classList.add('content-item');
       var addQty = UI.input({ type: 'number', min: 1, step: 1, value: 1 });
@@ -295,7 +272,7 @@
       var addBtn = h('button', { class: 'btn btn-sm content-add-btn', text: '+ Добавить', onclick: tryAdd, disabled: true });
 
       function refreshAddOptions() {
-        var items = compatibleItems(addKind.value, slotSelect.value);
+        var items = compatibleItems(slotSelect.value);
         UI.clear(addItemSel);
         addItemSel.appendChild(h('option', { value: '', text: items.length ? '— выберите предмет —' : '— нет подходящих предметов —' }));
         items.forEach(function (it) {
@@ -305,9 +282,8 @@
         addBtn.disabled = true;
       }
 
-      addKind.addEventListener('change', refreshAddOptions);
       addItemSel.addEventListener('change', function () {
-        var it = Store.byId(addKind.value === 'resource' ? 'resources' : 'equipments', addItemSel.value);
+        var it = Store.byId('goods', addItemSel.value);
         addBtn.disabled = !it;
         if (!it) return;
         var maxQ = maxQtyFor(it);
@@ -320,7 +296,7 @@
       });
 
       function tryAdd() {
-        var it = Store.byId(addKind.value === 'resource' ? 'resources' : 'equipments', addItemSel.value);
+        var it = Store.byId('goods', addItemSel.value);
         if (!it) return;
         var maxQ = maxQtyFor(it);
         if (maxQ < 1) {
@@ -339,7 +315,7 @@
         refreshBadge();
       }
 
-      var addRowEl = h('div', { class: 'content-row content-new' }, addKind, addItemSel, addQty, addBtn);
+      var addRowEl = h('div', { class: 'content-row content-new' }, addItemSel, addQty, addBtn);
       contentsEl.appendChild(addRowEl);
 
       /* При смене типа слота несовместимое содержимое убирается. */
@@ -391,7 +367,7 @@
         dragRow = null;
       });
 
-      (contents || []).forEach(function (c) { addContentRow(c.kind, c.itemId, c.qty); });
+      (contents || []).forEach(function (c) { addContentRow(c.itemId, c.qty); });
 
       var state = { row: row, slotSelect: slotSelect, contentRows: contentRows };
       rowStates.push(state);
@@ -443,7 +419,6 @@
             slotId: st.slotSelect.value,
             contents: st.contentRows.map(function (cr) {
               return {
-                kind: cr.kindSelect.value,
                 itemId: cr.itemSelect.value,
                 qty: String(parseInt(cr.qtyInput.value, 10) || 1)
               };
@@ -528,50 +503,36 @@
     });
   }
 
-  /* ---------- Ресурсы и оборудование ---------- */
+  /* ---------- Товары ---------- */
 
-  var RES_META = {
-    listTitle: 'Ресурсы',
-    listSub: 'Ресурсы: категория, масса, значения свойств и слот (если задан).',
-    addLabel: 'Добавить ресурс',
-    emptyText: 'Ресурсы пока не добавлены.',
-    newTitle: 'Новый ресурс',
-    editTitle: 'Изменить ресурс',
-    namePlaceholder: 'Например: Железо',
-    savedNew: 'Ресурс добавлен',
-    savedEdit: 'Ресурс изменён',
-    delTitle: 'Удалить ресурс?',
-    delDone: 'Ресурс удалён'
-  };
-
-  var EQ_META = {
-    listTitle: 'Оборудование',
-    listSub: 'Оборудование: категория, масса, значения свойств и слот (если задан).',
-    addLabel: 'Добавить оборудование',
-    emptyText: 'Оборудование пока не добавлено.',
-    newTitle: 'Новое оборудование',
-    editTitle: 'Изменить оборудование',
+  var GOODS_META = {
+    listTitle: 'Товары',
+    listSub: 'Товары: категория, масса, значения свойств и слот (если задан).',
+    addLabel: 'Добавить товар',
+    emptyText: 'Товары пока не добавлены.',
+    newTitle: 'Новый товар',
+    editTitle: 'Изменить товар',
     namePlaceholder: 'Например: Лазер Mk I',
-    savedNew: 'Оборудование добавлено',
-    savedEdit: 'Оборудование изменено',
-    delTitle: 'Удалить оборудование?',
-    delDone: 'Оборудование удалено'
+    savedNew: 'Товар добавлен',
+    savedEdit: 'Товар изменён',
+    delTitle: 'Удалить товар?',
+    delDone: 'Товар удалён'
   };
 
-  function renderItems(root, coll, type, meta) {
+  function renderGoods(root) {
     root.appendChild(UI.pageHead({
-      title: meta.listTitle,
-      subtitle: meta.listSub,
-      addLabel: meta.addLabel,
-      onAdd: function () { openItemModal(coll, type, null, meta); }
+      title: GOODS_META.listTitle,
+      subtitle: GOODS_META.listSub,
+      addLabel: GOODS_META.addLabel,
+      onAdd: function () { openGoodsModal(null); }
     }));
 
-    var items = Store[coll]();
+    var items = Store.goods();
     if (!items.length) {
       root.appendChild(UI.emptyState({
-        text: meta.emptyText,
-        addLabel: meta.addLabel,
-        onAdd: function () { openItemModal(coll, type, null, meta); }
+        text: GOODS_META.emptyText,
+        addLabel: GOODS_META.addLabel,
+        onAdd: function () { openGoodsModal(null); }
       }));
       return;
     }
@@ -604,18 +565,18 @@
       rows: items,
       actions: function (it) {
         return UI.editDelete(
-          function () { openItemModal(coll, type, it, meta); },
-          function () { deleteObject(coll, it, { title: meta.delTitle, done: meta.delDone }); }
+          function () { openGoodsModal(it); },
+          function () { deleteObject('goods', it, { title: GOODS_META.delTitle, done: GOODS_META.delDone }); }
         );
       }
     }));
   }
 
-  function openItemModal(coll, type, existing, meta) {
+  function openGoodsModal(existing) {
     var isEdit = !!existing;
-    var categories = Store.categories(type);
+    var categories = Store.categories('goods');
 
-    var nameInput = UI.input({ value: isEdit ? existing.name : '', placeholder: meta.namePlaceholder });
+    var nameInput = UI.input({ value: isEdit ? existing.name : '', placeholder: GOODS_META.namePlaceholder });
     var massInput = UI.input({
       type: 'number', min: 0, step: 'any',
       value: isEdit ? existing.mass : '',
@@ -658,13 +619,13 @@
     syncSlot();
 
     var slotHint = slots.length
-      ? 'Если слот задан — предмет устанавливается только в такой же слот корабля. «Без слота» — в любой слот.'
-      : 'Слоты ещё не созданы — предмет установится в любой слот.';
+      ? 'Если слот задан — товар устанавливается только в такой же слот корабля. «Без слота» — в любой слот.'
+      : 'Слоты ещё не созданы — товар установится в любой слот.';
 
     var body = h('div', {},
       UI.field('Название', nameInput),
-      UI.field('Категория', catSelect, categories.length ? null : 'Категорий пока нет — создайте их на странице категорий.'),
-      UI.field('Масса, кг', massInput, 'Масса одной единицы предмета. Учитывается при наполнении слотов корабля.'),
+      UI.field('Категория', catSelect, categories.length ? null : 'Категорий пока нет — создайте их на странице «Категории товаров».'),
+      UI.field('Масса, кг', massInput, 'Масса одной единицы товара. Учитывается при наполнении слотов корабля.'),
       h('div', { class: 'field' },
         h('label', { class: 'field-label', text: 'Свойства категории' }),
         propsHost
@@ -677,7 +638,7 @@
     );
 
     UI.modal({
-      title: isEdit ? meta.editTitle : meta.newTitle,
+      title: isEdit ? GOODS_META.editTitle : GOODS_META.newTitle,
       wide: true,
       body: body,
       onSave: function () {
@@ -693,11 +654,11 @@
           slotId: noSlotRow.input.checked ? null : slotSelect.value
         };
         if (isEdit) {
-          Store.patch(coll, existing.id, data);
-          UI.toast(meta.savedEdit, 'ok');
+          Store.patch('goods', existing.id, data);
+          UI.toast(GOODS_META.savedEdit, 'ok');
         } else {
-          Store.createObject(coll, data);
-          UI.toast(meta.savedNew, 'ok');
+          Store.createObject('goods', data);
+          UI.toast(GOODS_META.savedNew, 'ok');
         }
         App.refresh();
         return null;
@@ -708,6 +669,5 @@
   /* ---------- Экспорт страниц ---------- */
 
   window.Pages.ships = { render: renderShips };
-  window.Pages.resources = { render: function (root) { renderItems(root, 'resources', 'resource', RES_META); } };
-  window.Pages.equipment = { render: function (root) { renderItems(root, 'equipments', 'equipment', EQ_META); } };
+  window.Pages.goods = { render: renderGoods };
 })();

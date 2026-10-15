@@ -1,4 +1,4 @@
-/* Страницы-справочники: «Свойства», «Слоты» и «Категории» (корабли/ресурсы/оборудование). */
+/* Страницы-справочники: «Свойства», «Слоты» и «Категории» (корабли/товары). */
 (function () {
   'use strict';
   var h = UI.h;
@@ -168,8 +168,7 @@
     var u = Store.slotUsage(s.id);
     var used = [];
     u.ships.forEach(function (n) { used.push('корабль «' + n + '»'); });
-    u.resources.forEach(function (n) { used.push('ресурс «' + n + '»'); });
-    u.equipments.forEach(function (n) { used.push('оборудование «' + n + '»'); });
+    u.goods.forEach(function (n) { used.push('товар «' + n + '»'); });
     if (used.length) {
       UI.alert({
         title: 'Нельзя удалить',
@@ -198,17 +197,11 @@
       empty: 'Пока нет категорий кораблей. Например: «Фрегат», «Крейсер».',
       placeholder: 'Например: Фрегат'
     },
-    resource: {
-      title: 'Категории ресурсов',
-      subtitle: 'Категория задаёт список свойств, которые заполняются у ресурсов.',
-      empty: 'Пока нет категорий ресурсов. Например: «Металлы», «Кристаллы».',
+    goods: {
+      title: 'Категории товаров',
+      subtitle: 'Категория задаёт список свойств, которые заполняются у товаров.',
+      empty: 'Пока нет категорий товаров. Например: «Металлы», «Оружие», «Двигатели».',
       placeholder: 'Например: Металлы'
-    },
-    equipment: {
-      title: 'Категории оборудования',
-      subtitle: 'Категория задаёт список свойств, которые заполняются у оборудования.',
-      empty: 'Пока нет категорий оборудования. Например: «Оружие», «Двигатели».',
-      placeholder: 'Например: Оружие'
     }
   };
 
@@ -334,6 +327,5 @@
   window.Pages.props = { render: renderProps };
   window.Pages.slots = { render: renderSlots };
   window.Pages.catShip = { render: function (root) { renderCategories(root, 'ship'); } };
-  window.Pages.catResource = { render: function (root) { renderCategories(root, 'resource'); } };
-  window.Pages.catEquipment = { render: function (root) { renderCategories(root, 'equipment'); } };
+  window.Pages.catGoods = { render: function (root) { renderCategories(root, 'goods'); } };
 })();

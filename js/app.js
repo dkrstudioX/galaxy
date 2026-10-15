@@ -9,11 +9,9 @@
     { hash: '#/props', label: 'Свойства', section: 'Справочники', page: 'props' },
     { hash: '#/slots', label: 'Слоты', section: 'Справочники', page: 'slots' },
     { hash: '#/categories/ship', label: 'Категории кораблей', section: 'Категории', page: 'catShip' },
-    { hash: '#/categories/resource', label: 'Категории ресурсов', section: 'Категории', page: 'catResource' },
-    { hash: '#/categories/equipment', label: 'Категории оборудования', section: 'Категории', page: 'catEquipment' },
+    { hash: '#/categories/goods', label: 'Категории товаров', section: 'Категории', page: 'catGoods' },
     { hash: '#/ships', label: 'Корабли', section: 'Объекты', page: 'ships' },
-    { hash: '#/resources', label: 'Ресурсы', section: 'Объекты', page: 'resources' },
-    { hash: '#/equipment', label: 'Оборудование', section: 'Объекты', page: 'equipment' }
+    { hash: '#/goods', label: 'Товары', section: 'Объекты', page: 'goods' }
   ];
 
   var navLinks = [];

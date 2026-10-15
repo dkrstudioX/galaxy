@@ -382,7 +382,6 @@ select.input { cursor: pointer; }
   background: rgba(13, 21, 38, 0.45);
 }
 .content-row { display: flex; align-items: center; gap: 6px; }
-.content-row .content-kind { flex: none; width: 128px; }
 .content-row .content-item { flex: 1; min-width: 0; }
 .content-row .content-qty { flex: none; width: 64px; }
 .content-row .icon-btn { flex: none; font-size: 13px; }
