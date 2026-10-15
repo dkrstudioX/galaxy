@@ -8,7 +8,6 @@
   --cyan: #4dd9ff;
   --violet: #a855f7;
   --pink: #ec4899;
-  --glass-edge: rgba(160, 140, 255, 0.28);
   --glow-cyan: rgba(77, 217, 255, 0.5);
   --glow-violet: rgba(168, 85, 247, 0.5);
   --glow-pink: rgba(236, 72, 153, 0.4);
@@ -24,17 +23,62 @@ body {
   font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
   color: var(--text);
   background:
-    radial-gradient(1400px 800px at 80% -15%, rgba(168, 85, 247, 0.28), transparent 55%),
-    radial-gradient(1200px 700px at -5% 90%, rgba(236, 72, 153, 0.22), transparent 55%),
-    radial-gradient(1000px 500px at 50% 50%, rgba(77, 217, 255, 0.10), transparent 60%),
-    radial-gradient(800px 400px at 90% 80%, rgba(143, 107, 255, 0.15), transparent 50%),
+    radial-gradient(1400px 800px at 80% -15%, rgba(168, 85, 247, 0.30), transparent 55%),
+    radial-gradient(1200px 700px at -5% 90%, rgba(236, 72, 153, 0.26), transparent 55%),
+    radial-gradient(1000px 500px at 50% 50%, rgba(77, 217, 255, 0.12), transparent 60%),
+    radial-gradient(800px 400px at 90% 80%, rgba(143, 107, 255, 0.18), transparent 50%),
     var(--bg);
   overflow-x: hidden;
 }
 
+/* ---------- Туманности ---------- */
+
+/* Два медленно дрейфующих облака: крупная мягкая масса с палитрой
+   фиолетовый → циан → розовый → оранжевый. */
+.nebula {
+  position: fixed;
+  inset: -20%;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(70px) saturate(1.4);
+  opacity: 0.9;
+}
+.nebula::before, .nebula::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+}
+.nebula::before {
+  width: 60vw;
+  height: 60vw;
+  left: 5%;
+  top: 5%;
+  background:
+    radial-gradient(closest-side at 35% 35%, rgba(124, 58, 237, 0.55), transparent 70%),
+    radial-gradient(closest-side at 65% 40%, rgba(77, 217, 255, 0.35), transparent 72%),
+    radial-gradient(closest-side at 50% 70%, rgba(236, 72, 153, 0.30), transparent 70%);
+  animation: nebula-drift 70s ease-in-out infinite alternate;
+}
+.nebula::after {
+  width: 48vw;
+  height: 48vw;
+  right: 0%;
+  bottom: 0%;
+  background:
+    radial-gradient(closest-side at 45% 45%, rgba(14, 165, 233, 0.42), transparent 70%),
+    radial-gradient(closest-side at 60% 60%, rgba(244, 114, 182, 0.28), transparent 72%),
+    radial-gradient(closest-side at 35% 65%, rgba(251, 146, 60, 0.20), transparent 70%);
+  animation: nebula-drift 90s ease-in-out infinite alternate-reverse;
+}
+@keyframes nebula-drift {
+  from { transform: translate3d(-4%, -3%, 0) scale(1); }
+  to   { transform: translate3d(5%, 4%, 0) scale(1.12); }
+}
+
 /* ---------- Звёздный фон ---------- */
 
-.stars, .stars2 {
+.stars, .stars2, .stars3 {
   position: fixed;
   inset: 0;
   pointer-events: none;
@@ -63,7 +107,62 @@ body {
   opacity: 0.7;
   animation: twinkle 9s ease-in-out infinite alternate-reverse;
 }
+/* Крупные «алмазные» звёзды с крестом лучей */
+.stars3 {
+  background-image:
+    radial-gradient(2.5px 2.5px at 60px 120px, rgba(255, 255, 255, 0.95), transparent 60%),
+    radial-gradient(1px 8px at 60px 120px, rgba(190, 220, 255, 0.5), transparent 70%),
+    radial-gradient(8px 1px at 60px 120px, rgba(190, 220, 255, 0.5), transparent 70%),
+    radial-gradient(2px 2px at 300px 40px, rgba(77, 217, 255, 0.9), transparent 60%),
+    radial-gradient(1px 7px at 300px 40px, rgba(120, 220, 255, 0.4), transparent 70%),
+    radial-gradient(7px 1px at 300px 40px, rgba(120, 220, 255, 0.4), transparent 70%),
+    radial-gradient(2px 2px at 180px 260px, rgba(236, 72, 153, 0.85), transparent 60%),
+    radial-gradient(1px 6px at 180px 260px, rgba(244, 140, 190, 0.4), transparent 70%),
+    radial-gradient(6px 1px at 180px 260px, rgba(244, 140, 190, 0.4), transparent 70%);
+  background-size: 360px 320px;
+  opacity: 0.8;
+  animation: twinkle 12s ease-in-out infinite alternate;
+}
 @keyframes twinkle { from { opacity: 0.35; } to { opacity: 1; } }
+
+/* ---------- Астероиды ---------- */
+
+/* Каменные осколки: неправильные clip-path-формы, медленный дрейф
+   через экран с вращением; размер/точка старта/скорость — через CSS-переменные. */
+.asteroids {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.ast {
+  position: absolute;
+  left: var(--x, 20%);
+  top: var(--y, 20%);
+  width: var(--s, 50px);
+  height: var(--s, 50px);
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.22), transparent 45%),
+    linear-gradient(135deg, #8d7f72 0%, #5c5148 55%, #35302a 100%);
+  clip-path: polygon(18% 6%, 55% 0%, 88% 22%, 100% 58%, 82% 92%, 40% 100%, 6% 78%, 0% 36%);
+  opacity: 0.55;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.55));
+  animation: ast-drift var(--dur, 200s) linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+.ast-b {
+  clip-path: polygon(28% 12%, 72% 0%, 96% 38%, 84% 82%, 38% 96%, 4% 64%, 8% 24%);
+  opacity: 0.42;
+}
+.ast-c {
+  clip-path: polygon(10% 30%, 42% 4%, 80% 14%, 98% 52%, 74% 94%, 30% 88%, 2% 62%);
+  opacity: 0.5;
+}
+@keyframes ast-drift {
+  from { transform: translate3d(-18vw, 2vh, 0) rotate(0deg); }
+  to   { transform: translate3d(118vw, -6vh, 0) rotate(660deg); }
+}
 
 /* ---------- Каркас ---------- */
 
@@ -84,38 +183,101 @@ body {
   width: min(680px, 100%);
   padding: 42px 44px 32px;
   border-radius: 22px;
-  border: 1px solid var(--glass-edge);
-  background: linear-gradient(160deg, rgba(20, 25, 60, 0.35), rgba(10, 12, 30, 0.28));
-  -webkit-backdrop-filter: blur(24px) saturate(1.6);
-  backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid transparent;
+  /* Почти прозрачное стекло: тонкий градиент + сильный блюр и насыщение фона */
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 38%, rgba(80, 60, 160, 0.05) 100%);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8) brightness(1.08);
+  backdrop-filter: blur(30px) saturate(1.8) brightness(1.08);
   box-shadow:
-    0 30px 80px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    inset 0 0 60px rgba(120, 80, 255, 0.05),
-    0 0 80px rgba(168, 85, 247, 0.06);
+    0 30px 80px rgba(0, 0, 0, 0.55),
+    0 0 90px rgba(124, 58, 237, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(120, 200, 255, 0.08),
+    inset 0 0 70px rgba(120, 80, 255, 0.07);
   animation: rise 0.5s ease both;
+}
+/* Рамка с градиентным свечением по периметру */
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  padding: 1px;
+  background: linear-gradient(140deg,
+    rgba(77, 217, 255, 0.75), rgba(168, 85, 247, 0.55) 35%,
+    rgba(236, 72, 153, 0.35) 65%, rgba(77, 217, 255, 0.5));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
 }
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
 }
 
+/* Диагональный блик, медленно проходящий по стеклу */
+.sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sheen::before {
+  content: "";
+  position: absolute;
+  top: -60%;
+  left: -80%;
+  width: 55%;
+  height: 220%;
+  transform: rotate(22deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.10) 45%, rgba(190, 230, 255, 0.16) 50%, rgba(255, 255, 255, 0.10) 55%, transparent);
+  animation: sheen-move 9s ease-in-out infinite;
+}
+@keyframes sheen-move {
+  0%, 55% { left: -80%; }
+  85%, 100% { left: 140%; }
+}
+
+/* Горизонтальные светящиеся кромки сверху и снизу */
+.edge {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  height: 2px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.edge-t {
+  top: 0;
+  background: linear-gradient(90deg, transparent, rgba(77, 217, 255, 0.8), rgba(168, 85, 247, 0.9), rgba(77, 217, 255, 0.8), transparent);
+  filter: drop-shadow(0 0 8px var(--glow-cyan));
+}
+.edge-b {
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(236, 72, 153, 0.6), rgba(168, 85, 247, 0.8), rgba(236, 72, 153, 0.6), transparent);
+  filter: drop-shadow(0 0 8px var(--glow-violet));
+}
+
 /* Угловые скобки-рамки */
-.glass-panel::before, .glass-panel::after,
+.glass-panel::after,
 .frame::before, .frame::after {
   content: "";
   position: absolute;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   border: 2px solid var(--cyan);
-  opacity: 0.85;
-  filter: drop-shadow(0 0 6px var(--glow-cyan));
+  opacity: 0.95;
+  filter: drop-shadow(0 0 7px var(--glow-cyan));
 }
-.glass-panel::before { top: -2px; left: -2px; border-right: none; border-bottom: none; border-top-left-radius: 8px; }
-.glass-panel::after { bottom: -2px; right: -2px; border-left: none; border-top: none; border-bottom-right-radius: 8px; }
+/* Псевдоэлемент ::before занят градиентной рамкой — верхние углы рисует .frame */
 .frame { position: absolute; inset: 0; pointer-events: none; }
-.frame::before { top: -2px; right: -2px; border-left: none; border-bottom: none; border-top-right-radius: 8px; border-color: var(--violet); filter: drop-shadow(0 0 6px var(--glow-violet)); }
-.frame::after { bottom: -2px; left: -2px; border-right: none; border-top: none; border-bottom-left-radius: 8px; border-color: var(--violet); filter: drop-shadow(0 0 6px var(--glow-violet)); }
+.glass-panel::after { bottom: -2px; right: -2px; border-left: none; border-top: none; border-bottom-right-radius: 10px; }
+.frame::before { top: -2px; left: -2px; border-right: none; border-bottom: none; border-top-left-radius: 10px; }
+.frame::after { top: -2px; right: -2px; border-left: none; border-bottom: none; border-top-right-radius: 10px; border-color: var(--violet); filter: drop-shadow(0 0 7px var(--glow-violet)); }
 
 /* ---------- Титул ---------- */
 
@@ -153,12 +315,27 @@ body {
   gap: 16px;
   padding: 18px 20px;
   border-radius: 14px;
-  border: 1px solid rgba(140, 180, 255, 0.14);
-  background: linear-gradient(120deg, rgba(30, 35, 70, 0.35), rgba(14, 16, 40, 0.28));
+  border: 1px solid rgba(160, 190, 255, 0.18);
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.05), rgba(80, 60, 160, 0.04) 60%, rgba(255, 255, 255, 0.02));
+  -webkit-backdrop-filter: blur(12px) saturate(1.5);
+  backdrop-filter: blur(12px) saturate(1.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
   color: var(--text);
   text-decoration: none;
   overflow: hidden;
   transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+/* Тонкая стеклянная полоска-отражение под верхней кромкой */
+.menu-btn::after {
+  content: "";
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  opacity: 0.6;
+  pointer-events: none;
 }
 .menu-btn::before {
   content: "";
@@ -171,9 +348,9 @@ body {
 }
 .menu-btn:hover {
   transform: translateY(-2px);
-  border-color: rgba(160, 140, 255, 0.45);
-  background: linear-gradient(120deg, rgba(40, 48, 96, 0.45), rgba(20, 24, 56, 0.38));
-  box-shadow: 0 12px 40px rgba(80, 40, 140, 0.35), 0 0 30px rgba(168, 85, 247, 0.15);
+  border-color: rgba(160, 140, 255, 0.55);
+  background: linear-gradient(120deg, rgba(120, 160, 255, 0.10), rgba(168, 85, 247, 0.08) 60%, rgba(236, 72, 153, 0.05));
+  box-shadow: 0 12px 40px rgba(80, 40, 140, 0.40), 0 0 34px rgba(168, 85, 247, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 .menu-btn:hover::before { opacity: 1; }
 .menu-btn:focus-visible { outline: 2px solid rgba(160, 140, 255, 0.7); outline-offset: 2px; }
@@ -258,5 +435,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stars, .stars2, .glass-panel, .pulse, .menu-btn { animation: none; transition: none; }
+  .stars, .stars2, .stars3, .nebula, .nebula::before, .nebula::after,
+  .glass-panel, .sheen::before, .ast, .pulse, .menu-btn { animation: none; transition: none; }
 }
