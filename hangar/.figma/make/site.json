@@ -1,0 +1,10 @@
+{
+  "description": "Manage your starship fleet with an intuitive interface featuring a base information tab, shop categories, and a list of purchased ships for easy navigation.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

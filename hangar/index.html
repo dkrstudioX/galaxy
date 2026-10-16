@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HELIOS // 7 — орбитальная база</title>
+<link rel="stylesheet" href="hangar.css">
+</head>
+<body>
+<main class="app-shell">
+  <div class="scanline"></div>
+  <div class="station-backdrop" aria-hidden="true">
+    <div class="bay-window">
+      <span class="planet"></span>
+      <span class="stars stars-near"></span>
+      <span class="stars stars-far"></span>
+    </div>
+    <div class="bay-beam beam-left"></div>
+    <div class="bay-beam beam-right"></div>
+    <div class="bay-ceiling"></div>
+    <div class="bay-floor"></div>
+    <div class="runway-lights"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">
+        <svg aria-hidden="true" fill="none" height="23" viewBox="0 0 24 24" width="23" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
+          <path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path>
+          <circle cx="12" cy="12" r="5"></circle>
+          <path d="m8.5 8.5 7 7m0-7-7 7"></path>
+        </svg>
+      </span>
+      <div>
+        <strong>HELIOS // 7</strong>
+        <span>ОРБИТАЛЬНАЯ ЗВЁЗДНАЯ БАЗА</span>
+      </div>
+    </div>
+    <div class="station-status">
+      <span class="pulse"></span>
+      СИСТЕМЫ В НОРМЕ
+      <span class="divider"></span>
+      СЕКТОР A-17
+    </div>
+    <div class="balance">
+      <span>
+        <svg aria-hidden="true" fill="none" height="17" viewBox="0 0 24 24" width="17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="M15 9.5c-.6-1-1.5-1.5-3-1.5-2 0-3 1-3 2.2 0 3.1 6 1 6 4 0 1.2-1 2.3-3 2.3-1.5 0-2.6-.5-3.2-1.5M12 6v2m0 8.5V19"></path>
+        </svg>
+      </span>
+      <div>
+        <small>Баланс</small>
+        <strong id="creditsValue"></strong>
+      </div>
+    </div>
+  </header>
+
+  <nav class="primary-tabs">
+    <button data-action="tab" data-tab="info">
+      <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
+        <circle cx="12" cy="12" r="9"></circle>
+        <path d="M12 11v6M12 7h.01"></path>
+      </svg>
+      Информация о базе
+    </button>
+    <button data-action="tab" data-tab="shop">
+      <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
+        <path d="M4 9h16l-1-5H5L4 9Z"></path>
+        <path d="M6 9v11h12V9M9 20v-6h6v6"></path>
+      </svg>
+      Магазин
+    </button>
+    <button data-action="tab" data-tab="hangar">
+      <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
+        <path d="M3 20V9l9-6 9 6v11M7 20v-8h10v8"></path>
+        <path d="M9 16h6M9 12h6"></path>
+      </svg>
+      Ангар
+    </button>
+  </nav>
+
+  <div class="content">
+    <section class="shop-view" id="view-shop">
+      <div class="section-title">
+        <div>
+          <span class="eyebrow">ТОРГОВЫЙ УЗЕЛ // 04</span>
+          <h1>Снаряжение и снабжение</h1>
+        </div>
+        <div class="terminal-status"><span></span> <span id="noticeShop">Торговый терминал подключён</span></div>
+      </div>
+
+      <div class="category-tabs" id="categoryTabs"></div>
+
+      <div class="market-grid">
+        <div class="inventory-panel">
+          <div class="panel-head">
+            <div><span>01</span><strong>В продаже</strong></div>
+            <small id="shopCount"></small>
+          </div>
+          <div class="item-list" id="shopList"></div>
+        </div>
+
+        <div class="trade-console" id="shopConsole"></div>
+
+        <div class="inventory-panel">
+          <div class="panel-head">
+            <div><span>02</span><strong>На корабле</strong></div>
+            <small>19 / 24 слотов</small>
+          </div>
+          <div class="cargo-capacity"><span style="width:79%"></span></div>
+          <div class="item-list" id="cargoList"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="shop-view hangar-view" id="view-hangar" hidden>
+      <div class="section-title">
+        <div>
+          <span class="eyebrow">ГРУЗОВОЙ ТЕРМИНАЛ // C-12</span>
+          <h1>Ресурсы ангара</h1>
+        </div>
+        <div class="terminal-status"><span></span> <span id="noticeHangar">Торговый терминал подключён</span></div>
+      </div>
+
+      <div class="market-grid hangar-grid">
+        <div class="inventory-panel">
+          <div class="panel-head">
+            <div><span>01</span><strong>На базе</strong></div>
+            <small>Хранилище 68%</small>
+          </div>
+          <div class="cargo-capacity"><span style="width:68%"></span></div>
+          <div class="item-list" id="baseList"></div>
+        </div>
+
+        <div class="trade-console hangar-console" id="hangarConsole"></div>
+
+        <div class="inventory-panel">
+          <div class="panel-head">
+            <div><span>02</span><strong>На корабле</strong></div>
+            <small>Груз 19 / 24</small>
+          </div>
+          <div class="cargo-capacity"><span style="width:79%"></span></div>
+          <div class="item-list" id="shipResList"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="info-view" id="view-info" hidden>
+      <div class="section-title">
+        <div>
+          <span class="eyebrow">АНГАР // СЕКТОР C</span>
+          <h1>База «Helios VII»</h1>
+        </div>
+        <div class="terminal-status"><span></span> Стыковка завершена</div>
+      </div>
+
+      <div class="info-tabs" id="infoTabs">
+        <button data-action="info-section" data-sec="properties">
+          <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
+            <path d="m12 3 5 7-1 8-4-2-4 2-1-8 5-7Z"></path>
+            <path d="M10 12h4M12 3v7"></path>
+          </svg>
+          Свойства корабля
+        </button>
+        <button data-action="info-section" data-sec="equipment">
+          <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
+            <path d="m5 19 4-4m2-2 8-8v5l-8 8H6v-5l8-8h5"></path>
+            <path d="m14 10 3 3"></path>
+          </svg>
+          Купленное оборудование
+        </button>
+        <button data-action="info-section" data-sec="resources">
+          <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
+            <path d="m12 3 7 4v10l-7 4-7-4V7l7-4Z"></path>
+            <path d="m5 7 7 4 7-4M12 11v10"></path>
+          </svg>
+          Ресурсы
+        </button>
+      </div>
+
+      <div id="infoContent"></div>
+    </section>
+
+    <div id="shipDock"></div>
+  </div>
+</main>
+<script src="hangar.js"></script>
+</body>
+</html>

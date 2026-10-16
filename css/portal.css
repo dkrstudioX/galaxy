@@ -308,7 +308,7 @@ body {
 
 .portal-menu {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
 
@@ -333,9 +333,11 @@ body {
   animation: rise 0.45s ease both;
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
-/* Стаггер: вторая карточка въезжает чуть позже */
+/* Стаггер: карточки въезжают по очереди */
 .portal-card:nth-child(2) { animation-delay: 0.08s; }
+.portal-card:nth-child(3) { animation-delay: 0.16s; }
 .portal-card--game { --accent: var(--violet); --accent-2: var(--pink); }
+.portal-card--hangar { --accent: #2dd4bf; --accent-2: var(--cyan); }
 
 /* Тонкая стеклянная полоска-отражение под верхней кромкой */
 .portal-card::after {
@@ -466,6 +468,10 @@ body {
 .panel-center .portal-card { text-align: left; }
 
 /* ---------- Узкие экраны и анимации ---------- */
+
+@media (max-width: 960px) {
+  .portal-menu { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 640px) {
   .glass-panel { padding: 30px 22px 24px; border-radius: 18px; }
