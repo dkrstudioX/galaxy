@@ -95,7 +95,7 @@
   function renderSlots(root) {
     root.appendChild(UI.pageHead({
       title: 'Слоты',
-      subtitle: 'Справочник слотов: слоты назначаются кораблям, вместимость ограничивает массу их содержимого.',
+      subtitle: 'Справочник слотов: крепления принимают только совместимое оборудование, грузовые слоты — любой груз, кроме кораблей. Вместимость — в килограммах.',
       addLabel: 'Добавить слот',
       onAdd: function () { openSlotModal(null); }
     }));
@@ -119,6 +119,14 @@
             var cap = Store.slotCapacity(s);
             return h('span', { class: isFinite(cap) ? '' : 'muted', text: isFinite(cap) ? Store.fmtNum(cap) + ' кг' : '∞' });
           }
+        },
+        {
+          title: 'Тип',
+          render: function (s) {
+            return s.kind === 'cargo'
+              ? h('span', { class: 'type-chip type-chip-ship', text: 'грузовой' })
+              : h('span', { class: 'type-chip', text: 'крепление' });
+          }
         }
       ],
       rows: items,
@@ -138,9 +146,15 @@
       value: existing ? existing.capacity : '',
       placeholder: 'Без ограничения'
     });
+    var cargoRow = UI.checkRow('Грузовой слот', existing ? existing.kind === 'cargo' : false);
     var body = h('div', {},
       UI.field('Название', nameInput),
-      UI.field('Вместимость, кг', capInput, 'Сколько массы содержимого помещается в слот корабля. Пусто — без ограничения.')
+      UI.field('Вместимость, кг', capInput, 'Сколько массы содержимого помещается в слот корабля. Пусто — без ограничения.'),
+      h('div', { class: 'field' },
+        h('label', { class: 'field-label', text: 'Что можно положить' }),
+        cargoRow.el,
+        h('div', { class: 'hint', text: 'Грузовой слот принимает любой груз, кроме кораблей: руду, топливо, оборудование — лишь бы хватило вместимости. Без галочки слот принимает только совместимое оборудование.' })
+      )
     );
 
     UI.modal({
@@ -151,11 +165,12 @@
         if (!name) return 'Укажите название слота.';
         if (Store.nameTaken('slots', name, existing ? existing.id : null)) return 'Слот с таким названием уже есть.';
         var capacity = capInput.value.trim();
+        var kind = cargoRow.input.checked ? 'cargo' : 'mount';
         if (existing) {
-          Store.patch('slots', existing.id, { name: name, capacity: capacity });
+          Store.patch('slots', existing.id, { name: name, capacity: capacity, kind: kind });
           UI.toast('Слот изменён', 'ok');
         } else {
-          Store.createSlot(name, capacity);
+          Store.createSlot(name, capacity, kind);
           UI.toast('Слот добавлен', 'ok');
         }
         App.refresh();

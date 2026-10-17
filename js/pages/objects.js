@@ -247,13 +247,16 @@
     });
   }
 
-  /* Предметы, подходящие в слот: без «своего» слота или с таким же слотом.
-     Корабли в чужие слоты не вставляются. */
+  /* Предметы, подходящие в слот. Грузовой слот принимает любой груз, кроме кораблей;
+     крепление — только оборудование со своим слотом (одинаковый slotId). */
   function compatibleItems(slotId, excludeId) {
+    var slot = slotId ? Store.byId('slots', slotId) : null;
+    var isCargo = !!(slot && slot.kind === 'cargo');
     return Store.objects().filter(function (it) {
       if (it.id === excludeId) return false;
       if (Store.categoryIsShip(it.categoryId)) return false;
-      return !it.slotId || it.slotId === slotId;
+      if (isCargo) return true;
+      return it.slotId === slotId;
     });
   }
 
