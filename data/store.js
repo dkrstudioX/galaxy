@@ -393,6 +393,114 @@
     };
   }
 
+  /* ---------- Демонстрационный набор ---------- */
+
+  /* Набор для быстрого старта: всё строится на массе объектов.
+     Свойство «Редкость» намеренно не используется — важны вес и вместимость. */
+  function demoData() {
+    var d = blank();
+
+    function addProp(name, value) { var p = { id: uid(), name: name, value: value }; d.props.push(p); return p; }
+    function addSlot(name, capacity) { var s = { id: uid(), name: name, capacity: capacity || '' }; d.slots.push(s); return s; }
+    function addCat(name, propIds, parent, isShip, icon) {
+      var c = {
+        id: uid(), name: name, propIds: propIds, parentId: parent ? parent.id : '',
+        isShip: !!isShip, icon: icon || ''
+      };
+      d.categories.push(c);
+      return c;
+    }
+    function vals(pairs) {
+      var out = {};
+      for (var i = 0; i < pairs.length; i++) out[pairs[i][0].id] = pairs[i][1];
+      return out;
+    }
+    /* Корабль: масса корпуса и свои слоты с содержимым по умолчанию. */
+    function addShip(name, cat, valuePairs, mass, price, icon, slotEntries) {
+      d.objects.push({
+        id: uid(), name: name, categoryId: cat.id, parentCategoryId: cat.parentId || '',
+        values: vals(valuePairs), mass: mass, price: price || '', icon: icon || '',
+        slotId: null,
+        slots: slotEntries.map(function (e) {
+          return {
+            slotId: e.slot.id,
+            contents: (e.contents || []).map(function (c) { return { itemId: c.item.id, qty: String(c.qty) }; })
+          };
+        })
+      });
+    }
+    /* Предмет: масса единицы и слот, в который он вставляется (null — любой). */
+    function addItem(name, cat, valuePairs, mass, slot, price, icon) {
+      var item = {
+        id: uid(), name: name, categoryId: cat.id, parentCategoryId: cat.parentId || '',
+        values: vals(valuePairs), mass: mass, price: price || '', icon: icon || '',
+        slotId: slot ? slot.id : null, slots: []
+      };
+      d.objects.push(item);
+      return item;
+    }
+
+    var durability = addProp('Прочность', '100');
+    var speed = addProp('Скорость', '20');
+    var damage = addProp('Урон', '25');
+    var defense = addProp('Защита', '10');
+    var fuel = addProp('Расход топлива', '2');
+
+    /* Вместимость слотов — в килограммах. */
+    var slotWeapon = addSlot('Оружие', '30');
+    var slotEngine = addSlot('Двигатель', '40');
+    var slotShield = addSlot('Щит', '25');
+    var slotCargo = addSlot('Грузовой отсек', '500');
+    var slotHold = addSlot('Грузовой трюм', '250');
+
+    /* Одно дерево категорий: «Корабли» — категория кораблей, флаг наследуется. */
+    var catShips = addCat('Корабли', [durability.id, speed.id], null, true, 'ship');
+    var catLiners = addCat('Линкоры', [], catShips, false, 'ship');
+    var catShuttles = addCat('Шатлы', [], catShips, false, 'rocket');
+    var catResources = addCat('Ресурсы', [], null, false, 'gem');
+    var catMaterials = addCat('Материалы', [], catResources, false, 'crate');
+    var catFuel = addCat('Топливо', [], catResources, false, 'fuel');
+    var catEquipment = addCat('Оборудование', [], null, false, 'tool');
+    var catWeapons = addCat('Оружие', [damage.id], catEquipment, false, 'weapon');
+    var catShields = addCat('Щиты', [defense.id], catEquipment, false, 'shield');
+    var catEngines = addCat('Двигатели', [speed.id, fuel.id], catEquipment, false, 'engine');
+    var catOther = addCat('Прочее', [], null, false, 'box');
+    var catConsumables = addCat('Расходники', [], catOther, false, 'tool');
+
+    /* Масса — базовая величина: именно она учитывается вместимостью слотов. */
+    var iron = addItem('Железо', catMaterials, [], '8', null, '120', 'crate');
+    var iridium = addItem('Иридий', catMaterials, [], '12', null, '340', 'gem');
+    addItem('Гипертопливо', catFuel, [], '5', null, '260', 'fuel');
+    addItem('Плазменный боеприпас', catWeapons, [[damage, '15']], '3', slotWeapon, '90', 'box');
+
+    var laser = addItem('Лазер Mk I', catWeapons, [[damage, '35']], '6', slotWeapon, '1450', 'weapon');
+    var rockets = addItem('Ракетная установка', catWeapons, [[damage, '70']], '18', slotWeapon, '2600', 'rocket');
+    var engine = addItem('Ионный двигатель', catEngines, [[speed, '32'], [fuel, '3']], '25', slotEngine, '3200', 'engine');
+    var shield = addItem('Плазменный щит', catShields, [[defense, '28']], '14', slotShield, '2100', 'shield');
+    var repairKit = addItem('Ремкомплект', catConsumables, [], '2', null, '180', 'tool');
+
+    /* Грузовые слоты заполняются по массе: 500 кг вместимости — это 500 кг груза,
+       без разницы, руда это или оборудование. */
+    addShip('Сокол', catShuttles, [[durability, '90'], [speed, '26']], '260', '9800', 'ship', [
+      { slot: slotWeapon, contents: [{ item: laser, qty: 2 }] },
+      { slot: slotEngine, contents: [{ item: engine, qty: 1 }] },
+      { slot: slotCargo, contents: [] }
+    ]);
+    addShip('Титан', catLiners, [[durability, '160'], [speed, '14']], '1800', '28400', 'ship', [
+      { slot: slotWeapon, contents: [{ item: rockets, qty: 1 }] },
+      { slot: slotWeapon, contents: [{ item: laser, qty: 2 }] },
+      { slot: slotShield, contents: [{ item: shield, qty: 1 }] },
+      { slot: slotCargo, contents: [
+        { item: iron, qty: 10 },
+        { item: iridium, qty: 5 }
+      ] },
+      { slot: slotHold, contents: [{ item: repairKit, qty: 5 }] },
+      { slot: slotHold, contents: [] }
+    ]);
+
+    return d;
+  }
+
   /* ---------- Публичный API ---------- */
 
   window.Store = {
@@ -488,6 +596,7 @@
     exportJSON: exportJSON,
     importJSON: importJSON,
     clearAll: clearAll,
+    loadDemo: function () { db = demoData(); persist(); },
     counts: counts
   };
 })();
