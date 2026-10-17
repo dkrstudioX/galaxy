@@ -102,6 +102,13 @@ body.modal-open { overflow: hidden; }
   color: var(--muted);
   line-height: 1.5;
 }
+.build-tag {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #6f7fa3;
+}
 
 .content { flex: 1; min-width: 0; padding: 30px 38px 60px; }
 #page { max-width: 1080px; }

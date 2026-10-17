@@ -4,6 +4,8 @@
 (function () {
   'use strict';
 
+  console.info('HELIOS 7 — сборка 17.10.2026');
+
   /* ---------- Иконки ---------- */
 
   var ICONS = {

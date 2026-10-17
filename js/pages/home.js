@@ -1,4 +1,4 @@
-/* Страница «Главная»: сводка, с чего начать, экспорт/импорт и демо-данные. */
+/* Страница «Главная»: сводка, с чего начать, экспорт/импорт. */
 (function () {
   'use strict';
   var h = UI.h;
@@ -26,26 +26,6 @@
       URL.revokeObjectURL(url);
     }, 500);
     UI.toast('Файл экспортирован', 'ok');
-  }
-
-  function demoLoad() {
-    var c = Store.counts();
-    var hasData = Object.keys(c).some(function (k) { return c[k] > 0; });
-    var apply = function () {
-      Store.loadDemo();
-      UI.toast('Демо-данные загружены', 'ok');
-      App.refresh();
-    };
-    if (hasData) {
-      UI.confirm({
-        title: 'Загрузить демо-данные?',
-        text: 'Текущие данные будут заменены демонстрационным набором.',
-        okLabel: 'Загрузить',
-        onOk: apply
-      });
-    } else {
-      apply();
-    }
   }
 
   function clearAll() {
@@ -112,7 +92,7 @@
 
     root.appendChild(h('div', { class: 'card panel' },
       h('h2', { class: 'panel-title', text: 'Данные' }),
-      h('p', { class: 'panel-sub', text: 'Экспорт и импорт сохраняют всю базу одним JSON-файлом. Демо-данные помогут быстро посмотреть, как всё устроено.' }),
+      h('p', { class: 'panel-sub', text: 'Экспорт и импорт сохраняют всю базу одним JSON-файлом.' }),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn btn-primary', text: 'Экспорт JSON', onclick: exportData }),
         h('button', {
@@ -127,7 +107,6 @@
             });
           }
         }),
-        h('button', { class: 'btn', text: 'Загрузить демо-данные', onclick: demoLoad }),
         h('button', { class: 'btn btn-danger', text: 'Очистить всё', onclick: clearAll })
       ),
       fileInput

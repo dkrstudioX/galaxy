@@ -4,6 +4,10 @@
 
   var h = UI.h;
 
+  /* Метка сборки: видна в консоли, помогает понять, какая версия открыта. */
+  var BUILD = '17.10.2026';
+  console.info('Galaxy Admin — сборка ' + BUILD);
+
   var ROUTES = [
     { hash: '#/home', label: 'Админка', section: null, page: 'home' },
     { hash: '#/props', label: 'Свойства', section: 'Справочники', page: 'props' },
