@@ -193,17 +193,74 @@
   var CATEGORY_META = {
     ship: {
       title: 'Категории кораблей',
-      subtitle: 'Категория задаёт список свойств, которые заполняются у кораблей.',
-      empty: 'Пока нет категорий кораблей. Например: «Фрегат», «Крейсер».',
-      placeholder: 'Например: Фрегат'
+      subtitle: 'Категория задаёт список свойств кораблей. Категории вкладываются друг в друга: например, «Корабли» → «Линкоры», «Шатлы».',
+      empty: 'Пока нет категорий кораблей. Например: «Корабли» → «Линкоры», «Шатлы».',
+      placeholder: 'Например: Линкоры'
     },
     goods: {
       title: 'Категории товаров',
-      subtitle: 'Категория задаёт список свойств, которые заполняются у товаров.',
-      empty: 'Пока нет категорий товаров. Например: «Металлы», «Оружие», «Двигатели».',
-      placeholder: 'Например: Металлы'
+      subtitle: 'Категория задаёт список свойств товаров. Категории вкладываются друг в друга: например, «Оборудование» → «Оружие», «Щиты».',
+      empty: 'Пока нет категорий товаров. Например: «Ресурсы» → «Материалы», «Топливо».',
+      placeholder: 'Например: Материалы'
     }
   };
+
+  /* Свёрнутые ветки дерева: id → true. По умолчанию дерево развёрнуто целиком. */
+  var collapsedCats = {};
+
+  /* Селект категорий: вложенные подписаны полным путём («Корабли / Линкоры»). */
+  function categoryOptions(type, emptyLabel, excluded) {
+    var options = [{ value: '', label: emptyLabel }];
+    Store.categoryTree(type).forEach(function (node) {
+      if (excluded && excluded[node.cat.id]) return;
+      options.push({
+        value: node.cat.id,
+        label: node.depth ? Store.categoryPath(node.cat.id) : node.cat.name
+      });
+    });
+    return options;
+  }
+
+  function treeNameCell(row) {
+    var toggle;
+    if (row.hasChildren) {
+      var isCollapsed = !!collapsedCats[row.cat.id];
+      toggle = h('button', {
+        class: 'tree-toggle',
+        text: isCollapsed ? '\u25B8' : '\u25BE',
+        title: isCollapsed ? 'Показать подкатегории' : 'Скрыть подкатегории',
+        onclick: function () {
+          if (isCollapsed) delete collapsedCats[row.cat.id];
+          else collapsedCats[row.cat.id] = true;
+          App.refresh();
+        }
+      });
+    } else {
+      toggle = h('span', { class: 'tree-toggle tree-toggle-empty' });
+    }
+    return h('div', { class: 'tree-cell' },
+      h('span', { class: 'tree-indent', style: 'width:' + (row.depth * 22) + 'px' }),
+      toggle,
+      h('span', { class: 'cell-main', text: row.cat.name })
+    );
+  }
+
+  /* Собственные свойства — обычными метками, унаследованные от родителей — пунктирными. */
+  function propsCell(cat) {
+    var own = cat.propIds.map(function (id) { return Store.byId('props', id); }).filter(Boolean);
+    var inherited = Store.inheritedProps(cat.id);
+    if (!own.length && !inherited.length) return h('span', { class: 'muted', text: '—' });
+    return h('div', { class: 'prop-chips' },
+      own.map(function (p) { return h('span', { class: 'prop-chip', text: p.name }); }),
+      inherited.map(function (item) {
+        return h('span', {
+          class: 'prop-chip prop-chip-inherited',
+          text: item.prop.name,
+          title: 'Унаследовано от «' + item.from.name + '»'
+        });
+      })
+    );
+  }
 
   function renderCategories(root, type) {
     var meta = CATEGORY_META[type];
@@ -212,88 +269,162 @@
       title: meta.title,
       subtitle: meta.subtitle,
       addLabel: 'Добавить категорию',
-      onAdd: function () { openCategoryModal(type, null); }
+      onAdd: function () { openCategoryModal(type, null, ''); }
     }));
 
-    var items = Store.categories(type);
-    if (!items.length) {
+    if (!Store.categoryTree(type).length) {
       root.appendChild(UI.emptyState({
         text: meta.empty,
         addLabel: 'Добавить категорию',
-        onAdd: function () { openCategoryModal(type, null); }
+        onAdd: function () { openCategoryModal(type, null, ''); }
       }));
       return;
     }
 
+    /* В таблицу попадают только видимые строки: содержимое свёрнутых веток скрыто. */
+    var rows = [];
+    (function collect(parentId, depth) {
+      Store.childCategories(type, parentId).forEach(function (cat) {
+        var kids = Store.childCategories(type, cat.id);
+        rows.push({ cat: cat, depth: depth, hasChildren: kids.length > 0, childCount: kids.length });
+        if (kids.length && !collapsedCats[cat.id]) collect(cat.id, depth + 1);
+      });
+    })('', 0);
+
     root.appendChild(UI.table({
       columns: [
-        { title: 'Название', render: function (c) { return h('span', { class: 'cell-main', text: c.name }); } },
+        { title: 'Название', render: treeNameCell },
+        { title: 'Свойства', render: function (row) { return propsCell(row.cat); } },
         {
-          title: 'Свойства',
-          render: function (c) {
-            var names = c.propIds.map(function (id) {
-              var p = Store.byId('props', id);
-              return p ? p.name : null;
-            }).filter(Boolean);
-            return h('span', { class: names.length ? '' : 'muted', text: names.length ? names.join(', ') : '—' });
+          title: 'Подкатегории',
+          render: function (row) {
+            return h('span', { class: row.childCount ? '' : 'muted', text: row.childCount ? String(row.childCount) : '—' });
           }
         }
       ],
-      rows: items,
-      actions: function (c) {
-        return UI.editDelete(
-          function () { openCategoryModal(type, c); },
-          function () { deleteCategory(c); }
-        );
+      rows: rows,
+      actions: function (row) {
+        return [
+          h('button', {
+            class: 'btn btn-sm',
+            text: 'Подкатегория',
+            title: 'Создать вложенную категорию',
+            onclick: function () { openCategoryModal(type, null, row.cat.id); }
+          })
+        ].concat(UI.editDelete(
+          function () { openCategoryModal(type, row.cat, ''); },
+          function () { deleteCategory(row.cat); }
+        ));
       }
+    }));
+
+    root.appendChild(h('div', {
+      class: 'hint',
+      text: 'Подкатегория наследует свойства родительской категории. Стрелка слева сворачивает ветку, кнопка «Подкатегория» создаёт вложенную категорию внутри строки.'
     }));
   }
 
-  function openCategoryModal(type, existing) {
-    var props = Store.props();
+  function openCategoryModal(type, existing, parentId) {
+    var isEdit = !!existing;
     var meta = CATEGORY_META[type];
-    var nameInput = UI.input({ value: existing ? existing.name : '', placeholder: meta.placeholder });
 
-    var checks = [];
-    var listBox;
-    if (props.length) {
-      listBox = h('div', { class: 'check-list' }, props.map(function (p) {
-        var row = UI.checkRow(
-          p.name,
-          existing ? existing.propIds.indexOf(p.id) > -1 : false,
-          h('span', { class: 'check-side muted', text: p.value || '—' })
-        );
-        checks.push({ id: p.id, input: row.input });
-        return row.el;
-      }));
-    } else {
-      listBox = h('div', { class: 'hint-box', text: 'Свойств пока нет. Сначала создайте их на странице «Свойства».' });
+    var nameInput = UI.input({ value: isEdit ? existing.name : '', placeholder: meta.placeholder });
+
+    /* Родителем может стать любая категория того же типа, кроме самой категории и её подкатегорий. */
+    var excluded = {};
+    if (isEdit) {
+      excluded[existing.id] = true;
+      Store.categoryDescendants(existing.id).forEach(function (c) { excluded[c.id] = true; });
     }
+    var initialParent = isEdit ? (existing.parentId || '') : (parentId || '');
+    var parentSelect = UI.select({
+      options: categoryOptions(type, '— корневая категория —', excluded),
+      value: excluded[initialParent] ? '' : initialParent
+    });
+    var parentHint = h('div', { class: 'hint' });
+
+    /* Отметки собственных свойств — единственный источник правды: список
+       перерисовывается при смене родителя, а выбор пользователя сохраняется. */
+    var ownChecked = {};
+    if (isEdit) existing.propIds.forEach(function (id) { ownChecked[id] = true; });
+
+    var listHost = h('div');
+    var listHint = h('div', { class: 'hint' });
+
+    function renderList() {
+      UI.clear(listHost);
+      var parent = parentSelect.value ? Store.byId('categories', parentSelect.value) : null;
+      parentHint.textContent = parent
+        ? 'Категория станет подкатегорией «' + parent.name + '» и унаследует её свойства.'
+        : 'Категория верхнего уровня: свойства родителей не подключаются.';
+
+      var props = Store.props();
+      if (!props.length) {
+        listHost.appendChild(h('div', { class: 'hint-box', text: 'Свойств пока нет. Сначала создайте их на странице «Свойства».' }));
+        listHint.textContent = '';
+        return;
+      }
+
+      var inherited = parentSelect.value ? Store.chainProps(parentSelect.value) : [];
+      var inheritedIds = {};
+      inherited.forEach(function (item) { inheritedIds[item.prop.id] = true; });
+
+      var list = h('div', { class: 'check-list' });
+      inherited.forEach(function (item) {
+        var row = UI.checkRow(item.prop.name, true, h('span', { class: 'check-side muted', text: 'от «' + item.from.name + '»' }));
+        row.input.disabled = true;
+        list.appendChild(row.el);
+      });
+      props.forEach(function (p) {
+        if (inheritedIds[p.id]) return;
+        var row = UI.checkRow(p.name, !!ownChecked[p.id], h('span', { class: 'check-side muted', text: p.value || '—' }));
+        row.input.addEventListener('change', function () {
+          if (row.input.checked) ownChecked[p.id] = true;
+          else delete ownChecked[p.id];
+        });
+        list.appendChild(row.el);
+      });
+      listHost.appendChild(list);
+
+      listHint.textContent = inherited.length
+        ? 'Свойства родительских категорий отмечены и не правятся здесь: чтобы убрать их, измените родительскую категорию.'
+        : 'Отмеченные свойства появляются в форме объекта этой категории.';
+    }
+
+    parentSelect.addEventListener('change', renderList);
+    renderList();
 
     var body = h('div', {},
       UI.field('Название', nameInput),
       h('div', { class: 'field' },
+        h('label', { class: 'field-label', text: 'Родительская категория' }),
+        parentSelect,
+        parentHint
+      ),
+      h('div', { class: 'field' },
         h('label', { class: 'field-label', text: 'Свойства категории' }),
-        listBox,
-        h('div', { class: 'hint', text: 'Отмеченные свойства появляются в форме объекта этой категории.' })
+        listHost,
+        listHint
       )
     );
 
     UI.modal({
-      title: existing ? 'Изменить категорию' : 'Новая категория',
+      title: isEdit ? 'Изменить категорию' : (initialParent ? 'Новая подкатегория' : 'Новая категория'),
       wide: true,
       body: body,
       onSave: function () {
         var name = nameInput.value.trim();
         if (!name) return 'Укажите название категории.';
-        if (Store.nameTaken('categories', name, existing ? existing.id : null, type)) return 'Категория с таким названием уже есть.';
-        var propIds = checks.filter(function (c) { return c.input.checked; }).map(function (c) { return c.id; });
-        if (existing) {
-          Store.patch('categories', existing.id, { name: name, propIds: propIds });
+        if (Store.categoryNameTaken(type, name, parentSelect.value, isEdit ? existing.id : null)) {
+          return 'В этой ветке уже есть категория с таким названием.';
+        }
+        var propIds = Store.props().filter(function (p) { return ownChecked[p.id]; }).map(function (p) { return p.id; });
+        if (isEdit) {
+          Store.patch('categories', existing.id, { name: name, parentId: parentSelect.value || '', propIds: propIds });
           UI.toast('Категория изменена', 'ok');
         } else {
-          Store.createCategory(type, name, propIds);
-          UI.toast('Категория добавлена', 'ok');
+          Store.createCategory(type, name, propIds, parentSelect.value);
+          UI.toast(parentSelect.value ? 'Подкатегория добавлена' : 'Категория добавлена', 'ok');
         }
         App.refresh();
         return null;
@@ -302,6 +433,15 @@
   }
 
   function deleteCategory(c) {
+    var kids = Store.childCategories(c.type, c.id);
+    if (kids.length) {
+      UI.alert({
+        title: 'Нельзя удалить',
+        text: 'У категории «' + c.name + '» есть подкатегории: ' + kids.map(function (k) { return k.name; }).join(', ') +
+          '. Сначала удалите их или перенесите в другую ветку.'
+      });
+      return;
+    }
     var used = Store.categoryUsage(c.id);
     if (used.length) {
       UI.alert({

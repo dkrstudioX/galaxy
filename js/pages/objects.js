@@ -6,8 +6,16 @@
 
   /* ---------- Общие части форм объектов ---------- */
 
-  /* Блок полей «свойства категории»: для каждого свойства категории — поле значения.
-     Значение подставляется из свойства (значение по умолчанию), его можно изменить. */
+  /* Селект категорий: подкатегории подписаны полным путём («Корабли / Линкоры»). */
+  function categoryOptions(type, emptyLabel) {
+    return [{ value: '', label: emptyLabel }].concat(Store.categoryTree(type).map(function (node) {
+      return { value: node.cat.id, label: node.depth ? Store.categoryPath(node.cat.id) : node.cat.name };
+    }));
+  }
+
+  /* Блок полей «свойства категории»: для каждого свойства категории (своё или
+     унаследованное от родительской) — поле значения. Значение подставляется из
+     свойства (значение по умолчанию), его можно изменить. */
   function categoryPropsBlock(categoryId, values) {
     var inputs = {};
     var box = h('div');
@@ -18,9 +26,9 @@
       return { box: box, inputs: inputs };
     }
 
-    var props = cat.propIds.map(function (id) { return Store.byId('props', id); }).filter(Boolean);
+    var props = Store.categoryProps(cat.id);
     if (!props.length) {
-      box.appendChild(h('div', { class: 'hint-box', text: 'В этой категории нет свойств. Их можно включить на странице категорий.' }));
+      box.appendChild(h('div', { class: 'hint-box', text: 'У этой категории нет свойств — ни своих, ни унаследованных. Их можно включить на странице категорий.' }));
       return { box: box, inputs: inputs };
     }
 
@@ -30,6 +38,11 @@
       inputs[p.id] = inp;
       box.appendChild(UI.field(p.name, inp));
     });
+
+    var inherited = Store.inheritedProps(cat.id);
+    if (inherited.length) {
+      box.appendChild(h('div', { class: 'hint', text: 'Часть свойств унаследована: ' + inherited.map(function (it) { return '«' + it.prop.name + '» от «' + it.from.name + '»'; }).join(', ') + '.' }));
+    }
     return { box: box, inputs: inputs };
   }
 
@@ -87,7 +100,7 @@
           title: 'Категория',
           render: function (s) {
             var c = Store.byId('categories', s.categoryId);
-            return h('span', { class: c ? '' : 'muted', text: c ? c.name : '—' });
+            return h('span', { class: c ? '' : 'muted', text: c ? Store.categoryPath(c.id) : '—' });
           }
         },
         {
@@ -308,7 +321,7 @@
           q = maxQ;
           UI.toast('В слоте хватает места только на ' + q + ' шт.', 'warn');
         }
-        addContentRow(addKind.value, it.id, String(q));
+        addContentRow(it.id, String(q));
         addItemSel.value = '';
         addBtn.disabled = true;
         addQty.value = '1';
@@ -435,9 +448,7 @@
 
     var nameInput = UI.input({ value: isEdit ? existing.name : '', placeholder: 'Например: Сокол' });
     var catSelect = UI.select({
-      options: [{ value: '', label: '— выберите категорию —' }].concat(categories.map(function (c) {
-        return { value: c.id, label: c.name };
-      })),
+      options: categoryOptions('ship', '— выберите категорию —'),
       value: isEdit ? existing.categoryId : ''
     });
 
@@ -544,7 +555,7 @@
           title: 'Категория',
           render: function (it) {
             var c = Store.byId('categories', it.categoryId);
-            return h('span', { class: c ? '' : 'muted', text: c ? c.name : '—' });
+            return h('span', { class: c ? '' : 'muted', text: c ? Store.categoryPath(c.id) : '—' });
           }
         },
         {
@@ -583,9 +594,7 @@
       placeholder: 'Например: 10'
     });
     var catSelect = UI.select({
-      options: [{ value: '', label: '— выберите категорию —' }].concat(categories.map(function (c) {
-        return { value: c.id, label: c.name };
-      })),
+      options: categoryOptions('goods', '— выберите категорию —'),
       value: isEdit ? existing.categoryId : ''
     });
 

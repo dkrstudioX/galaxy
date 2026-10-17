@@ -36,9 +36,13 @@
     }).filter(function (s) { return s.name; });
 
     out.categories = arr(data.categories).filter(isObj).map(function (c) {
-      /* Ресурсы и оборудование объединены в товары: старые типы мигрируют. */
+      /* Ресурсы и оборудование объединены в товары: старые типы мигрируют.
+         parentId — родительская категория; '' — корневая (в старых выгрузках поля нет). */
       var type = c.type === 'ship' ? 'ship' : 'goods';
-      return { id: str(c.id) || uid(), type: type, name: str(c.name).trim(), propIds: arr(c.propIds).map(str) };
+      return {
+        id: str(c.id) || uid(), type: type, name: str(c.name).trim(),
+        propIds: arr(c.propIds).map(str), parentId: str(c.parentId)
+      };
     }).filter(function (c) { return c.name; });
 
     out.ships = arr(data.ships).filter(isObj).map(function (s) {
@@ -88,6 +92,7 @@
     out.categories.forEach(function (c) {
       c.propIds = c.propIds.filter(function (id) { return propIds[id]; });
     });
+    fixParents(out.categories);
     out.ships.forEach(function (s) {
       if (!catIds[s.categoryId]) s.categoryId = '';
       s.slots = s.slots.filter(function (e) { return slotIds[e.slotId]; });
@@ -98,6 +103,24 @@
     out.goods.forEach(function (g) {
       if (!catIds[g.categoryId]) g.categoryId = '';
       if (g.slotId && !slotIds[g.slotId]) g.slotId = null;
+    });
+  }
+
+  /* Родитель категории должен существовать, быть того же типа, а цепочка —
+     не зацикливаться. Иначе категория становится корневой, а не пропадает. */
+  function fixParents(categories) {
+    var byId = {};
+    categories.forEach(function (c) { byId[c.id] = c; });
+    categories.forEach(function (c) {
+      var seen = {};
+      seen[c.id] = true;
+      var parentId = c.parentId;
+      while (parentId) {
+        var parent = byId[parentId];
+        if (!parent || parent.type !== c.type || seen[parent.id]) { c.parentId = ''; break; }
+        seen[parent.id] = true;
+        parentId = parent.parentId;
+      }
     });
   }
 
@@ -181,6 +204,105 @@
     return all(coll).filter(function (o) { return o.categoryId === categoryId; }).map(function (o) { return o.name; });
   }
 
+  /* ---------- Дерево категорий ---------- */
+
+  /* Категории одного типа, непосредственно вложенные в parentId ('' — корневые). */
+  function childrenOf(type, parentId) {
+    var pid = str(parentId);
+    return all('categories').filter(function (c) { return c.type === type && str(c.parentId) === pid; });
+  }
+
+  /* Плоский список дерева для таблиц и селектов: [{cat, depth, hasChildren, childCount}]. */
+  function categoryTree(type) {
+    var out = [];
+    (function walk(parentId, depth) {
+      childrenOf(type, parentId).forEach(function (c) {
+        var kids = childrenOf(type, c.id);
+        out.push({ cat: c, depth: depth, hasChildren: kids.length > 0, childCount: kids.length });
+        walk(c.id, depth + 1);
+      });
+    })('', 0);
+    return out;
+  }
+
+  /* Цепочка от корня до самой категории: [корень, …, категория]. */
+  function categoryChain(id) {
+    var chain = [];
+    var seen = {};
+    var cat = id ? byId('categories', id) : null;
+    while (cat && !seen[cat.id]) {
+      seen[cat.id] = true;
+      chain.unshift(cat);
+      cat = cat.parentId ? byId('categories', cat.parentId) : null;
+    }
+    return chain;
+  }
+
+  /* Все подкатегории на любую глубину, сверху вниз. */
+  function categoryDescendants(id) {
+    var out = [];
+    var root = id ? byId('categories', id) : null;
+    if (!root) return out;
+    var seen = {};
+    seen[root.id] = true;
+    (function walk(parentId) {
+      childrenOf(root.type, parentId).forEach(function (c) {
+        if (seen[c.id]) return;
+        seen[c.id] = true;
+        out.push(c);
+        walk(c.id);
+      });
+    })(root.id);
+    return out;
+  }
+
+  function categoryDepth(id) { return Math.max(0, categoryChain(id).length - 1); }
+
+  /* Подпись пути категории: «Корабли / Линкоры». */
+  function categoryPath(id) {
+    return categoryChain(id).map(function (c) { return c.name; }).join(' / ');
+  }
+
+  /* Свойства цепочки категорий (вместе с самой категорией) с источником каждого. */
+  function chainProps(categoryId) {
+    var out = [];
+    var seen = {};
+    categoryChain(categoryId).forEach(function (c) {
+      c.propIds.forEach(function (id) {
+        if (seen[id]) return;
+        var prop = byId('props', id);
+        if (!prop) return;
+        seen[id] = true;
+        out.push({ prop: prop, from: c });
+      });
+    });
+    return out;
+  }
+
+  /* Свойства, унаследованные от родительских категорий (без собственных). */
+  function inheritedProps(categoryId) {
+    var cat = byId('categories', categoryId);
+    if (!cat) return [];
+    var own = {};
+    cat.propIds.forEach(function (id) { own[id] = true; });
+    return chainProps(cat.parentId).filter(function (item) { return !own[item.prop.id]; });
+  }
+
+  /* Свойства категории с наследованием: сначала родительские, затем собственные. */
+  function categoryProps(categoryId) {
+    return chainProps(categoryId).map(function (item) { return item.prop; });
+  }
+
+  /* Названия уникальны среди соседей: под одним родителем двух «Оружий» быть не может. */
+  function categoryNameTaken(type, name, parentId, excludeId) {
+    var n = str(name).trim().toLowerCase();
+    if (!n) return false;
+    return childrenOf(type, parentId).some(function (c) {
+      if (excludeId && c.id === excludeId) return false;
+      return str(c.name).trim().toLowerCase() === n;
+    });
+  }
+
   /* ---------- Экспорт / импорт / демо ---------- */
 
   function exportJSON() { return JSON.stringify(ensure(), null, 2); }
@@ -213,7 +335,7 @@
 
     function addProp(name, value) { var p = { id: uid(), name: name, value: value }; d.props.push(p); return p; }
     function addSlot(name, capacity) { var s = { id: uid(), name: name, capacity: capacity || '' }; d.slots.push(s); return s; }
-    function addCat(type, name, propIds) { var c = { id: uid(), type: type, name: name, propIds: propIds }; d.categories.push(c); return c; }
+    function addCat(type, name, propIds, parent) { var c = { id: uid(), type: type, name: name, propIds: propIds, parentId: parent ? parent.id : '' }; d.categories.push(c); return c; }
     function vals(pairs) {
       var out = {};
       for (var i = 0; i < pairs.length; i++) out[pairs[i][0].id] = pairs[i][1];
@@ -251,33 +373,38 @@
     var slotShield = addSlot('Щит', '25');
     var slotCargo = addSlot('Грузовой отсек', '200');
 
-    var catFrigate = addCat('ship', 'Фрегат', [durability.id, speed.id, mass.id]);
-    var catCruiser = addCat('ship', 'Крейсер', [durability.id, speed.id, mass.id, cargo.id]);
-    var catMetals = addCat('goods', 'Металлы', [rarity.id]);
-    var catCrystals = addCat('goods', 'Кристаллы', [rarity.id]);
-    var catWeapons = addCat('goods', 'Оружие', [damage.id]);
-    var catEngines = addCat('goods', 'Двигатели', [speed.id, fuel.id]);
-    var catDefense = addCat('goods', 'Защита', [defense.id]);
+    /* Категории вкладываются друг в друга: подкатегория наследует свойства родительской. */
+    var catShips = addCat('ship', 'Корабли', [durability.id, speed.id, mass.id]);
+    var catLiners = addCat('ship', 'Линкоры', [cargo.id], catShips);
+    var catShuttles = addCat('ship', 'Шатлы', [], catShips);
+    var catResources = addCat('goods', 'Ресурсы', [rarity.id]);
+    var catMaterials = addCat('goods', 'Материалы', [], catResources);
+    var catFuel = addCat('goods', 'Топливо', [], catResources);
+    var catEquipment = addCat('goods', 'Оборудование', [rarity.id]);
+    var catWeapons = addCat('goods', 'Оружие', [damage.id], catEquipment);
+    var catShields = addCat('goods', 'Щиты', [defense.id], catEquipment);
+    var catEngines = addCat('goods', 'Двигатели', [speed.id, fuel.id], catEquipment);
     var catOther = addCat('goods', 'Прочее', []);
 
     /* Масса товара — базовое поле, именно она учитывается вместимостью слотов. */
-    var iron = addItem('goods', 'Железо', catMetals, [[rarity, 'Обычный']], '8', null);
-    var iridium = addItem('goods', 'Иридий', catMetals, [[rarity, 'Редкий']], '12', null);
-    addItem('goods', 'Плазменный боеприпас', catCrystals, [[rarity, 'Необычный']], '3', slotWeapon);
+    var iron = addItem('goods', 'Железо', catMaterials, [[rarity, 'Обычный']], '8', null);
+    var iridium = addItem('goods', 'Иридий', catMaterials, [[rarity, 'Редкий']], '12', null);
+    addItem('goods', 'Гипертопливо', catFuel, [[rarity, 'Обычный']], '5', null);
+    addItem('goods', 'Плазменный боеприпас', catWeapons, [[rarity, 'Необычный'], [damage, '15']], '3', slotWeapon);
 
     var laser = addItem('goods', 'Лазер Mk I', catWeapons, [[damage, '35']], '6', slotWeapon);
     var rockets = addItem('goods', 'Ракетная установка', catWeapons, [[damage, '70']], '18', slotWeapon);
     var engine = addItem('goods', 'Ионный двигатель', catEngines, [[speed, '32'], [fuel, '3']], '25', slotEngine);
-    var shield = addItem('goods', 'Плазменный щит', catDefense, [[defense, '28']], '14', slotShield);
+    var shield = addItem('goods', 'Плазменный щит', catShields, [[defense, '28']], '14', slotShield);
     var repairKit = addItem('goods', 'Ремкомплект', catOther, [], '2', null);
 
     /* У корабля слоты могут повторяться — порядок и повторы сохраняются как заданы. */
-    addShip('Сокол', catFrigate, [[durability, '90'], [speed, '26'], [mass, '45']], [
+    addShip('Сокол', catShuttles, [[durability, '90'], [speed, '26'], [mass, '45']], [
       { slot: slotWeapon, contents: [{ item: laser, qty: 2 }] },
       { slot: slotWeapon, contents: [{ item: rockets, qty: 1 }] },
       { slot: slotEngine, contents: [{ item: engine, qty: 1 }] }
     ]);
-    addShip('Титан', catCruiser, [[durability, '160'], [speed, '14'], [mass, '220'], [cargo, '400']], [
+    addShip('Титан', catLiners, [[durability, '160'], [speed, '14'], [mass, '220'], [cargo, '400']], [
       { slot: slotWeapon, contents: [{ item: rockets, qty: 1 }] },
       { slot: slotWeapon, contents: [{ item: laser, qty: 2 }] },
       { slot: slotShield, contents: [{ item: shield, qty: 1 }] },
@@ -313,7 +440,9 @@
 
     createProp: function (name, value) { return insert('props', { name: name, value: value }); },
     createSlot: function (name, capacity) { return insert('slots', { name: name, capacity: capacity || '' }); },
-    createCategory: function (type, name, propIds) { return insert('categories', { type: type, name: name, propIds: (propIds || []).slice() }); },
+    createCategory: function (type, name, propIds, parentId) {
+      return insert('categories', { type: type, name: name, propIds: (propIds || []).slice(), parentId: parentId || '' });
+    },
     createObject: function (coll, data) {
       var item = { name: data.name, categoryId: data.categoryId, values: data.values || {} };
       if (coll === 'ships') {
@@ -333,6 +462,17 @@
     propUsage: propUsage,
     slotUsage: slotUsage,
     categoryUsage: categoryUsage,
+
+    childCategories: childrenOf,
+    categoryTree: categoryTree,
+    categoryChain: categoryChain,
+    categoryDescendants: categoryDescendants,
+    categoryDepth: categoryDepth,
+    categoryPath: categoryPath,
+    chainProps: chainProps,
+    inheritedProps: inheritedProps,
+    categoryProps: categoryProps,
+    categoryNameTaken: categoryNameTaken,
 
     /* Вместимость слота: пусто или не число — без ограничения. */
     slotCapacity: function (slot) {

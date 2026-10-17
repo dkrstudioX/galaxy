@@ -227,6 +227,41 @@ body.modal-open { overflow: hidden; }
 .empty { margin-top: 14px; padding: 36px 20px; text-align: center; border-style: dashed; }
 .empty-text { color: var(--muted); margin: 0 0 14px; }
 
+/* ---------- Дерево категорий ---------- */
+
+.tree-cell { display: flex; align-items: center; gap: 6px; }
+.tree-indent { flex: none; }
+.tree-toggle {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tree-toggle:hover { background: rgba(168, 85, 247, 0.14); color: var(--text); }
+.tree-toggle-empty { cursor: default; }
+.tree-toggle-empty:hover { background: transparent; }
+
+.prop-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.prop-chip {
+  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: 20px;
+  border: 1px solid var(--border-soft);
+  background: rgba(168, 85, 247, 0.10);
+  white-space: nowrap;
+}
+.prop-chip-inherited { background: transparent; border-style: dashed; color: var(--muted); }
+
 /* ---------- Модальные окна ---------- */
 
 .overlay {
