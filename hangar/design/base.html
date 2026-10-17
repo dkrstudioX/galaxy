@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HELIOS // 7 — новый дизайн базы</title>
+<link rel="stylesheet" href="base.css">
+</head>
+<body data-view="shop">
+
+<!-- Отдельный слой фона: меняется независимо от интерфейса -->
+<div class="bg" aria-hidden="true"></div>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<div class="app">
+  <header class="topbar glass">
+    <div class="brand">
+      <span class="brand-mark">◈</span>
+      <div>
+        <strong>HELIOS // 7</strong>
+        <span>орбитальная звёздная база</span>
+      </div>
+    </div>
+    <div class="status"><i class="pulse"></i>системы в норме<i class="dot"></i>сектор A-17</div>
+    <div class="credits"><small>баланс</small><strong>42 860</strong><span>¤</span></div>
+  </header>
+
+  <nav class="tabs glass">
+    <button data-view="info">Информация о базе</button>
+    <button data-view="shop" class="active">Магазин</button>
+    <button data-view="hangar">Ангар</button>
+  </nav>
+
+  <main class="layout">
+    <aside class="panel glass cats">
+      <h2>Категории</h2>
+
+      <button class="cat">
+        <span class="ic" data-icon="ship" data-size="18"></span>Корабли<b>18</b>
+      </button>
+      <div class="cat-group">
+        <div class="cat-line">Линкоры<b>3</b></div>
+        <div class="cat-line">Фрегаты<b>3</b></div>
+        <div class="cat-line">Корветы<b>3</b></div>
+        <div class="cat-line">Перехватчики<b>3</b></div>
+        <div class="cat-line">Шаттлы<b>3</b></div>
+        <div class="cat-line">Грузовозы<b>3</b></div>
+      </div>
+
+      <button class="cat">
+        <span class="ic" data-icon="gem" data-size="18"></span>Ресурсы<b>20</b>
+      </button>
+      <div class="cat-group">
+        <div class="cat-line">Руды<b>10</b></div>
+        <div class="cat-line">Минералы<b>10</b></div>
+      </div>
+
+      <button class="cat">
+        <span class="ic" data-icon="fuel" data-size="18"></span>Топливо<b>3</b>
+      </button>
+      <div class="cat-group">
+        <div class="cat-line">Топливные баки<b>3</b></div>
+      </div>
+
+      <button class="cat active">
+        <span class="ic" data-icon="tool" data-size="18"></span>Оборудование<b>39</b>
+      </button>
+      <div class="cat-group">
+        <div class="cat-line">Лазеры<b>10</b></div>
+        <div class="cat-line">Пулемёты<b>10</b></div>
+        <div class="cat-line">Щиты<b>10</b></div>
+        <div class="cat-line">Двигатели<b>4</b></div>
+        <div class="cat-line">Радары и сканеры<b>8</b></div>
+      </div>
+
+      <button class="cat">
+        <span class="ic" data-icon="box" data-size="18"></span>Прочее<b>3</b>
+      </button>
+
+      <div class="sub-block">
+        <span class="sub-title">Подкатегории</span>
+        <div class="sub-chips">
+          <button class="on">Лазеры</button>
+          <button>Пулемёты</button>
+          <button>Щиты</button>
+          <button>Двигатели</button>
+          <button>Радары</button>
+        </div>
+      </div>
+    </aside>
+
+    <section class="panel glass center">
+
+      <!-- Информация о базе -->
+      <div class="view" data-view="info">
+        <div class="view-head">
+          <div>
+            <span class="eyebrow">ангар // сектор C</span>
+            <h1>База «Helios VII»</h1>
+          </div>
+          <span class="count">стыковка завершена</span>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-cell"><span>уровень базы</span><b>07</b></div>
+          <div class="info-cell"><span>репутация</span><b>Доверие</b></div>
+          <div class="info-cell"><span>техобслуживание</span><b class="accent">Доступно</b></div>
+          <div class="info-cell"><span>до вылета</span><b>00:12:44</b></div>
+        </div>
+
+        <div class="mini-title">Бортовые системы «Гром»</div>
+        <div class="info-grid">
+          <div class="info-cell"><span>прочность</span><b>5 200</b></div>
+          <div class="info-cell"><span>скорость</span><b>11</b></div>
+          <div class="info-cell"><span>масса корпуса</span><b>18 000 кг</b></div>
+          <div class="info-cell"><span>загрузка трюма</span><b>1 700 / 5 000 кг</b></div>
+        </div>
+
+        <div class="mini-title">Журнал базы</div>
+        <div class="rows four">
+          <div class="row head"><span>событие</span><span>время</span><span>объём</span><b>тип</b></div>
+          <div class="row"><strong>Прибытие груза</strong><span>12:41</span><span>+5 000 кг</span><b>топливо</b></div>
+          <div class="row"><strong>Погрузка на «Гром»</strong><span>12:18</span><span>−1 700 кг</span><b>руда</b></div>
+          <div class="row"><strong>Ремонт корпуса</strong><span>11:52</span><span>+420 ед.</span><b>сервис</b></div>
+        </div>
+      </div>
+
+      <!-- Магазин -->
+      <div class="view on" data-view="shop">
+        <div class="view-head">
+          <div>
+            <span class="eyebrow">оборудование / лазеры</span>
+            <h1>Лазер M-7</h1>
+          </div>
+          <span class="count">10 позиций</span>
+        </div>
+
+        <div class="product">
+          <div class="product-icon"><span class="ic" data-icon="bolt" data-size="52"></span></div>
+          <div>
+            <div class="stats">
+              <div><span>урон</span><b>125</b></div>
+              <div><span>мощность</span><b>374</b></div>
+              <div><span>масса</span><b>11 кг</b></div>
+            </div>
+            <div class="price-row">
+              <span class="price">3 910 <i>¤</i></span>
+              <button class="buy">Купить →</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mini-title">Ещё в категории</div>
+        <div class="mini-list">
+          <div class="mini"><span class="ic" data-icon="bolt" data-size="20"></span><strong>Лазер M-6</strong><span>урон 110 · 11 кг</span></div>
+          <div class="mini"><span class="ic" data-icon="bolt" data-size="20"></span><strong>Лазер M-8</strong><span>урон 140 · 12 кг</span></div>
+          <div class="mini"><span class="ic" data-icon="bolt" data-size="20"></span><strong>Лазер M-9</strong><span>урон 155 · 13 кг</span></div>
+          <div class="mini"><span class="ic" data-icon="bolt" data-size="20"></span><strong>Лазер M-10</strong><span>урон 170 · 14 кг</span></div>
+        </div>
+        <div class="mini-title">Все лазеры</div>
+        <div class="rows">
+          <div class="row head"><span>название</span><span>урон</span><span>мощность</span><span>масса</span><b>цена</b></div>
+          <div class="row"><strong>Лазер M-1</strong><span>35</span><span>122</span><span>5 кг</span><b>1 330 ¤</b></div>
+          <div class="row"><strong>Лазер M-2</strong><span>50</span><span>164</span><span>6 кг</span><b>1 760 ¤</b></div>
+          <div class="row"><strong>Лазер M-3</strong><span>65</span><span>206</span><span>7 кг</span><b>2 190 ¤</b></div>
+          <div class="row"><strong>Лазер M-4</strong><span>80</span><span>248</span><span>8 кг</span><b>2 620 ¤</b></div>
+        </div>
+      </div>
+      <div class="view" data-view="hangar">
+        <div class="view-head">
+          <div>
+            <span class="eyebrow">грузовой терминал // C-12</span>
+            <h1>Топливный бак, 5 т</h1>
+          </div>
+          <span class="count">погрузка на «Гром»</span>
+        </div>
+
+        <div class="transfer">
+          <div class="side-card">
+            <small>на базе</small>
+            <strong>Топливный бак, 5 т</strong>
+            <span>12 шт · 60 000 кг</span>
+          </div>
+          <div class="arrow">→</div>
+          <div class="side-card">
+            <small>на корабле</small>
+            <strong>Трюм 5 т</strong>
+            <span>занято 1 700 / 5 000 кг</span>
+          </div>
+        </div>
+
+        <div class="amount">
+          <button>−</button><b>3</b><button>+</button>
+          <button class="buy" style="margin-left:16px">Загрузить →</button>
+        </div>
+
+        <div class="mini-title">Заполнение трюмов</div>
+        <div class="slots">
+          <div class="slot"><small>трюм 5 т</small><strong>1 700 / 5 000 кг</strong><div class="bar"><i style="width:34%"></i></div><div class="cap">железная руда, медная руда</div></div>
+          <div class="slot"><small>трюм 10 т</small><strong>4 800 / 10 000 кг</strong><div class="bar"><i style="width:48%"></i></div><div class="cap">титановая, вольфрамовая руда</div></div>
+          <div class="slot"><small>трюм 1 т</small><strong>0 / 1 000 кг</strong><div class="bar"><i style="width:0%"></i></div><div class="cap">пусто</div></div>
+        </div>
+
+        <div class="mini-title">На базе</div>
+        <div class="rows four">
+          <div class="row head"><span>позиция</span><span>масса</span><span>склад</span><b>цена</b></div>
+          <div class="row"><strong>Топливный бак, 5 т</strong><span>5 000 кг</span><span>12 шт</span><b>4 500 ¤</b></div>
+          <div class="row"><strong>Топливный бак, 1 т</strong><span>1 000 кг</span><span>28 шт</span><b>1 000 ¤</b></div>
+          <div class="row"><strong>Железная руда</strong><span>12 кг</span><span>1 240 шт</span><b>60 ¤</b></div>
+        </div>
+      </div>
+
+      <!-- Карточка корабля -->
+      <div class="view" data-view="ship">
+        <div class="hero">
+          <img class="hero-img" src="assets/ship.jpg" alt="">
+          <span class="eyebrow">линкор · категория кораблей</span>
+          <h1>ГРОМ <small>MK.IV</small></h1>
+          <div class="hero-sub">двенадцать слотов · груз 5 т и 5 т</div>
+          <div class="hero-stats">
+            <div><span>прочность</span><b>5 200</b></div>
+            <div><span>скорость</span><b>11</b></div>
+            <div><span>масса</span><b>18 000 кг</b></div>
+            <div><span>цена</span><b>184 000 ¤</b></div>
+          </div>
+        </div>
+
+        <div class="slots">
+          <div class="slot"><small>орудийная башня</small><strong>Лазер M-7</strong><div class="bar"><i style="width:9%"></i></div><div class="cap">11 / 120 кг</div></div>
+          <div class="slot"><small>орудийная башня</small><strong>Лазер M-10</strong><div class="bar"><i style="width:12%"></i></div><div class="cap">14 / 120 кг</div></div>
+          <div class="slot"><small>пулемётная точка</small><strong>Пулемёт P-6</strong><div class="bar"><i style="width:30%"></i></div><div class="cap">18 / 60 кг</div></div>
+          <div class="slot"><small>щитовой генератор</small><strong>Щит S-8</strong><div class="bar"><i style="width:59%"></i></div><div class="cap">89 / 150 кг</div></div>
+          <div class="slot"><small>двигатель</small><strong>Двигатель E-4</strong><div class="bar"><i style="width:93%"></i></div><div class="cap">280 / 300 кг</div></div>
+          <div class="slot"><small>трюм 5 т</small><strong>железная руда</strong><div class="bar"><i style="width:34%"></i></div><div class="cap">1 700 / 5 000 кг</div></div>
+        </div>
+
+        <div class="mini-title">Грузовые отсеки и свободные крепления</div>
+        <div class="slots">
+          <div class="slot"><small>трюм 5 т</small><strong>железная + медная руда</strong><div class="bar"><i style="width:34%"></i></div><div class="cap">1 700 / 5 000 кг</div></div>
+          <div class="slot"><small>трюм 5 т</small><strong>пусто</strong><div class="bar"><i style="width:0"></i></div><div class="cap">0 / 5 000 кг</div></div>
+          <div class="slot"><small>свободно</small><strong>2 башни · 1 генератор</strong><div class="bar"><i style="width:0"></i></div><div class="cap">готово к установке</div></div>
+        </div>
+      </div>
+
+      <!-- Категории: классы кораблей -->
+      <div class="view" data-view="categories">
+        <div class="view-head">
+          <div>
+            <span class="eyebrow">категории / корабли</span>
+            <h1>Шесть классов</h1>
+          </div>
+          <span class="count">18 кораблей</span>
+        </div>
+
+        <div class="class-grid">
+          <div class="class-card"><span class="ic" data-icon="ship" data-size="22"></span><strong>Линкоры</strong><span>3 корабля</span><em>18 000–22 000 кг</em></div>
+          <div class="class-card"><span class="ic" data-icon="ship" data-size="22"></span><strong>Фрегаты</strong><span>3 корабля</span><em>3 600–5 100 кг</em></div>
+          <div class="class-card"><span class="ic" data-icon="rocket" data-size="22"></span><strong>Корветы</strong><span>3 корабля</span><em>1 400–1 800 кг</em></div>
+          <div class="class-card"><span class="ic" data-icon="rocket" data-size="22"></span><strong>Перехватчики</strong><span>3 корабля</span><em>300–420 кг</em></div>
+          <div class="class-card"><span class="ic" data-icon="rocket" data-size="22"></span><strong>Шаттлы</strong><span>3 корабля</span><em>240–600 кг</em></div>
+          <div class="class-card"><span class="ic" data-icon="hangar" data-size="22"></span><strong>Грузовозы</strong><span>3 корабля</span><em>9 000–16 000 кг</em></div>
+        </div>
+
+        <div class="mini-title">В классе «Линкоры»</div>
+        <div class="rows four">
+          <div class="row head"><span>корабль</span><span>масса</span><span>скорость</span><b>цена</b></div>
+          <div class="row"><strong>Гром</strong><span>18 000 кг</span><span>11</span><b>184 000 ¤</b></div>
+          <div class="row"><strong>Молот</strong><span>22 000 кг</span><span>9</span><b>214 000 ¤</b></div>
+          <div class="row"><strong>Цитадель</strong><span>16 000 кг</span><span>12</span><b>158 000 ¤</b></div>
+        </div>
+      </div>
+
+    </section>
+
+    <aside class="panel glass side">
+      <div class="side-head">
+        <h2>На корабле</h2><span>1 700 / 5 000 кг</span>
+      </div>
+      <div class="bar"><i style="width:34%"></i></div>
+
+      <ul class="cargo">
+        <li><span class="ic" data-icon="crate" data-size="18"></span><div><strong>Железная руда</strong><span>12 кг · руда</span></div><b>×100</b></li>
+        <li><span class="ic" data-icon="crate" data-size="18"></span><div><strong>Медная руда</strong><span>10 кг · руда</span></div><b>×50</b></li>
+        <li><span class="ic" data-icon="bolt" data-size="18"></span><div><strong>Лазер M-7</strong><span>11 кг · оружие</span></div><b>×1</b></li>
+        <li><span class="ic" data-icon="shield" data-size="18"></span><div><strong>Щит S-8</strong><span>89 кг · защита</span></div><b>×1</b></li>
+        <li><span class="ic" data-icon="tool" data-size="18"></span><div><strong>Ремкомплект</strong><span>2 кг · расходник</span></div><b>×5</b></li>
+      </ul>
+
+      <div class="sub-block">
+        <span class="sub-title">Свободно</span>
+        <div class="sub-chips"><button class="on">3 300 кг</button><button>2 трюма</button></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="ships">
+    <article class="ship glass active">
+      <svg class="glyph" width="64" height="30" viewBox="0 0 220 100" fill="none" aria-hidden="true">
+        <path d="M12 52 56 40 88 14h45l17 24 58 14-58 12-20 24H88L57 65 12 52Z" fill="currentColor" opacity=".16"/>
+        <path d="M13 52h195M57 40l31 12-31 13M88 14l14 38-14 36M133 14l-13 38 10 36" stroke="currentColor"/>
+      </svg>
+      <div><strong>ГРОМ</strong><span>линкор · MK.IV</span></div>
+      <span class="tag">выбран</span>
+    </article>
+
+    <article class="ship glass">
+      <svg class="glyph" width="64" height="30" viewBox="0 0 220 100" fill="none" aria-hidden="true">
+        <path d="M12 52 56 40 88 14h45l17 24 58 14-58 12-20 24H88L57 65 12 52Z" fill="currentColor" opacity=".16"/>
+        <path d="M13 52h195M57 40l31 12-31 13M88 14l14 38-14 36M133 14l-13 38 10 36" stroke="currentColor"/>
+      </svg>
+      <div><strong>СОКОЛ</strong><span>фрегат · MK.II</span></div>
+      <span class="tag">4 200 кг</span>
+    </article>
+
+    <article class="ship glass">
+      <svg class="glyph" width="64" height="30" viewBox="0 0 220 100" fill="none" aria-hidden="true">
+        <path d="M12 52 56 40 88 14h45l17 24 58 14-58 12-20 24H88L57 65 12 52Z" fill="currentColor" opacity=".16"/>
+        <path d="M13 52h195M57 40l31 12-31 13M88 14l14 38-14 36M133 14l-13 38 10 36" stroke="currentColor"/>
+      </svg>
+      <div><strong>БАРЖА</strong><span>грузовоз · MK.I</span></div>
+      <span class="tag">12 000 кг</span>
+    </article>
+  </footer>
+</div>
+
+<script src="../../data/icons.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* Иконки — из общего каталога проекта. */
+  document.querySelectorAll('[data-icon]').forEach(function (el) {
+    if (!window.Icons) return;
+    el.innerHTML = Icons.svg(el.getAttribute('data-icon'), Number(el.getAttribute('data-size') || 18));
+  });
+
+  var VIEWS = ['info', 'shop', 'hangar', 'ship', 'categories'];
+  var TAB_OF = { info: 'info', shop: 'shop', hangar: 'hangar', ship: 'hangar', categories: 'shop' };
+
+  function show(name) {
+    if (VIEWS.indexOf(name) === -1) name = 'shop';
+    document.body.setAttribute('data-view', name);
+    document.querySelectorAll('.view').forEach(function (v) {
+      v.classList.toggle('on', v.getAttribute('data-view') === name);
+    });
+    document.querySelectorAll('.tabs button').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-view') === TAB_OF[name]);
+    });
+  }
+
+  document.querySelectorAll('.tabs button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      window.location.hash = '#' + b.getAttribute('data-view');
+    });
+  });
+
+  window.addEventListener('hashchange', function () { show(window.location.hash.slice(1)); });
+  show(window.location.hash.slice(1) || 'shop');
+})();
+</script>
+</body>
+</html>
