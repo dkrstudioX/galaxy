@@ -244,13 +244,22 @@
     }).join('');
   }
 
-  /* Чипы подкатегорий под табами: показываются только для выбранной ветки. */
+  /* Чипы подкатегорий под табами: та же форма, что у категорий.
+     Пустой блок не скрывается — он держит высоту, чтобы сетка не прыгала. */
   function renderSubcategories() {
-    var bar = document.getElementById('subcategoryBar');
-    if (!bar) return;
+    var title = document.getElementById('subcategoryTitle');
+    var tabs = document.getElementById('subcategoryTabs');
+    if (!title || !tabs) return;
     var list = buildSubcategories(state.category);
-    bar.hidden = !list.length;
-    document.getElementById('subcategoryTabs').innerHTML = list.map(function (s) {
+    if (!list.length) {
+      title.hidden = true;
+      tabs.hidden = true;
+      tabs.innerHTML = '';
+      return;
+    }
+    title.hidden = false;
+    tabs.hidden = false;
+    tabs.innerHTML = list.map(function (s) {
       return '<button class="sub-chip' + (state.subcategory === s.id ? ' active' : '') + '" data-action="subcategory" data-sub="' + s.id + '">' +
         s.label + '<span class="sub-count">' + s.count + '</span></button>';
     }).join('');
