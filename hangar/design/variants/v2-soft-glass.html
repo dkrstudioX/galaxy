@@ -22,14 +22,32 @@ body{margin:0;background:var(--ink);color:var(--text);font:14px/1.5 var(--sans);
 .app{position:relative;z-index:2;height:100vh;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;gap:16px;padding:22px 26px}
 .card{
   position:relative;
-  background:linear-gradient(165deg,rgba(255,255,255,.17),rgba(255,255,255,.045));
+  background:
+    linear-gradient(125deg,rgba(255,255,255,.12),transparent 42%),
+    linear-gradient(165deg,rgba(255,255,255,.17),rgba(255,255,255,.045));
   border:1px solid var(--line);
   -webkit-backdrop-filter:blur(34px) saturate(1.5);backdrop-filter:blur(34px) saturate(1.5);
   border-radius:var(--r-lg);
   box-shadow:0 30px 70px rgba(2,8,16,.48), inset 0 1px 0 rgba(255,255,255,.35);
 }
-.card::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-  background:linear-gradient(125deg,rgba(255,255,255,.14),transparent 42%)}
+/* Техническая рамка: двойной контур + угловые скобки */
+.card::after{
+  content:'';position:absolute;inset:8px;border-radius:15px;pointer-events:none;
+  border:1px solid rgba(255,200,168,.26);
+  box-shadow:inset 0 0 0 3px rgba(255,200,168,.05);
+  background:
+    linear-gradient(var(--peach),var(--peach)) 0 0/22px 2px no-repeat,
+    linear-gradient(var(--peach),var(--peach)) 0 0/2px 22px no-repeat,
+    linear-gradient(var(--peach),var(--peach)) 100% 0/22px 2px no-repeat,
+    linear-gradient(var(--peach),var(--peach)) 100% 0/2px 22px no-repeat,
+    linear-gradient(var(--peach),var(--peach)) 0 100%/22px 2px no-repeat,
+    linear-gradient(var(--peach),var(--peach)) 0 100%/2px 22px no-repeat,
+    linear-gradient(var(--peach),var(--peach)) 100% 100%/22px 2px no-repeat,
+    linear-gradient(var(--peach),var(--peach)) 100% 100%/2px 22px no-repeat;
+}
+.card > *{position:relative;z-index:1}
+/* у «пилюль» — только тонкий внутренний контур, без скобок */
+.topbar::after,.tabs::after{border-radius:999px;background:none;box-shadow:none;border-color:rgba(255,255,255,.14)}
 
 /* topbar */
 .topbar{display:flex;align-items:center;gap:16px;padding:12px 20px;border-radius:999px}
@@ -89,19 +107,11 @@ h1{margin:8px 0 0;font:600 34px/1.1 var(--sans);letter-spacing:-.01em}
   background:linear-gradient(120deg,var(--mint),var(--peach));box-shadow:0 16px 40px rgba(143,245,227,.28)}
 .buy:hover{filter:brightness(1.06)}
 
-.more{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:6px}
-.more > div{padding:18px;border-radius:var(--r-md);background:rgba(255,255,255,.06);border:1px solid var(--line-soft);display:flex;align-items:center;gap:14px}
-.more .ic{color:var(--mint);flex:none}
-.more .copy{min-width:0}
-.more strong{display:block;font:500 13.5px var(--sans)}
-.more span{display:block;margin-top:3px;font:10px var(--mono);color:var(--dim)}
-.more b{margin-left:auto;font:600 12px var(--mono);color:var(--text);white-space:nowrap}
-
-.compare{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:16px;border:1px solid var(--line-soft);border-radius:var(--r-md);overflow:hidden;background:rgba(255,255,255,.04)}
-.compare div{padding:14px 18px;border-right:1px solid var(--line-soft)}
-.compare div:last-child{border-right:0}
-.compare b{display:block;font:600 18px var(--mono);color:var(--mint)}
-.compare span{display:block;margin-top:3px;font:9px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.more{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:6px}
+.more > div{padding:14px;border-radius:var(--r-md);background:rgba(255,255,255,.06);border:1px solid var(--line-soft)}
+.more .ic{color:var(--mint)}
+.more strong{display:block;margin-top:8px;font:500 13px var(--sans)}
+.more span{display:block;margin-top:2px;font:10px var(--mono);color:var(--dim)}
 
 /* cargo */
 .cap{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
@@ -119,15 +129,22 @@ h1{margin:8px 0 0;font:600 34px/1.1 var(--sans);letter-spacing:-.01em}
 .total span{font:9px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
 .total b{font:600 14px var(--mono);color:var(--mint)}
 
-/* ships */
-.ships{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.ship{display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:22px}
-.thumb{width:74px;height:46px;border-radius:12px;background:url('../assets/ship.jpg') center/cover;border:1px solid rgba(255,255,255,.25);flex:none}
-.ship strong{display:block;font:600 14px var(--sans);letter-spacing:.06em}
-.ship span{display:block;margin-top:3px;font:10px var(--mono);color:var(--dim);letter-spacing:.1em;text-transform:uppercase}
-.ship .tag{margin-left:auto;padding:5px 10px;border-radius:999px;background:rgba(255,255,255,.10);border:1px solid var(--line-soft);font:600 9px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-.ship.on{border-color:rgba(143,245,227,.55);box-shadow:0 30px 70px rgba(2,8,16,.5),0 0 0 1px rgba(143,245,227,.3),inset 0 1px 0 rgba(255,255,255,.4)}
-.ship.on .tag{background:rgba(143,245,227,.9);color:#062018;border-color:transparent}
+/* квадратные карточки кораблей */
+.dock{display:flex;align-items:center;gap:20px}
+.dock-label{flex:none;width:112px}
+.dock-label span{display:block;font:9px var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
+.dock-label b{display:block;margin-top:6px;font:600 20px var(--mono)}
+.dock-row{display:flex;gap:12px}
+.ship{width:126px;height:126px;border-radius:20px;padding:0;overflow:hidden;display:block;cursor:pointer}
+.ship::after{display:none}
+.thumb{position:absolute;inset:0;border-radius:0;border:0;background:url('../assets/ship.jpg') center/cover;opacity:.62;z-index:0}
+.ship .meta{position:absolute;left:0;right:0;bottom:0;z-index:1;padding:10px 12px;background:linear-gradient(180deg,transparent,rgba(4,10,18,.94))}
+.ship b{display:block;font:600 11px var(--mono);letter-spacing:.14em}
+.ship span{display:block;margin-top:2px;font:9px var(--mono);color:var(--muted);letter-spacing:.06em}
+.ship .tag{position:absolute;top:8px;right:8px;z-index:1;padding:3px 7px;border-radius:999px;background:rgba(8,17,28,.72);border:1px solid var(--line-soft);font:600 8px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.ship.on{border-color:rgba(143,245,227,.6);box-shadow:0 30px 70px rgba(2,8,16,.5),0 0 0 1px rgba(143,245,227,.35),inset 0 1px 0 rgba(255,255,255,.4)}
+.ship.on .tag{background:rgba(143,245,227,.92);color:#062018;border-color:transparent}
+.ship.on b{color:var(--mint)}
 ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);border-radius:8px}
 </style>
 </head>
@@ -203,17 +220,10 @@ h1{margin:8px 0 0;font:600 34px/1.1 var(--sans);letter-spacing:-.01em}
 
       <div class="h">ещё в категории</div>
       <div class="more">
-        <div><span class="ic"><svg width="18" height="18"><use href="#i-bolt"/></svg></span><div class="copy"><strong>Лазер M-6</strong><span>урон 110 · 10 кг</span></div><b>3 480 ¤</b></div>
-        <div><span class="ic"><svg width="18" height="18"><use href="#i-bolt"/></svg></span><div class="copy"><strong>Лазер M-8</strong><span>урон 140 · 12 кг</span></div><b>4 340 ¤</b></div>
-        <div><span class="ic"><svg width="18" height="18"><use href="#i-bolt"/></svg></span><div class="copy"><strong>Лазер M-9</strong><span>урон 155 · 13 кг</span></div><b>4 770 ¤</b></div>
-        <div><span class="ic"><svg width="18" height="18"><use href="#i-bolt"/></svg></span><div class="copy"><strong>Лазер M-10</strong><span>урон 170 · 14 кг</span></div><b>5 200 ¤</b></div>
-      </div>
-
-      <div class="compare">
-        <div><b>+15</b><span>урона к M-6</span></div>
-        <div><b>+42</b><span>мощности</span></div>
-        <div><b>+430 ¤</b><span>к цене</span></div>
-        <div><b>+1 кг</b><span>массы</span></div>
+        <div><span class="ic"><svg width="18" height="18"><use href="#i-bolt"/></svg></span><strong>Лазер M-6</strong><span>урон 110 · 10 кг</span></div>
+        <div><span class="ic"><svg width="18" height="18"><use href="#i-bolt"/></svg></span><strong>Лазер M-8</strong><span>урон 140 · 12 кг</span></div>
+        <div><span class="ic"><svg width="18" height="18"><use href="#i-bolt"/></svg></span><strong>Лазер M-9</strong><span>урон 155 · 13 кг</span></div>
+        <div><span class="ic"><svg width="18" height="18"><use href="#i-bolt"/></svg></span><strong>Лазер M-10</strong><span>урон 170 · 14 кг</span></div>
       </div>
     </section>
 
@@ -232,10 +242,16 @@ h1{margin:8px 0 0;font:600 34px/1.1 var(--sans);letter-spacing:-.01em}
     </aside>
   </div>
 
-  <footer class="ships">
-    <article class="card ship on"><span class="thumb"></span><div><strong>ГРОМ</strong><span>линкор · 18 000 кг</span></div><span class="tag">выбран</span></article>
-    <article class="card ship"><span class="thumb"></span><div><strong>СОКОЛ</strong><span>фрегат · 4 200 кг</span></div><span class="tag">11 слотов</span></article>
-    <article class="card ship"><span class="thumb"></span><div><strong>БАРЖА</strong><span>грузовоз · 12 000 кг</span></div><span class="tag">15 т трюм</span></article>
+  <footer class="dock">
+    <div class="dock-label"><span>флот</span><b>6 / 18</b></div>
+    <div class="dock-row">
+      <article class="card ship on"><span class="thumb"></span><span class="tag">выбран</span><div class="meta"><b>ГРОМ</b><span>линкор · 18 000 кг</span></div></article>
+      <article class="card ship"><span class="thumb"></span><div class="meta"><b>МОЛОТ</b><span>линкор · 22 000 кг</span></div></article>
+      <article class="card ship"><span class="thumb"></span><div class="meta"><b>ЦИТАДЕЛЬ</b><span>линкор · 16 000 кг</span></div></article>
+      <article class="card ship"><span class="thumb"></span><div class="meta"><b>СОКОЛ</b><span>фрегат · 4 200 кг</span></div></article>
+      <article class="card ship"><span class="thumb"></span><div class="meta"><b>КЛИНОК</b><span>фрегат · 3 600 кг</span></div></article>
+      <article class="card ship"><span class="thumb"></span><div class="meta"><b>БАРЖА</b><span>грузовоз · 12 000 кг</span></div></article>
+    </div>
   </footer>
 </div>
 </body>
