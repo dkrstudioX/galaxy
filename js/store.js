@@ -4,12 +4,11 @@
   'use strict';
 
   var KEY = 'galaxy_admin_db_v1';
-  var TYPE_LABEL = { ship: 'корабли', goods: 'товары' };
 
   var db = null;
 
   function blank() {
-    return { props: [], slots: [], categories: [], ships: [], goods: [] };
+    return { props: [], slots: [], categories: [], objects: [] };
   }
 
   function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
@@ -35,38 +34,51 @@
       return { id: str(s.id) || uid(), name: str(s.name).trim(), capacity: str(s.capacity).trim() };
     }).filter(function (s) { return s.name; });
 
+    /* Категории — одно дерево: прежние типы 'ship' и 'goods' больше не различаются,
+       parentId сохраняется ('' — корневая). */
     out.categories = arr(data.categories).filter(isObj).map(function (c) {
-      /* Ресурсы и оборудование объединены в товары: старые типы мигрируют.
-         parentId — родительская категория; '' — корневая (в старых выгрузках поля нет). */
-      var type = c.type === 'ship' ? 'ship' : 'goods';
       return {
-        id: str(c.id) || uid(), type: type, name: str(c.name).trim(),
+        id: str(c.id) || uid(), name: str(c.name).trim(),
         propIds: arr(c.propIds).map(str), parentId: str(c.parentId)
       };
     }).filter(function (c) { return c.name; });
 
-    out.ships = arr(data.ships).filter(isObj).map(function (s) {
-      return { id: str(s.id) || uid(), name: str(s.name).trim(), categoryId: str(s.categoryId), values: obj(s.values), slots: makeShipSlots(s) };
-    }).filter(function (s) { return s.name; });
-
-    /* Товары: единая коллекция; старые выгрузки с resources/equipments склеиваются. */
-    out.goods = arr(data.goods).concat(arr(data.resources), arr(data.equipments))
-      .filter(isObj).map(makeItem).filter(function (g) { return g.name; });
+    /* Объекты: корабли и предметы — одна коллекция с флажком isShip.
+       Старые выгрузки читаются из objects, ships, goods, resources и equipments. */
+    function collect(list, forceShip) {
+      return arr(list).filter(isObj).map(function (o) { return makeObject(o, forceShip); });
+    }
+    out.objects = collect(data.objects)
+      .concat(collect(data.ships, true))
+      .concat(collect(data.goods))
+      .concat(collect(data.resources))
+      .concat(collect(data.equipments))
+      .filter(function (o) { return o.name; });
 
     pruneRefs(out);
     return out;
 
-    function makeItem(o) {
-      return { id: str(o.id) || uid(), name: str(o.name).trim(), categoryId: str(o.categoryId), values: obj(o.values), mass: str(o.mass).trim(), slotId: o.slotId ? str(o.slotId) : null };
+    function makeObject(o, forceShip) {
+      var isShip = forceShip === true || o.isShip === true || o.isShip === 'true';
+      return {
+        id: str(o.id) || uid(),
+        name: str(o.name).trim(),
+        categoryId: str(o.categoryId),
+        values: obj(o.values),
+        mass: str(o.mass).trim(),
+        isShip: isShip,
+        slotId: isShip ? null : (o.slotId ? str(o.slotId) : null),
+        slots: isShip ? makeSlots(o) : []
+      };
     }
 
     /* Слоты корабля: [{slotId, contents:[{itemId, qty}]}].
        Старый формат (slotIds: [id]) мигрирует — содержимое остаётся пустым;
-       поле kind из прежних выгрузок отбрасывается (id товаров уникальны). */
-    function makeShipSlots(s) {
-      var entries = arr(s.slots);
-      if (!entries.length && Array.isArray(s.slotIds)) {
-        entries = s.slotIds.map(function (id) { return { slotId: str(id), contents: [] }; });
+       поле kind из прежних выгрузок отбрасывается (id объектов уникальны). */
+    function makeSlots(o) {
+      var entries = arr(o.slots);
+      if (!entries.length && Array.isArray(o.slotIds)) {
+        entries = o.slotIds.map(function (id) { return { slotId: str(id), contents: [] }; });
       }
       return entries.filter(isObj).map(function (e) {
         return {
@@ -83,31 +95,35 @@
 
   /* Убираем ссылки на несуществующие записи, чтобы база всегда была согласованной. */
   function pruneRefs(out) {
-    var propIds = {}, catIds = {}, slotIds = {}, goodsIds = {};
+    var propIds = {}, catIds = {}, slotIds = {}, objIds = {};
     out.props.forEach(function (p) { propIds[p.id] = true; });
     out.categories.forEach(function (c) { catIds[c.id] = true; });
     out.slots.forEach(function (s) { slotIds[s.id] = true; });
-    out.goods.forEach(function (g) { goodsIds[g.id] = true; });
+    out.objects.forEach(function (o) { objIds[o.id] = true; });
 
     out.categories.forEach(function (c) {
       c.propIds = c.propIds.filter(function (id) { return propIds[id]; });
     });
     fixParents(out.categories);
-    out.ships.forEach(function (s) {
-      if (!catIds[s.categoryId]) s.categoryId = '';
-      s.slots = s.slots.filter(function (e) { return slotIds[e.slotId]; });
-      s.slots.forEach(function (e) {
-        e.contents = e.contents.filter(function (c) { return goodsIds[c.itemId]; });
-      });
-    });
-    out.goods.forEach(function (g) {
-      if (!catIds[g.categoryId]) g.categoryId = '';
-      if (g.slotId && !slotIds[g.slotId]) g.slotId = null;
+
+    out.objects.forEach(function (o) {
+      if (!catIds[o.categoryId]) o.categoryId = '';
+      if (o.isShip) {
+        /* Корабль никуда не вставляется, у него только свои слоты. */
+        o.slotId = null;
+        o.slots = o.slots.filter(function (e) { return slotIds[e.slotId]; });
+        o.slots.forEach(function (e) {
+          e.contents = e.contents.filter(function (c) { return objIds[c.itemId] && c.itemId !== o.id; });
+        });
+      } else {
+        o.slots = [];
+        if (o.slotId && !slotIds[o.slotId]) o.slotId = null;
+      }
     });
   }
 
-  /* Родитель категории должен существовать, быть того же типа, а цепочка —
-     не зацикливаться. Иначе категория становится корневой, а не пропадает. */
+  /* Родитель категории должен существовать, а цепочка — не зацикливаться.
+     Иначе категория становится корневой, а не пропадает. */
   function fixParents(categories) {
     var byId = {};
     categories.forEach(function (c) { byId[c.id] = c; });
@@ -117,7 +133,7 @@
       var parentId = c.parentId;
       while (parentId) {
         var parent = byId[parentId];
-        if (!parent || parent.type !== c.type || seen[parent.id]) { c.parentId = ''; break; }
+        if (!parent || seen[parent.id]) { c.parentId = ''; break; }
         seen[parent.id] = true;
         parentId = parent.parentId;
       }
@@ -168,56 +184,29 @@
     db[coll] = db[coll].filter(function (x) { return x.id !== id; });
     persist();
   }
-  function nameTaken(coll, name, excludeId, type) {
+  function nameTaken(coll, name, excludeId) {
     var n = str(name).trim().toLowerCase();
     if (!n) return false;
     return all(coll).some(function (x) {
       if (excludeId && x.id === excludeId) return false;
-      if (type && x.type !== type) return false;
       return str(x.name).trim().toLowerCase() === n;
     });
   }
 
-  /* ---------- Проверки использования ---------- */
-
-  function propUsage(propId) {
-    var out = [];
-    all('categories').forEach(function (c) {
-      if (c.propIds.indexOf(propId) > -1) out.push(c.name + ' (' + TYPE_LABEL[c.type] + ')');
-    });
-    return out;
-  }
-
-  function slotUsage(slotId) {
-    return {
-      ships: all('ships').filter(function (s) {
-        return s.slots.some(function (e) { return e.slotId === slotId; });
-      }).map(function (s) { return s.name; }),
-      goods: all('goods').filter(function (g) { return g.slotId === slotId; }).map(function (g) { return g.name; })
-    };
-  }
-
-  function categoryUsage(categoryId) {
-    var cat = byId('categories', categoryId);
-    if (!cat) return [];
-    var coll = cat.type === 'ship' ? 'ships' : 'goods';
-    return all(coll).filter(function (o) { return o.categoryId === categoryId; }).map(function (o) { return o.name; });
-  }
-
   /* ---------- Дерево категорий ---------- */
 
-  /* Категории одного типа, непосредственно вложенные в parentId ('' — корневые). */
-  function childrenOf(type, parentId) {
+  /* Категории, непосредственно вложенные в parentId ('' — корневые). */
+  function childrenOf(parentId) {
     var pid = str(parentId);
-    return all('categories').filter(function (c) { return c.type === type && str(c.parentId) === pid; });
+    return all('categories').filter(function (c) { return str(c.parentId) === pid; });
   }
 
   /* Плоский список дерева для таблиц и селектов: [{cat, depth, hasChildren, childCount}]. */
-  function categoryTree(type) {
+  function categoryTree() {
     var out = [];
     (function walk(parentId, depth) {
-      childrenOf(type, parentId).forEach(function (c) {
-        var kids = childrenOf(type, c.id);
+      childrenOf(parentId).forEach(function (c) {
+        var kids = childrenOf(c.id);
         out.push({ cat: c, depth: depth, hasChildren: kids.length > 0, childCount: kids.length });
         walk(c.id, depth + 1);
       });
@@ -246,7 +235,7 @@
     var seen = {};
     seen[root.id] = true;
     (function walk(parentId) {
-      childrenOf(root.type, parentId).forEach(function (c) {
+      childrenOf(parentId).forEach(function (c) {
         if (seen[c.id]) return;
         seen[c.id] = true;
         out.push(c);
@@ -294,13 +283,46 @@
   }
 
   /* Названия уникальны среди соседей: под одним родителем двух «Оружий» быть не может. */
-  function categoryNameTaken(type, name, parentId, excludeId) {
+  function categoryNameTaken(name, parentId, excludeId) {
     var n = str(name).trim().toLowerCase();
     if (!n) return false;
-    return childrenOf(type, parentId).some(function (c) {
+    return childrenOf(parentId).some(function (c) {
       if (excludeId && c.id === excludeId) return false;
       return str(c.name).trim().toLowerCase() === n;
     });
+  }
+
+  /* ---------- Проверки использования ---------- */
+
+  function propUsage(propId) {
+    return all('categories').filter(function (c) { return c.propIds.indexOf(propId) > -1; })
+      .map(function (c) { return c.name; });
+  }
+
+  /* Слот занят: contains — у этих объектов есть такой слот,
+     fits — эти предметы вставляются именно в него. */
+  function slotUsage(slotId) {
+    return {
+      contains: all('objects').filter(function (o) {
+        return o.slots.some(function (e) { return e.slotId === slotId; });
+      }).map(function (o) { return o.name; }),
+      fits: all('objects').filter(function (o) { return !o.isShip && o.slotId === slotId; })
+        .map(function (o) { return o.name; })
+    };
+  }
+
+  /* Где используется объект: имена объектов, в чьих слотах он лежит. */
+  function objectUsage(id) {
+    return all('objects').filter(function (o) {
+      return o.slots.some(function (e) {
+        return e.contents.some(function (c) { return c.itemId === id; });
+      });
+    }).map(function (o) { return o.name; });
+  }
+
+  function categoryUsage(categoryId) {
+    return all('objects').filter(function (o) { return o.categoryId === categoryId; })
+      .map(function (o) { return o.name; });
   }
 
   /* ---------- Экспорт / импорт / демо ---------- */
@@ -323,8 +345,7 @@
       props: d.props.length,
       slots: d.slots.length,
       categories: d.categories.length,
-      ships: d.ships.length,
-      goods: d.goods.length
+      objects: d.objects.length
     };
   }
 
@@ -335,16 +356,21 @@
 
     function addProp(name, value) { var p = { id: uid(), name: name, value: value }; d.props.push(p); return p; }
     function addSlot(name, capacity) { var s = { id: uid(), name: name, capacity: capacity || '' }; d.slots.push(s); return s; }
-    function addCat(type, name, propIds, parent) { var c = { id: uid(), type: type, name: name, propIds: propIds, parentId: parent ? parent.id : '' }; d.categories.push(c); return c; }
+    function addCat(name, propIds, parent) {
+      var c = { id: uid(), name: name, propIds: propIds, parentId: parent ? parent.id : '' };
+      d.categories.push(c);
+      return c;
+    }
     function vals(pairs) {
       var out = {};
       for (var i = 0; i < pairs.length; i++) out[pairs[i][0].id] = pairs[i][1];
       return out;
     }
-    /* Слоты корабля с содержимым по умолчанию: [{ slot, contents: [{ item, qty }] }] */
+    /* Корабль: свои слоты с содержимым по умолчанию. */
     function addShip(name, cat, valuePairs, slotEntries) {
-      d.ships.push({
-        id: uid(), name: name, categoryId: cat.id, values: vals(valuePairs),
+      d.objects.push({
+        id: uid(), name: name, categoryId: cat.id, values: vals(valuePairs), mass: '',
+        isShip: true, slotId: null,
         slots: slotEntries.map(function (e) {
           return {
             slotId: e.slot.id,
@@ -353,9 +379,13 @@
         })
       });
     }
-    function addItem(coll, name, cat, valuePairs, mass, slot) {
-      var item = { id: uid(), name: name, categoryId: cat.id, values: vals(valuePairs), mass: mass, slotId: slot ? slot.id : null };
-      d[coll].push(item);
+    /* Предмет: масса единицы и слот, в который он вставляется (null — любой). */
+    function addItem(name, cat, valuePairs, mass, slot) {
+      var item = {
+        id: uid(), name: name, categoryId: cat.id, values: vals(valuePairs), mass: mass,
+        isShip: false, slotId: slot ? slot.id : null, slots: []
+      };
+      d.objects.push(item);
       return item;
     }
 
@@ -373,30 +403,30 @@
     var slotShield = addSlot('Щит', '25');
     var slotCargo = addSlot('Грузовой отсек', '200');
 
-    /* Категории вкладываются друг в друга: подкатегория наследует свойства родительской. */
-    var catShips = addCat('ship', 'Корабли', [durability.id, speed.id, mass.id]);
-    var catLiners = addCat('ship', 'Линкоры', [cargo.id], catShips);
-    var catShuttles = addCat('ship', 'Шатлы', [], catShips);
-    var catResources = addCat('goods', 'Ресурсы', [rarity.id]);
-    var catMaterials = addCat('goods', 'Материалы', [], catResources);
-    var catFuel = addCat('goods', 'Топливо', [], catResources);
-    var catEquipment = addCat('goods', 'Оборудование', [rarity.id]);
-    var catWeapons = addCat('goods', 'Оружие', [damage.id], catEquipment);
-    var catShields = addCat('goods', 'Щиты', [defense.id], catEquipment);
-    var catEngines = addCat('goods', 'Двигатели', [speed.id, fuel.id], catEquipment);
-    var catOther = addCat('goods', 'Прочее', []);
+    /* Одно дерево категорий: корабли и предметы в общей иерархии. */
+    var catShips = addCat('Корабли', [durability.id, speed.id, mass.id]);
+    var catLiners = addCat('Линкоры', [cargo.id], catShips);
+    var catShuttles = addCat('Шатлы', [], catShips);
+    var catResources = addCat('Ресурсы', [rarity.id]);
+    var catMaterials = addCat('Материалы', [], catResources);
+    var catFuel = addCat('Топливо', [], catResources);
+    var catEquipment = addCat('Оборудование', [rarity.id]);
+    var catWeapons = addCat('Оружие', [damage.id], catEquipment);
+    var catShields = addCat('Щиты', [defense.id], catEquipment);
+    var catEngines = addCat('Двигатели', [speed.id, fuel.id], catEquipment);
+    var catOther = addCat('Прочее', []);
 
-    /* Масса товара — базовое поле, именно она учитывается вместимостью слотов. */
-    var iron = addItem('goods', 'Железо', catMaterials, [[rarity, 'Обычный']], '8', null);
-    var iridium = addItem('goods', 'Иридий', catMaterials, [[rarity, 'Редкий']], '12', null);
-    addItem('goods', 'Гипертопливо', catFuel, [[rarity, 'Обычный']], '5', null);
-    addItem('goods', 'Плазменный боеприпас', catWeapons, [[rarity, 'Необычный'], [damage, '15']], '3', slotWeapon);
+    /* Масса объекта — базовая величина: именно она учитывается вместимостью слотов. */
+    var iron = addItem('Железо', catMaterials, [[rarity, 'Обычный']], '8', null);
+    var iridium = addItem('Иридий', catMaterials, [[rarity, 'Редкий']], '12', null);
+    addItem('Гипертопливо', catFuel, [[rarity, 'Обычный']], '5', null);
+    addItem('Плазменный боеприпас', catWeapons, [[rarity, 'Необычный'], [damage, '15']], '3', slotWeapon);
 
-    var laser = addItem('goods', 'Лазер Mk I', catWeapons, [[damage, '35']], '6', slotWeapon);
-    var rockets = addItem('goods', 'Ракетная установка', catWeapons, [[damage, '70']], '18', slotWeapon);
-    var engine = addItem('goods', 'Ионный двигатель', catEngines, [[speed, '32'], [fuel, '3']], '25', slotEngine);
-    var shield = addItem('goods', 'Плазменный щит', catShields, [[defense, '28']], '14', slotShield);
-    var repairKit = addItem('goods', 'Ремкомплект', catOther, [], '2', null);
+    var laser = addItem('Лазер Mk I', catWeapons, [[damage, '35']], '6', slotWeapon);
+    var rockets = addItem('Ракетная установка', catWeapons, [[damage, '70']], '18', slotWeapon);
+    var engine = addItem('Ионный двигатель', catEngines, [[speed, '32'], [fuel, '3']], '25', slotEngine);
+    var shield = addItem('Плазменный щит', catShields, [[defense, '28']], '14', slotShield);
+    var repairKit = addItem('Ремкомплект', catOther, [], '2', null);
 
     /* У корабля слоты могут повторяться — порядок и повторы сохраняются как заданы. */
     addShip('Сокол', catShuttles, [[durability, '90'], [speed, '26'], [mass, '45']], [
@@ -426,12 +456,8 @@
 
     props: function () { return all('props'); },
     slots: function () { return all('slots'); },
-    categories: function (type) {
-      var list = all('categories');
-      return type ? list.filter(function (c) { return c.type === type; }) : list;
-    },
-    ships: function () { return all('ships'); },
-    goods: function () { return all('goods'); },
+    categories: function () { return all('categories'); },
+    objects: function () { return all('objects'); },
 
     byId: byId,
     nameTaken: nameTaken,
@@ -440,27 +466,30 @@
 
     createProp: function (name, value) { return insert('props', { name: name, value: value }); },
     createSlot: function (name, capacity) { return insert('slots', { name: name, capacity: capacity || '' }); },
-    createCategory: function (type, name, propIds, parentId) {
-      return insert('categories', { type: type, name: name, propIds: (propIds || []).slice(), parentId: parentId || '' });
+    createCategory: function (name, propIds, parentId) {
+      return insert('categories', { name: name, propIds: (propIds || []).slice(), parentId: parentId || '' });
     },
-    createObject: function (coll, data) {
-      var item = { name: data.name, categoryId: data.categoryId, values: data.values || {} };
-      if (coll === 'ships') {
-        item.slots = (data.slots || []).map(function (e) {
+    createObject: function (data) {
+      var isShip = !!data.isShip;
+      return insert('objects', {
+        name: data.name,
+        categoryId: data.categoryId,
+        values: data.values || {},
+        mass: data.mass || '',
+        isShip: isShip,
+        slotId: isShip ? null : (data.slotId || null),
+        slots: isShip ? (data.slots || []).map(function (e) {
           return {
             slotId: e.slotId,
             contents: (e.contents || []).map(function (c) { return { itemId: c.itemId, qty: String(c.qty) }; })
           };
-        });
-      } else {
-        item.mass = data.mass || '';
-        item.slotId = data.slotId || null;
-      }
-      return insert(coll, item);
+        }) : []
+      });
     },
 
     propUsage: propUsage,
     slotUsage: slotUsage,
+    objectUsage: objectUsage,
     categoryUsage: categoryUsage,
 
     childCategories: childrenOf,
@@ -480,17 +509,17 @@
       var n = parseFloat(str(slot.capacity).replace(',', '.'));
       return isFinite(n) && n >= 0 ? n : Infinity;
     },
-    /* Масса одной единицы предмета: пусто или не число — 0. */
+    /* Масса одной единицы объекта: пусто или не число — 0. */
     massOf: function (item) {
       if (!item) return 0;
       var n = parseFloat(str(item.mass).replace(',', '.'));
       return isFinite(n) && n > 0 ? n : 0;
     },
-    /* Суммарная масса содержимого слота: масса товара × количество. */
+    /* Суммарная масса содержимого слота: масса объекта × количество. */
     usedMass: function (contents) {
       var sum = 0;
       (contents || []).forEach(function (c) {
-        sum += (parseInt(c.qty, 10) || 0) * Store.massOf(byId('goods', c.itemId));
+        sum += (parseInt(c.qty, 10) || 0) * Store.massOf(byId('objects', c.itemId));
       });
       return sum;
     },

@@ -262,6 +262,18 @@ body.modal-open { overflow: hidden; }
 }
 .prop-chip-inherited { background: transparent; border-style: dashed; color: var(--muted); }
 
+.type-chip {
+  display: inline-block;
+  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: 20px;
+  border: 1px solid var(--border-soft);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.02);
+  white-space: nowrap;
+}
+.type-chip-ship { color: #dfe6ff; border-color: rgba(124, 92, 255, 0.45); background: rgba(124, 92, 255, 0.18); }
+
 /* ---------- Модальные окна ---------- */
 
 .overlay {

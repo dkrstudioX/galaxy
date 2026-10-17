@@ -8,11 +8,17 @@
     { hash: '#/home', label: 'Админка', section: null, page: 'home' },
     { hash: '#/props', label: 'Свойства', section: 'Справочники', page: 'props' },
     { hash: '#/slots', label: 'Слоты', section: 'Справочники', page: 'slots' },
-    { hash: '#/categories/ship', label: 'Категории кораблей', section: 'Категории', page: 'catShip' },
-    { hash: '#/categories/goods', label: 'Категории товаров', section: 'Категории', page: 'catGoods' },
-    { hash: '#/ships', label: 'Корабли', section: 'Объекты', page: 'ships' },
-    { hash: '#/goods', label: 'Товары', section: 'Объекты', page: 'goods' }
+    { hash: '#/categories', label: 'Категории', section: 'Каталог', page: 'categories' },
+    { hash: '#/objects', label: 'Объекты', section: 'Каталог', page: 'objects' }
   ];
+
+  /* Старые адреса: корабли и товары слились в объекты, категории — в одно дерево. */
+  var ALIASES = {
+    '#/ships': '#/objects',
+    '#/goods': '#/objects',
+    '#/categories/ship': '#/categories',
+    '#/categories/goods': '#/categories'
+  };
 
   var navLinks = [];
 
@@ -34,6 +40,11 @@
 
   function currentRoute() {
     var hash = window.location.hash || '#/home';
+    if (ALIASES[hash]) {
+      hash = ALIASES[hash];
+      try { window.history.replaceState(null, '', hash); }
+      catch (e) { window.location.hash = hash; }
+    }
     var found = null;
     ROUTES.forEach(function (r) { if (r.hash === hash) found = r; });
     return found || ROUTES[0];

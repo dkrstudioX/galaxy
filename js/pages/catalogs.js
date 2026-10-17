@@ -167,8 +167,8 @@
   function deleteSlot(s) {
     var u = Store.slotUsage(s.id);
     var used = [];
-    u.ships.forEach(function (n) { used.push('корабль «' + n + '»'); });
-    u.goods.forEach(function (n) { used.push('товар «' + n + '»'); });
+    u.contains.forEach(function (n) { used.push('у объекта «' + n + '» есть такой слот'); });
+    u.fits.forEach(function (n) { used.push('объект «' + n + '» вставляется в него'); });
     if (used.length) {
       UI.alert({
         title: 'Нельзя удалить',
@@ -191,27 +191,19 @@
   /* ================= Категории ================= */
 
   var CATEGORY_META = {
-    ship: {
-      title: 'Категории кораблей',
-      subtitle: 'Категория задаёт список свойств кораблей. Категории вкладываются друг в друга: например, «Корабли» → «Линкоры», «Шатлы».',
-      empty: 'Пока нет категорий кораблей. Например: «Корабли» → «Линкоры», «Шатлы».',
-      placeholder: 'Например: Линкоры'
-    },
-    goods: {
-      title: 'Категории товаров',
-      subtitle: 'Категория задаёт список свойств товаров. Категории вкладываются друг в друга: например, «Оборудование» → «Оружие», «Щиты».',
-      empty: 'Пока нет категорий товаров. Например: «Ресурсы» → «Материалы», «Топливо».',
-      placeholder: 'Например: Материалы'
-    }
+    title: 'Категории',
+    subtitle: 'Категория задаёт список свойств объектов. Категории вкладываются друг в друга: «Корабли» → «Линкоры», «Шатлы».',
+    empty: 'Пока нет категорий. Например: «Корабли» → «Линкоры», «Шатлы»; «Ресурсы» → «Материалы», «Топливо».',
+    placeholder: 'Например: Линкоры'
   };
 
   /* Свёрнутые ветки дерева: id → true. По умолчанию дерево развёрнуто целиком. */
   var collapsedCats = {};
 
   /* Селект категорий: вложенные подписаны полным путём («Корабли / Линкоры»). */
-  function categoryOptions(type, emptyLabel, excluded) {
+  function categoryOptions(emptyLabel, excluded) {
     var options = [{ value: '', label: emptyLabel }];
-    Store.categoryTree(type).forEach(function (node) {
+    Store.categoryTree().forEach(function (node) {
       if (excluded && excluded[node.cat.id]) return;
       options.push({
         value: node.cat.id,
@@ -262,21 +254,21 @@
     );
   }
 
-  function renderCategories(root, type) {
-    var meta = CATEGORY_META[type];
+  function renderCategories(root) {
+    var meta = CATEGORY_META;
 
     root.appendChild(UI.pageHead({
       title: meta.title,
       subtitle: meta.subtitle,
       addLabel: 'Добавить категорию',
-      onAdd: function () { openCategoryModal(type, null, ''); }
+      onAdd: function () { openCategoryModal(null, ''); }
     }));
 
-    if (!Store.categoryTree(type).length) {
+    if (!Store.categoryTree().length) {
       root.appendChild(UI.emptyState({
         text: meta.empty,
         addLabel: 'Добавить категорию',
-        onAdd: function () { openCategoryModal(type, null, ''); }
+        onAdd: function () { openCategoryModal(null, ''); }
       }));
       return;
     }
@@ -284,8 +276,8 @@
     /* В таблицу попадают только видимые строки: содержимое свёрнутых веток скрыто. */
     var rows = [];
     (function collect(parentId, depth) {
-      Store.childCategories(type, parentId).forEach(function (cat) {
-        var kids = Store.childCategories(type, cat.id);
+      Store.childCategories(parentId).forEach(function (cat) {
+        var kids = Store.childCategories(cat.id);
         rows.push({ cat: cat, depth: depth, hasChildren: kids.length > 0, childCount: kids.length });
         if (kids.length && !collapsedCats[cat.id]) collect(cat.id, depth + 1);
       });
@@ -309,10 +301,10 @@
             class: 'btn btn-sm',
             text: 'Подкатегория',
             title: 'Создать вложенную категорию',
-            onclick: function () { openCategoryModal(type, null, row.cat.id); }
+            onclick: function () { openCategoryModal(null, row.cat.id); }
           })
         ].concat(UI.editDelete(
-          function () { openCategoryModal(type, row.cat, ''); },
+          function () { openCategoryModal(row.cat, ''); },
           function () { deleteCategory(row.cat); }
         ));
       }
@@ -324,13 +316,13 @@
     }));
   }
 
-  function openCategoryModal(type, existing, parentId) {
+  function openCategoryModal(existing, parentId) {
     var isEdit = !!existing;
-    var meta = CATEGORY_META[type];
+    var meta = CATEGORY_META;
 
     var nameInput = UI.input({ value: isEdit ? existing.name : '', placeholder: meta.placeholder });
 
-    /* Родителем может стать любая категория того же типа, кроме самой категории и её подкатегорий. */
+    /* Родителем может стать любая категория, кроме самой категории и её подкатегорий. */
     var excluded = {};
     if (isEdit) {
       excluded[existing.id] = true;
@@ -338,7 +330,7 @@
     }
     var initialParent = isEdit ? (existing.parentId || '') : (parentId || '');
     var parentSelect = UI.select({
-      options: categoryOptions(type, '— корневая категория —', excluded),
+      options: categoryOptions('— корневая категория —', excluded),
       value: excluded[initialParent] ? '' : initialParent
     });
     var parentHint = h('div', { class: 'hint' });
@@ -415,7 +407,7 @@
       onSave: function () {
         var name = nameInput.value.trim();
         if (!name) return 'Укажите название категории.';
-        if (Store.categoryNameTaken(type, name, parentSelect.value, isEdit ? existing.id : null)) {
+        if (Store.categoryNameTaken(name, parentSelect.value, isEdit ? existing.id : null)) {
           return 'В этой ветке уже есть категория с таким названием.';
         }
         var propIds = Store.props().filter(function (p) { return ownChecked[p.id]; }).map(function (p) { return p.id; });
@@ -423,7 +415,7 @@
           Store.patch('categories', existing.id, { name: name, parentId: parentSelect.value || '', propIds: propIds });
           UI.toast('Категория изменена', 'ok');
         } else {
-          Store.createCategory(type, name, propIds, parentSelect.value);
+          Store.createCategory(name, propIds, parentSelect.value);
           UI.toast(parentSelect.value ? 'Подкатегория добавлена' : 'Категория добавлена', 'ok');
         }
         App.refresh();
@@ -433,7 +425,7 @@
   }
 
   function deleteCategory(c) {
-    var kids = Store.childCategories(c.type, c.id);
+    var kids = Store.childCategories(c.id);
     if (kids.length) {
       UI.alert({
         title: 'Нельзя удалить',
@@ -466,6 +458,5 @@
 
   window.Pages.props = { render: renderProps };
   window.Pages.slots = { render: renderSlots };
-  window.Pages.catShip = { render: function (root) { renderCategories(root, 'ship'); } };
-  window.Pages.catGoods = { render: function (root) { renderCategories(root, 'goods'); } };
+  window.Pages.categories = { render: renderCategories };
 })();
