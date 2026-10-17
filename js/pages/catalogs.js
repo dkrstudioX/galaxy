@@ -9,7 +9,7 @@
   function renderProps(root) {
     root.appendChild(UI.pageHead({
       title: 'Свойства',
-      subtitle: 'Справочник свойств: название и значение по умолчанию.',
+      subtitle: 'Справочник свойств: название и значение по умолчанию. Свойство «Масса» (или «Вес») используется для расчёта вместимости слотов.',
       addLabel: 'Добавить свойство',
       onAdd: function () { openPropModal(null); }
     }));

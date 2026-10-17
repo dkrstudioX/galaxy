@@ -51,6 +51,12 @@
         }).join(', ') + '.'
       }));
     }
+    if (!Store.massProp() || props.indexOf(Store.massProp()) === -1) {
+      box.appendChild(h('div', {
+        class: 'hint',
+        text: 'В этой категории нет свойства «Масса» — объект будет считаться невесомым при заполнении слотов.'
+      }));
+    }
     return { box: box, inputs: inputs };
   }
 
@@ -587,11 +593,6 @@
       options: categoryOptions('— выберите подкатегорию —'),
       value: presetId
     });
-    var massInput = UI.input({
-      type: 'number', min: 0, step: 'any',
-      value: isEdit ? existing.mass : '',
-      placeholder: 'Например: 10'
-    });
     var priceInput = UI.input({
       type: 'number', min: 0, step: 'any',
       value: isEdit ? existing.price : '',
@@ -689,7 +690,6 @@
       ),
       shipBlock,
       itemBlock,
-      UI.field('Масса, кг', massInput, 'Масса одной единицы: учитывается при наполнении слотов кораблей.'),
       UI.field('Цена, ¤', priceInput, 'Цена покупки в ангаре. Пусто — цена не задана.'),
       h('div', { class: 'field' },
         h('label', { class: 'field-label', text: 'Свойства категории' }),
@@ -726,7 +726,6 @@
           name: name,
           categoryId: catSelect.value,
           parentCategoryId: chosenCat ? (chosenCat.parentId || '') : '',
-          mass: massInput.value.trim(),
           price: priceInput.value.trim(),
           icon: iconField.value(),
           values: collectInputs(inputs),

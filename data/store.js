@@ -28,6 +28,13 @@
     return out;
   }
 
+  /* Имя свойства, которым задаётся масса: «Масса» или «Вес», регистр не важен
+     (допускаются «Масса корпуса», «Вес груза»). */
+  function isMassPropName(name) {
+    var n = str(name).trim().toLowerCase();
+    return n === 'масса' || n === 'вес' || n.indexOf('масса ') === 0 || n.indexOf('вес ') === 0;
+  }
+
   function sanitize(data) {
     var out = blank();
     if (!isObj(data)) return out;
@@ -90,6 +97,7 @@
         categoryId: str(o.categoryId),
         parentCategoryId: str(o.parentCategoryId),
         values: obj(o.values),
+        /* Старое поле массы: перенесём в свойство при санитизации. */
         mass: str(o.mass).trim(),
         price: str(o.price).trim(),
         icon: str(o.icon),
@@ -150,12 +158,18 @@
     });
     fixParents(out.categories);
 
+    /* Масса — обычное свойство; старые данные переносим из поля в значения. */
+    var massProp = null;
+    out.props.forEach(function (p) { if (!massProp && isMassPropName(p.name)) massProp = p; });
+
     out.objects.forEach(function (o) {
       var cat = catById[o.categoryId];
       if (!cat) o.categoryId = '';
       /* Родительская категория хранится в объекте для быстрой фильтрации
          (ангар, списки) — пересчитываем её из категории. */
       o.parentCategoryId = cat ? str(cat.parentId) : '';
+      if (massProp && !str(o.values[massProp.id]) && o.mass) o.values[massProp.id] = o.mass;
+      delete o.mass;
       if (isShipIn(catById, o.categoryId)) {
         /* Корабль никуда не вставляется, у него только свои слоты. */
         o.slotId = null;
@@ -401,10 +415,11 @@
   /* ---------- Демонстрационный набор ---------- */
 
   /* Набор для быстрого старта: всё держится на массе.
+     Масса — обычное свойство категорий («Масса»), у каждого объекта своё значение.
      Шесть классов кораблей по три, двадцать добытых ресурсов, топливо в баках
      на 1/5/10 тонн, по десять лазеров, пулемётов и щитов, добывающее и
      перерабатывающее оборудование, радары со сканерами и грузовые отсеки.
-     Свойство «Редкость» намеренно не используется — важны вес и вместимость. */
+     Свойство «Редкость» намеренно не используется. */
   function demoData() {
     var d = blank();
     var byName = {};
@@ -428,11 +443,12 @@
       for (var i = 0; i < pairs.length; i++) out[pairs[i][0].id] = pairs[i][1];
       return out;
     }
-    /* Предмет: масса единицы и слот, в который он вставляется (null — любой). */
-    function addItem(name, cat, valuePairs, mass, slot, price, icon) {
+    /* Предмет: масса — значение свойства «Масса», плюс свойства категории. */
+    function addItem(name, cat, mass, valuePairs, slot, price, icon) {
       var item = {
         id: uid(), name: name, categoryId: cat.id, parentCategoryId: cat.parentId || '',
-        values: vals(valuePairs), mass: mass, price: price || '', icon: icon || '',
+        values: vals([[massProp, String(mass)]].concat(valuePairs || [])),
+        price: price || '', icon: icon || '',
         slotId: slot ? slot.id : null, slots: []
       };
       d.objects.push(item);
@@ -442,6 +458,7 @@
 
     var durability = addProp('Прочность', '100');
     var speed = addProp('Скорость', '20');
+    var massProp = addProp('Масса', '10');
     var damage = addProp('Урон', '25');
     var power = addProp('Мощность', '150');
     var fireRate = addProp('Скорострельность', '6');
@@ -468,7 +485,7 @@
 
     /* ---------- Категории ---------- */
 
-    var catShips = addCat('Корабли', [durability.id, speed.id], null, true, 'ship');
+    var catShips = addCat('Корабли', [durability.id, speed.id, massProp.id], null, true, 'ship');
     var catLiners = addCat('Линкоры', [], catShips, false, 'ship');
     var catFrigates = addCat('Фрегаты', [], catShips, false, 'ship');
     var catCorvettes = addCat('Корветы', [], catShips, false, 'rocket');
@@ -476,14 +493,14 @@
     var catShuttles = addCat('Шаттлы', [], catShips, false, 'rocket');
     var catFreighters = addCat('Грузовозы', [], catShips, false, 'hangar');
 
-    var catResources = addCat('Ресурсы', [], null, false, 'gem');
+    var catResources = addCat('Ресурсы', [massProp.id], null, false, 'gem');
     var catOres = addCat('Руды', [], catResources, false, 'crate');
     var catMinerals = addCat('Минералы', [], catResources, false, 'gem');
 
-    var catFuel = addCat('Топливо', [], null, false, 'fuel');
+    var catFuel = addCat('Топливо', [massProp.id], null, false, 'fuel');
     var catFuelTanks = addCat('Топливные баки', [], catFuel, false, 'fuel');
 
-    var catEquipment = addCat('Оборудование', [], null, false, 'tool');
+    var catEquipment = addCat('Оборудование', [massProp.id], null, false, 'tool');
     var catLasers = addCat('Лазеры', [damage.id, power.id], catEquipment, false, 'bolt');
     var catGuns = addCat('Пулемёты', [damage.id, fireRate.id], catEquipment, false, 'weapon');
     var catShields = addCat('Щиты', [defense.id, regen.id], catEquipment, false, 'shield');
@@ -493,7 +510,7 @@
     var catSensors = addCat('Радары и сканеры', [scanRange.id], catEquipment, false, 'radar');
     var catHolds = addCat('Грузовые отсеки', [holdCapacity.id], catEquipment, false, 'crate');
 
-    var catOther = addCat('Прочее', [], null, false, 'box');
+    var catOther = addCat('Прочее', [massProp.id], null, false, 'box');
     var catConsumables = addCat('Расходники', [], catOther, false, 'tool');
 
     /* ---------- Ресурсы: двадцать добытых позиций ---------- */
@@ -509,75 +526,75 @@
       ['Литий', '4', '220'], ['Магний', '6', '130'], ['Цинк', '8', '110'], ['Олово', '9', '90'],
       ['Графит', '5', '70'], ['Кремний', '6', '85']
     ];
-    ores.forEach(function (r) { addItem(r[0], catOres, [], r[1], null, r[2], 'crate'); });
-    minerals.forEach(function (r) { addItem(r[0], catMinerals, [], r[1], null, r[2], 'gem'); });
+    ores.forEach(function (r) { addItem(r[0], catOres, r[1], [], null, r[2], 'crate'); });
+    minerals.forEach(function (r) { addItem(r[0], catMinerals, r[1], [], null, r[2], 'gem'); });
 
     /* ---------- Топливо: баки на 1, 5 и 10 тонн; чем больше объём, тем дешевле тонна ---------- */
 
-    addItem('Топливный бак, 1 т', catFuelTanks, [], '1000', null, '1000', 'fuel');
-    addItem('Топливный бак, 5 т', catFuelTanks, [], '5000', null, '4500', 'fuel');
-    addItem('Топливный бак, 10 т', catFuelTanks, [], '10000', null, '8000', 'fuel');
+    addItem('Топливный бак, 1 т', catFuelTanks, '1000', [], null, '1000', 'fuel');
+    addItem('Топливный бак, 5 т', catFuelTanks, '5000', [], null, '4500', 'fuel');
+    addItem('Топливный бак, 10 т', catFuelTanks, '10000', [], null, '8000', 'fuel');
 
     /* ---------- Оружие и защита: по десять позиций ---------- */
 
     var i;
     for (i = 1; i <= 10; i++) {
-      addItem('Лазер M-' + i, catLasers,
+      addItem('Лазер M-' + i, catLasers, 4 + i,
         [[damage, String(20 + i * 15)], [power, String(80 + i * 42)]],
-        String(4 + i), slotTurret, String(900 + i * 430), 'bolt');
+        slotTurret, String(900 + i * 430), 'bolt');
     }
     for (i = 1; i <= 10; i++) {
-      addItem('Пулемёт P-' + i, catGuns,
+      addItem('Пулемёт P-' + i, catGuns, 6 + i * 2,
         [[damage, String(6 + i * 4)], [fireRate, String(2 + i * 2)]],
-        String(6 + i * 2), slotGun, String(600 + i * 280), 'weapon');
+        slotGun, String(600 + i * 280), 'weapon');
     }
     for (i = 1; i <= 10; i++) {
-      addItem('Щит S-' + i, catShields,
+      addItem('Щит S-' + i, catShields, 25 + i * 8,
         [[defense, String(150 + i * 130)], [regen, String(4 + i * 3)]],
-        String(25 + i * 8), slotShield, String(1500 + i * 700), 'shield');
+        slotShield, String(1500 + i * 700), 'shield');
     }
 
     /* ---------- Двигатели ---------- */
 
-    addItem('Двигатель E-1', catEngines, [[thrust, '120'], [fuelUse, '2']], '80', slotEngine, '2400', 'engine');
-    addItem('Двигатель E-2', catEngines, [[thrust, '200'], [fuelUse, '3']], '120', slotEngine, '4200', 'engine');
-    addItem('Двигатель E-3', catEngines, [[thrust, '340'], [fuelUse, '5']], '190', slotEngine, '7600', 'engine');
-    addItem('Двигатель E-4', catEngines, [[thrust, '520'], [fuelUse, '8']], '280', slotEngine, '12400', 'engine');
+    addItem('Двигатель E-1', catEngines, '80', [[thrust, '120'], [fuelUse, '2']], slotEngine, '2400', 'engine');
+    addItem('Двигатель E-2', catEngines, '120', [[thrust, '200'], [fuelUse, '3']], slotEngine, '4200', 'engine');
+    addItem('Двигатель E-3', catEngines, '190', [[thrust, '340'], [fuelUse, '5']], slotEngine, '7600', 'engine');
+    addItem('Двигатель E-4', catEngines, '280', [[thrust, '520'], [fuelUse, '8']], slotEngine, '12400', 'engine');
 
     /* ---------- Добыча и переработка ---------- */
 
     for (i = 1; i <= 5; i++) {
-      addItem('Бур D-' + i, catMining, [[mineSpeed, String(4 + i * 4)]],
-        String(120 + i * 50), slotMining, String(2600 + i * 1800), 'tool');
+      addItem('Бур D-' + i, catMining, 120 + i * 50, [[mineSpeed, String(4 + i * 4)]],
+        slotMining, String(2600 + i * 1800), 'tool');
     }
     for (i = 1; i <= 5; i++) {
-      addItem('Переработчик R-' + i, catRefining, [[refineSpeed, String(1 + i * 2)]],
-        String(200 + i * 70), slotRefinery, String(3800 + i * 2400), 'tool');
+      addItem('Переработчик R-' + i, catRefining, 200 + i * 70, [[refineSpeed, String(1 + i * 2)]],
+        slotRefinery, String(3800 + i * 2400), 'tool');
     }
 
     /* ---------- Радары и сканеры ---------- */
 
     for (i = 1; i <= 4; i++) {
-      addItem('Радар R-' + i, catSensors, [[scanRange, String(20 + i * 15)]],
-        String(20 + i * 6), slotRadar, String(1200 + i * 600), 'radar');
+      addItem('Радар R-' + i, catSensors, 20 + i * 6, [[scanRange, String(20 + i * 15)]],
+        slotRadar, String(1200 + i * 600), 'radar');
     }
     for (i = 1; i <= 4; i++) {
-      addItem('Сканер C-' + i, catSensors, [[scanRange, String(8 + i * 4)]],
-        String(12 + i * 5), slotRadar, String(900 + i * 500), 'radar');
+      addItem('Сканер C-' + i, catSensors, 12 + i * 5, [[scanRange, String(8 + i * 4)]],
+        slotRadar, String(900 + i * 500), 'radar');
     }
 
     /* ---------- Грузовые отсеки: продаются как модули ---------- */
 
-    addItem('Грузовой отсек 500 кг', catHolds, [[holdCapacity, '500']], '60', null, '1200', 'crate');
-    addItem('Грузовой отсек 2 т', catHolds, [[holdCapacity, '2000']], '140', null, '3400', 'crate');
-    addItem('Грузовой отсек 5 т', catHolds, [[holdCapacity, '5000']], '260', null, '6800', 'crate');
-    addItem('Грузовой отсек 10 т', catHolds, [[holdCapacity, '10000']], '450', null, '11000', 'crate');
+    addItem('Грузовой отсек 500 кг', catHolds, '60', [[holdCapacity, '500']], null, '1200', 'crate');
+    addItem('Грузовой отсек 2 т', catHolds, '140', [[holdCapacity, '2000']], null, '3400', 'crate');
+    addItem('Грузовой отсек 5 т', catHolds, '260', [[holdCapacity, '5000']], null, '6800', 'crate');
+    addItem('Грузовой отсек 10 т', catHolds, '450', [[holdCapacity, '10000']], null, '11000', 'crate');
 
     /* ---------- Расходники ---------- */
 
-    addItem('Ремкомплект', catConsumables, [], '2', null, '180', 'tool');
-    addItem('Набор запчастей', catConsumables, [], '6', null, '420', 'tool');
-    addItem('Аптечка', catConsumables, [], '3', null, '260', 'tool');
+    addItem('Ремкомплект', catConsumables, '2', [], null, '180', 'tool');
+    addItem('Набор запчастей', catConsumables, '6', [], null, '420', 'tool');
+    addItem('Аптечка', catConsumables, '3', [], null, '260', 'tool');
 
     /* ---------- Корабли: шесть классов по три ---------- */
 
@@ -641,8 +658,8 @@
     shipSpecs.forEach(function (spec) {
       d.objects.push({
         id: uid(), name: spec.name, categoryId: spec.cat.id, parentCategoryId: spec.cat.parentId || '',
-        values: vals([[durability, spec.hp], [speed, spec.sp]]),
-        mass: spec.mass, price: spec.price, icon: 'ship', slotId: null,
+        values: vals([[durability, spec.hp], [speed, spec.sp], [massProp, spec.mass]]),
+        price: spec.price, icon: 'ship', slotId: null,
         slots: spec.slots.map(function (e) {
           return {
             slotId: e[0].id,
@@ -690,7 +707,6 @@
         categoryId: data.categoryId,
         parentCategoryId: cat ? str(cat.parentId) : '',
         values: data.values || {},
-        mass: data.mass || '',
         price: data.price || '',
         icon: data.icon || '',
         slotId: isShip ? null : (data.slotId || null),
@@ -726,11 +742,22 @@
       var n = parseFloat(str(slot.capacity).replace(',', '.'));
       return isFinite(n) && n >= 0 ? n : Infinity;
     },
-    /* Масса одной единицы объекта: пусто или не число — 0. */
+    /* Масса одной единицы: значение свойства «Масса»/«Вес» из категории объекта.
+       Старое поле mass читается как запасной вариант. */
     massOf: function (item) {
       if (!item) return 0;
-      var n = parseFloat(str(item.mass).replace(',', '.'));
+      var prop = null;
+      all('props').forEach(function (p) { if (!prop && isMassPropName(p.name)) prop = p; });
+      var raw = prop && item.values ? item.values[prop.id] : '';
+      if (raw === undefined || raw === '') raw = item.mass;
+      var n = parseFloat(str(raw).replace(',', '.'));
       return isFinite(n) && n > 0 ? n : 0;
+    },
+    /* Свойство, которым задаётся масса (для форм и подсказок). */
+    massProp: function () {
+      var found = null;
+      all('props').forEach(function (p) { if (!found && isMassPropName(p.name)) found = p; });
+      return found;
     },
     /* Цена объекта: пусто или не число — 0. */
     priceOf: function (item) {
