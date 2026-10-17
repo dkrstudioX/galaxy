@@ -28,7 +28,7 @@
     size = size || 18;
     return '<svg aria-hidden="true" fill="none" height="' + size + '" viewBox="0 0 24 24" width="' + size +
       '" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">' +
-      (ICONS[name] || '') + '</svg>';
+      (ICONS[name] || ICONS.grid) + '</svg>';
   }
 
   function shipGlyph(compact) {
@@ -56,8 +56,9 @@
         parentCategoryId: o.parentCategoryId || (cat ? cat.parentId : ''),
         categoryName: cat ? cat.name : '—',
         categoryPath: cat ? Store.categoryPath(cat.id) : '—',
-        icon: cat ? iconForCategory(cat.name) : 'grid',
+        icon: o.icon || (cat ? iconForCategory(cat.name) : 'grid'),
         mass: Store.massOf(o),
+        price: Store.priceOf(o),
         props: props
       };
     });
@@ -83,11 +84,7 @@
 
   /* Иконок в данных админки нет — подбираем по названию категории. */
   function iconForCategory(name) {
-    var n = String(name).toLowerCase();
-    if (n.indexOf('кораб') === 0) return 'ship';
-    if (n.indexOf('оруж') === 0) return 'weapon';
-    if (n.indexOf('щит') > -1) return 'shield';
-    if (n.indexOf('ресурс') > -1 || n.indexOf('матери') > -1 || n.indexOf('топл') > -1) return 'resource';
+    if (window.Icons) return Icons.forCategory(name);
     return 'grid';
   }
 
@@ -204,13 +201,20 @@
       '</button>';
   }
 
-  /* Строка магазина: объект из админки (цены пока нет). */
+  /* Иконка объекта: из общего каталога data/icons.js, с запасным вариантом. */
+  function iconMarkup(name, size) {
+    if (window.Icons) return Icons.svg(name, size);
+    return icon(name, size);
+  }
+
+  /* Строка магазина: объект из админки. */
   function shopItemRowHTML(item, selected) {
     return '<button class="item-row' + (selected ? ' selected' : '') + '" data-action="select-shop" data-id="' + item.id + '">' +
-      '<span class="item-icon ' + item.icon + '">' + icon(item.icon, 22) + '</span>' +
+      '<span class="item-icon">' + iconMarkup(item.icon, 22) + '</span>' +
       '<span class="item-copy"><strong>' + item.name + '</strong><span>' +
       (item.mass ? 'Масса ' + fmt(item.mass) + ' кг' : 'Масса не задана') + '</span></span>' +
-      '<span class="item-meta"><small>' + item.categoryName + '</small></span>' +
+      '<span class="item-meta"><small>' + item.categoryName + '</small>' +
+      (item.price ? '<b>' + fmt(item.price) + ' ¤</b>' : '') + '</span>' +
       '</button>';
   }
 
@@ -231,10 +235,13 @@
     item.props.forEach(function (p) {
       lines += '<span class="trade-preview-stats">' + p.name + ': ' + p.value + '</span>';
     });
+    var price = item.price
+      ? '<span class="trade-preview-price">' + fmt(item.price) + ' ¤<small> / шт.</small></span>'
+      : '<span class="trade-preview-stats">Цена не задана</span>';
     return '<div class="trade-preview">' +
-      '<span class="trade-preview-icon ' + item.icon + '">' + icon(item.icon, 27) + '</span>' +
+      '<span class="trade-preview-icon">' + iconMarkup(item.icon, 27) + '</span>' +
       '<strong>' + item.name + '</strong>' +
-      lines +
+      lines + price +
       '</div>' +
       '<button class="trade-button buy" data-action="buy">Купить' + icon('arrowRight') + '</button>';
   }

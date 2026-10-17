@@ -320,6 +320,37 @@ body.modal-open { overflow: hidden; }
   .cat-panel { position: static; max-height: 240px; }
 }
 
+/* ---------- Иконки объектов ---------- */
+
+.obj-name { display: flex; align-items: center; gap: 9px; }
+.obj-icon { flex: none; display: inline-flex; color: #b9a7ff; }
+
+.icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(13, 10, 30, 0.45);
+}
+.icon-pick {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.icon-pick:hover { background: rgba(168, 85, 247, 0.12); color: var(--text); }
+.icon-pick.active { color: #fff; border-color: rgba(124, 92, 255, 0.6); background: rgba(124, 92, 255, 0.20); }
+.icon-random { margin-top: 8px; }
+
 /* ---------- Модальные окна ---------- */
 
 .overlay {

@@ -85,6 +85,8 @@
         parentCategoryId: str(o.parentCategoryId),
         values: obj(o.values),
         mass: str(o.mass).trim(),
+        price: str(o.price).trim(),
+        icon: str(o.icon),
         slotId: o.slotId ? str(o.slotId) : null,
         slots: makeSlots(o)
       };
@@ -408,10 +410,10 @@
       return out;
     }
     /* Корабль: свои слоты с содержимым по умолчанию (тип задаёт категория). */
-    function addShip(name, cat, valuePairs, slotEntries) {
+    function addShip(name, cat, valuePairs, slotEntries, price, icon) {
       d.objects.push({
         id: uid(), name: name, categoryId: cat.id, parentCategoryId: cat.parentId || '',
-        values: vals(valuePairs), mass: '',
+        values: vals(valuePairs), mass: '', price: price || '', icon: icon || '',
         slotId: null,
         slots: slotEntries.map(function (e) {
           return {
@@ -422,10 +424,10 @@
       });
     }
     /* Предмет: масса единицы и слот, в который он вставляется (null — любой). */
-    function addItem(name, cat, valuePairs, mass, slot) {
+    function addItem(name, cat, valuePairs, mass, slot, price, icon) {
       var item = {
         id: uid(), name: name, categoryId: cat.id, parentCategoryId: cat.parentId || '',
-        values: vals(valuePairs), mass: mass,
+        values: vals(valuePairs), mass: mass, price: price || '', icon: icon || '',
         slotId: slot ? slot.id : null, slots: []
       };
       d.objects.push(item);
@@ -461,23 +463,23 @@
     var catConsumables = addCat('Расходники', [], catOther);
 
     /* Масса объекта — базовая величина: именно она учитывается вместимостью слотов. */
-    var iron = addItem('Железо', catMaterials, [[rarity, 'Обычный']], '8', null);
-    var iridium = addItem('Иридий', catMaterials, [[rarity, 'Редкий']], '12', null);
-    addItem('Гипертопливо', catFuel, [[rarity, 'Обычный']], '5', null);
-    addItem('Плазменный боеприпас', catWeapons, [[rarity, 'Необычный'], [damage, '15']], '3', slotWeapon);
+    var iron = addItem('Железо', catMaterials, [[rarity, 'Обычный']], '8', null, '120', 'crate');
+    var iridium = addItem('Иридий', catMaterials, [[rarity, 'Редкий']], '12', null, '340', 'gem');
+    addItem('Гипертопливо', catFuel, [[rarity, 'Обычный']], '5', null, '260', 'fuel');
+    addItem('Плазменный боеприпас', catWeapons, [[rarity, 'Необычный'], [damage, '15']], '3', slotWeapon, '90', 'box');
 
-    var laser = addItem('Лазер Mk I', catWeapons, [[damage, '35']], '6', slotWeapon);
-    var rockets = addItem('Ракетная установка', catWeapons, [[damage, '70']], '18', slotWeapon);
-    var engine = addItem('Ионный двигатель', catEngines, [[speed, '32'], [fuel, '3']], '25', slotEngine);
-    var shield = addItem('Плазменный щит', catShields, [[defense, '28']], '14', slotShield);
-    var repairKit = addItem('Ремкомплект', catConsumables, [], '2', null);
+    var laser = addItem('Лазер Mk I', catWeapons, [[damage, '35']], '6', slotWeapon, '1450', 'weapon');
+    var rockets = addItem('Ракетная установка', catWeapons, [[damage, '70']], '18', slotWeapon, '2600', 'rocket');
+    var engine = addItem('Ионный двигатель', catEngines, [[speed, '32'], [fuel, '3']], '25', slotEngine, '3200', 'engine');
+    var shield = addItem('Плазменный щит', catShields, [[defense, '28']], '14', slotShield, '2100', 'shield');
+    var repairKit = addItem('Ремкомплект', catConsumables, [], '2', null, '180', 'tool');
 
     /* У корабля слоты могут повторяться — порядок и повторы сохраняются как заданы. */
     addShip('Сокол', catShuttles, [[durability, '90'], [speed, '26'], [mass, '45']], [
       { slot: slotWeapon, contents: [{ item: laser, qty: 2 }] },
       { slot: slotWeapon, contents: [{ item: rockets, qty: 1 }] },
       { slot: slotEngine, contents: [{ item: engine, qty: 1 }] }
-    ]);
+    ], '9800', 'ship');
     addShip('Титан', catLiners, [[durability, '160'], [speed, '14'], [mass, '220'], [cargo, '400']], [
       { slot: slotWeapon, contents: [{ item: rockets, qty: 1 }] },
       { slot: slotWeapon, contents: [{ item: laser, qty: 2 }] },
@@ -488,7 +490,7 @@
       ] },
       { slot: slotCargo, contents: [{ item: repairKit, qty: 5 }] },
       { slot: slotCargo, contents: [] }
-    ]);
+    ], '28400', 'ship');
 
     return d;
   }
@@ -525,6 +527,8 @@
         parentCategoryId: cat ? str(cat.parentId) : '',
         values: data.values || {},
         mass: data.mass || '',
+        price: data.price || '',
+        icon: data.icon || '',
         slotId: isShip ? null : (data.slotId || null),
         slots: isShip ? (data.slots || []).map(function (e) {
           return {
@@ -562,6 +566,12 @@
     massOf: function (item) {
       if (!item) return 0;
       var n = parseFloat(str(item.mass).replace(',', '.'));
+      return isFinite(n) && n > 0 ? n : 0;
+    },
+    /* Цена объекта: пусто или не число — 0. */
+    priceOf: function (item) {
+      if (!item) return 0;
+      var n = parseFloat(str(item.price).replace(',', '.'));
       return isFinite(n) && n > 0 ? n : 0;
     },
     /* Суммарная масса содержимого слота: масса объекта × количество. */

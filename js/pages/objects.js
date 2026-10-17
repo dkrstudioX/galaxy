@@ -159,7 +159,15 @@
     } else {
       main.appendChild(UI.table({
         columns: [
-          { title: 'Название', render: function (o) { return h('span', { class: 'cell-main', text: o.name }); } },
+          {
+            title: 'Название',
+            render: function (o) {
+              var cat = Store.byId('categories', o.categoryId);
+              var mark = h('span', { class: 'obj-icon' });
+              mark.innerHTML = Icons.svg(o.icon || Icons.forCategory(cat ? cat.name : ''), 18);
+              return h('div', { class: 'obj-name' }, mark, h('span', { class: 'cell-main', text: o.name }));
+            }
+          },
           {
             title: 'Категория',
             render: function (o) {
@@ -173,6 +181,13 @@
             render: function (o) {
               var m = Store.massOf(o);
               return h('span', { class: m ? '' : 'muted', text: m ? Store.fmtNum(m) + ' кг' : '—' });
+            }
+          },
+          {
+            title: 'Цена',
+            render: function (o) {
+              var p = Store.priceOf(o);
+              return h('span', { class: p ? '' : 'muted', text: p ? Store.fmtNum(p) + ' ¤' : '—' });
             }
           },
           { title: 'Слоты', render: function (o) { return slotsSummary(o); } }
@@ -571,6 +586,29 @@
       value: isEdit ? existing.mass : '',
       placeholder: 'Например: 10'
     });
+    var priceInput = UI.input({
+      type: 'number', min: 0, step: 'any',
+      value: isEdit ? existing.price : '',
+      placeholder: 'Например: 1450'
+    });
+
+    /* Иконка: у нового объекта сразу выбрана случайная, можно взять другую. */
+    var iconValue = isEdit ? (existing.icon || Icons.random()) : Icons.random();
+    var iconButtons = {};
+    var iconGrid = h('div', { class: 'icon-picker' });
+    function setIcon(key) {
+      iconValue = key;
+      Object.keys(iconButtons).forEach(function (k) {
+        iconButtons[k].classList.toggle('active', k === key);
+      });
+    }
+    Icons.keys().forEach(function (key) {
+      var btn = h('button', { class: 'icon-pick', title: key, onclick: function () { setIcon(key); } });
+      btn.innerHTML = Icons.svg(key, 20);
+      iconButtons[key] = btn;
+      iconGrid.appendChild(btn);
+    });
+    setIcon(iconValue);
 
     var propsHost = h('div');
     var inputs = {};
@@ -654,9 +692,20 @@
         hasLeaf ? null : h('div', { class: 'hint', text: 'Подкатегорий пока нет — создайте их на странице «Категории»: объект привязывается к подкатегории.' }),
         typeHint
       ),
+      h('div', { class: 'field' },
+        h('label', { class: 'field-label', text: 'Иконка' }),
+        iconGrid,
+        h('button', {
+          class: 'btn btn-sm icon-random',
+          text: 'Случайная иконка',
+          onclick: function () { setIcon(Icons.random()); }
+        }),
+        h('div', { class: 'hint', text: 'Иконка показывается в списке объектов и в магазине ангара.' })
+      ),
       shipBlock,
       itemBlock,
       UI.field('Масса, кг', massInput, 'Масса одной единицы: учитывается при наполнении слотов кораблей.'),
+      UI.field('Цена, ¤', priceInput, 'Цена покупки в ангаре. Пусто — цена не задана.'),
       h('div', { class: 'field' },
         h('label', { class: 'field-label', text: 'Свойства категории' }),
         propsHost
@@ -693,6 +742,8 @@
           categoryId: catSelect.value,
           parentCategoryId: chosenCat ? (chosenCat.parentId || '') : '',
           mass: massInput.value.trim(),
+          price: priceInput.value.trim(),
+          icon: iconValue,
           values: collectInputs(inputs),
           slotId: isShip || anySlotRow.input.checked ? null : slotSelect.value,
           slots: slotEntries
