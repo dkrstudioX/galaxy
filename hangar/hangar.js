@@ -463,8 +463,7 @@
         return '<button class="ship-card' + (ship.active ? ' active' : '') + '">' +
           '<div class="ship-visual">' + shipGlyph(true) +
           (ship.active ? '<span class="active-tag">Выбран</span>' : '') + '</div>' +
-          '<div><strong>' + ship.name + '</strong><span>' + ship.className + '</span></div>' +
-          '<small>' + ship.level + '</small>' +
+          '<div class="ship-meta"><strong>' + ship.name + '</strong><span>' + ship.className + ' · ' + ship.level + '</span></div>' +
           '</button>';
       }).join('') +
       '</div></section>';
