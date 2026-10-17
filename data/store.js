@@ -82,6 +82,7 @@
         id: str(o.id) || uid(),
         name: str(o.name).trim(),
         categoryId: str(o.categoryId),
+        parentCategoryId: str(o.parentCategoryId),
         values: obj(o.values),
         mass: str(o.mass).trim(),
         slotId: o.slotId ? str(o.slotId) : null,
@@ -142,7 +143,11 @@
     fixParents(out.categories);
 
     out.objects.forEach(function (o) {
-      if (!catById[o.categoryId]) o.categoryId = '';
+      var cat = catById[o.categoryId];
+      if (!cat) o.categoryId = '';
+      /* Родительская категория хранится в объекте для быстрой фильтрации
+         (ангар, списки) — пересчитываем её из категории. */
+      o.parentCategoryId = cat ? str(cat.parentId) : '';
       if (isShipIn(catById, o.categoryId)) {
         /* Корабль никуда не вставляется, у него только свои слоты. */
         o.slotId = null;
@@ -405,7 +410,8 @@
     /* Корабль: свои слоты с содержимым по умолчанию (тип задаёт категория). */
     function addShip(name, cat, valuePairs, slotEntries) {
       d.objects.push({
-        id: uid(), name: name, categoryId: cat.id, values: vals(valuePairs), mass: '',
+        id: uid(), name: name, categoryId: cat.id, parentCategoryId: cat.parentId || '',
+        values: vals(valuePairs), mass: '',
         slotId: null,
         slots: slotEntries.map(function (e) {
           return {
@@ -418,7 +424,8 @@
     /* Предмет: масса единицы и слот, в который он вставляется (null — любой). */
     function addItem(name, cat, valuePairs, mass, slot) {
       var item = {
-        id: uid(), name: name, categoryId: cat.id, values: vals(valuePairs), mass: mass,
+        id: uid(), name: name, categoryId: cat.id, parentCategoryId: cat.parentId || '',
+        values: vals(valuePairs), mass: mass,
         slotId: slot ? slot.id : null, slots: []
       };
       d.objects.push(item);
@@ -451,6 +458,7 @@
     var catShields = addCat('Щиты', [defense.id], catEquipment);
     var catEngines = addCat('Двигатели', [speed.id, fuel.id], catEquipment);
     var catOther = addCat('Прочее', []);
+    var catConsumables = addCat('Расходники', [], catOther);
 
     /* Масса объекта — базовая величина: именно она учитывается вместимостью слотов. */
     var iron = addItem('Железо', catMaterials, [[rarity, 'Обычный']], '8', null);
@@ -462,7 +470,7 @@
     var rockets = addItem('Ракетная установка', catWeapons, [[damage, '70']], '18', slotWeapon);
     var engine = addItem('Ионный двигатель', catEngines, [[speed, '32'], [fuel, '3']], '25', slotEngine);
     var shield = addItem('Плазменный щит', catShields, [[defense, '28']], '14', slotShield);
-    var repairKit = addItem('Ремкомплект', catOther, [], '2', null);
+    var repairKit = addItem('Ремкомплект', catConsumables, [], '2', null);
 
     /* У корабля слоты могут повторяться — порядок и повторы сохраняются как заданы. */
     addShip('Сокол', catShuttles, [[durability, '90'], [speed, '26'], [mass, '45']], [
@@ -510,9 +518,11 @@
     createObject: function (data) {
       /* Тип объекта определяет категория: у корабля слоты, у остальных — слот вставки. */
       var isShip = categoryIsShip(data.categoryId);
+      var cat = data.categoryId ? byId('categories', data.categoryId) : null;
       return insert('objects', {
         name: data.name,
         categoryId: data.categoryId,
+        parentCategoryId: cat ? str(cat.parentId) : '',
         values: data.values || {},
         mass: data.mass || '',
         slotId: isShip ? null : (data.slotId || null),

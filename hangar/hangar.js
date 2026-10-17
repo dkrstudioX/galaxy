@@ -39,22 +39,36 @@
       '<path d="m45 45-20 7 20 7m114-16 33 9-33 8" stroke="currentColor" stroke-width="2"/></svg>';
   }
 
-  /* ---------- Данные (из App.tsx) ---------- */
+  /* ---------- Данные магазина (объекты из базы админки) ---------- */
 
-  var shopItems = [
-    { id: 1, name: 'Импульсный М-4', category: 'weapon', rarity: 'Редкое', stats: 'Урон 48 · 2.4 выстр./с', price: 2450, stock: 8 },
-    { id: 2, name: 'Рельсотрон «Копьё»', category: 'weapon', rarity: 'Эпическое', stats: 'Урон 118 · Пробитие +24%', price: 5200, stock: 3 },
-    { id: 3, name: 'Барьер VX-8', category: 'shield', rarity: 'Редкое', stats: 'Щит 620 · Реген. 18/с', price: 3180, stock: 5 },
-    { id: 4, name: 'Фазовый контур', category: 'shield', rarity: 'Обычное', stats: 'Щит 340 · Реген. 12/с', price: 1700, stock: 12 },
-    { id: 5, name: 'Кристаллы ксенона', category: 'resource', rarity: 'Ресурс', stats: 'Топливо · 20 ед.', price: 380, stock: 64 },
-    { id: 6, name: 'Сплав «Титан-X»', category: 'resource', rarity: 'Ресурс', stats: 'Материал · 10 ед.', price: 260, stock: 42 },
-    { id: 7, name: 'Перехватчик K-12', category: 'ship', rarity: 'Эпическое', stats: 'Класс: штурмовой', price: 28400, stock: 1 }
-  ];
+  /* Объекты админки -> строки витрины: имя, категория, масса и свойства. */
+  function buildShopItems() {
+    if (!window.Store) return [];
+    return Store.objects().map(function (o) {
+      var cat = Store.byId('categories', o.categoryId);
+      var props = Store.categoryProps(o.categoryId).map(function (p) {
+        return { name: p.name, value: (o.values && o.values[p.id]) || p.value || '' };
+      }).filter(function (p) { return p.value; });
+      return {
+        id: o.id,
+        name: o.name,
+        categoryId: o.categoryId,
+        parentCategoryId: o.parentCategoryId || (cat ? cat.parentId : ''),
+        categoryName: cat ? cat.name : '—',
+        categoryPath: cat ? Store.categoryPath(cat.id) : '—',
+        icon: cat ? iconForCategory(cat.name) : 'grid',
+        mass: Store.massOf(o),
+        props: props
+      };
+    });
+  }
+
+  var shopItems = buildShopItems();
 
   var initialCargo = [
-    { id: 101, name: 'Лазерный излучатель', category: 'weapon', rarity: 'Улучшенное', stats: 'Урон 34 · 3.1 выстр./с', price: 1220, stock: 2 },
-    { id: 102, name: 'Щит «Эгида»', category: 'shield', rarity: 'Редкое', stats: 'Щит 480 · Реген. 15/с', price: 1850, stock: 1 },
-    { id: 103, name: 'Плазменные ячейки', category: 'resource', rarity: 'Ресурс', stats: 'Боезапас · 8 ед.', price: 190, stock: 16 }
+    { id: '101', name: 'Лазерный излучатель', category: 'weapon', rarity: 'Улучшенное', stats: 'Урон 34 · 3.1 выстр./с', price: 1220, stock: 2 },
+    { id: '102', name: 'Щит «Эгида»', category: 'shield', rarity: 'Редкое', stats: 'Щит 480 · Реген. 15/с', price: 1850, stock: 1 },
+    { id: '103', name: 'Плазменные ячейки', category: 'resource', rarity: 'Ресурс', stats: 'Боезапас · 8 ед.', price: 190, stock: 16 }
   ];
 
   /* ---------- Категории магазина ---------- */
@@ -66,9 +80,6 @@
     { id: 'resource', label: 'Ресурсы', icon: 'resource' },
     { id: 'ship', label: 'Корабли', icon: 'ship' }
   ];
-
-  /* Встроенный ключ категории предмета -> название категории в базе админки. */
-  var KEY_TO_CATEGORY_NAME = { weapon: 'Оружие', shield: 'Щиты', resource: 'Ресурсы', ship: 'Корабли' };
 
   /* Иконок в данных админки нет — подбираем по названию категории. */
   function iconForCategory(name) {
@@ -101,10 +112,10 @@
   ];
 
   var hangarResources = [
-    { id: 201, name: 'Плазменные ячейки', description: 'Стабилизированные энергетические элементы для импульсных систем вооружения.', stats: 'Энергия 80 МДж · Стабильность 96%' },
-    { id: 202, name: 'Кристаллы ксенона', description: 'Очищенное топливо для маршевых двигателей и систем сверхсветового перехода.', stats: 'Чистота 99.4% · Класс топлива A' },
-    { id: 203, name: 'Сплав «Титан-X»', description: 'Лёгкий композит для ремонта корпуса и усиления внешней брони.', stats: 'Прочность 840 МПа · Масса 12 кг' },
-    { id: 204, name: 'Наноремкомплект', description: 'Автономный ремонтный модуль для восстановления обшивки в полевых условиях.', stats: 'Ремонт +320 · Цикл 18 сек.' }
+    { id: '201', name: 'Плазменные ячейки', description: 'Стабилизированные энергетические элементы для импульсных систем вооружения.', stats: 'Энергия 80 МДж · Стабильность 96%' },
+    { id: '202', name: 'Кристаллы ксенона', description: 'Очищенное топливо для маршевых двигателей и систем сверхсветового перехода.', stats: 'Чистота 99.4% · Класс топлива A' },
+    { id: '203', name: 'Сплав «Титан-X»', description: 'Лёгкий композит для ремонта корпуса и усиления внешней брони.', stats: 'Прочность 840 МПа · Масса 12 кг' },
+    { id: '204', name: 'Наноремкомплект', description: 'Автономный ремонтный модуль для восстановления обшивки в полевых условиях.', stats: 'Ремонт +320 · Цикл 18 сек.' }
   ];
 
   var purchasedEquipment = [
@@ -120,14 +131,14 @@
   var state = {
     tab: 'shop',
     category: 'all',
-    selectedShop: 1,
-    selectedCargo: 101,
+    selectedShop: '',
+    selectedCargo: '',
     amount: 1,
     tradeMode: 'buy',
     credits: 42860,
     notice: 'Торговый терминал подключён',
     infoSection: 'properties',
-    selectedResource: 201,
+    selectedResource: '201',
     transferMode: 'load',
     transferAmount: 1,
     baseStock: { 201: 42, 202: 64, 203: 28, 204: 9 },
@@ -137,27 +148,22 @@
   /* ---------- Хелперы ---------- */
 
   function fmt(n) { return n.toLocaleString('ru-RU'); }
+  function plural(n, forms) {
+    var d = n % 10;
+    var dd = n % 100;
+    if (d === 1 && dd !== 11) return forms[0];
+    if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return forms[1];
+    return forms[2];
+  }
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
   function byId(list, id) {
     for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
     return null;
   }
-  /* Категория предмета в базе админки: null, если базы нет или категория не найдена. */
-  function dbCategoryOf(item) {
-    if (!window.Store) return null;
-    var name = KEY_TO_CATEGORY_NAME[item.category];
-    if (!name) return null;
-    var list = Store.categories();
-    for (var i = 0; i < list.length; i++) if (list[i].name === name) return list[i];
-    return null;
-  }
-
-  /* Предмет подходит, если выбранная категория — он сам или один из его предков. */
+  /* Объект подходит, если выбрана его подкатегория или её родитель (1-й уровень). */
   function inCategory(item, categoryId) {
     if (categoryId === 'all') return true;
-    var cat = dbCategoryOf(item);
-    if (!cat) return item.category === categoryId;
-    return Store.categoryChain(cat.id).some(function (c) { return c.id === categoryId; });
+    return item.categoryId === categoryId || item.parentCategoryId === categoryId;
   }
 
   function filteredItems() {
@@ -169,7 +175,6 @@
     return filteredItems()[0] || null;
   }
   function currentCargo() { return byId(initialCargo, state.selectedCargo) || initialCargo[0]; }
-  function activeTradeItem() { return state.tradeMode === 'buy' ? currentShop() : currentCargo(); }
   function activeResource() { return byId(hangarResources, state.selectedResource) || hangarResources[0]; }
 
   /* ---------- Рендер: шапка и вкладки ---------- */
@@ -199,6 +204,16 @@
       '</button>';
   }
 
+  /* Строка магазина: объект из админки (цены пока нет). */
+  function shopItemRowHTML(item, selected) {
+    return '<button class="item-row' + (selected ? ' selected' : '') + '" data-action="select-shop" data-id="' + item.id + '">' +
+      '<span class="item-icon ' + item.icon + '">' + icon(item.icon, 22) + '</span>' +
+      '<span class="item-copy"><strong>' + item.name + '</strong><span>' +
+      (item.mass ? 'Масса ' + fmt(item.mass) + ' кг' : 'Масса не задана') + '</span></span>' +
+      '<span class="item-meta"><small>' + item.categoryName + '</small></span>' +
+      '</button>';
+  }
+
   function categoryTabsHTML() {
     return categories.map(function (c) {
       return '<button class="' + (state.category === c.id ? 'active' : '') + '" data-action="category" data-cat="' + c.id + '">' +
@@ -206,12 +221,28 @@
     }).join('');
   }
 
-  function shopConsoleHTML() {
-    var item = activeTradeItem();
-    if (!item) return '<div class="trade-empty">В этой категории пока нет товаров</div>';
-    var total = state.tradeMode === 'buy'
-      ? currentShop().price * state.amount
-      : Math.round(currentCargo().price * state.amount * 0.65);
+  /* Центр: объект из админки — информация и кнопка «Купить» (оплату подключим позже). */
+  function shopObjectConsole(item) {
+    if (!item) {
+      return '<div class="trade-empty">' + (shopItems.length ? 'В этой категории пока нет объектов' : 'В базе админки пока нет объектов') + '</div>';
+    }
+    var lines = '<span class="trade-preview-stats">' + item.categoryPath + '</span>';
+    if (item.mass) lines += '<span class="trade-preview-stats">Масса: ' + fmt(item.mass) + ' кг</span>';
+    item.props.forEach(function (p) {
+      lines += '<span class="trade-preview-stats">' + p.name + ': ' + p.value + '</span>';
+    });
+    return '<div class="trade-preview">' +
+      '<span class="trade-preview-icon ' + item.icon + '">' + icon(item.icon, 27) + '</span>' +
+      '<strong>' + item.name + '</strong>' +
+      lines +
+      '</div>' +
+      '<button class="trade-button buy" data-action="buy">Купить' + icon('arrowRight') + '</button>';
+  }
+
+  /* Центр: груз на корабле — прежний вид с ценой и продажей. */
+  function cargoConsole(item) {
+    if (!item) return '<div class="trade-empty">Груз пока пуст</div>';
+    var total = Math.round(item.price * state.amount * 0.65);
     return '<div class="trade-preview">' +
       '<span class="trade-preview-icon ' + item.category + '">' + icon(item.category === 'resource' ? 'resource' : item.category, 27) + '</span>' +
       '<strong>' + item.name + '</strong>' +
@@ -223,24 +254,23 @@
       '<div><strong>' + state.amount + '</strong><span>КОЛ-ВО</span></div>' +
       '<button aria-label="Увеличить количество" data-action="amount" data-dir="1">' + icon('plus') + '</button>' +
       '</div>' +
-      '<div class="trade-total"><span>' + (state.tradeMode === 'buy' ? 'К покупке' : 'К продаже') + '</span>' +
-      '<strong>' + fmt(total) + ' ¤</strong></div>' +
-      '<button class="trade-button ' + state.tradeMode + '" data-action="transact">' +
-      (state.tradeMode === 'sell' ? icon('arrowLeft') : '') +
-      (state.tradeMode === 'buy' ? 'Купить' : 'Продать') +
-      (state.tradeMode === 'buy' ? icon('arrowRight') : '') +
-      '</button>';
+      '<div class="trade-total"><span>К продаже</span><strong>' + fmt(total) + ' ¤</strong></div>' +
+      '<button class="trade-button sell" data-action="transact">' + icon('arrowLeft') + 'Продать</button>';
+  }
+
+  function shopConsoleHTML() {
+    return state.tradeMode === 'buy' ? shopObjectConsole(currentShop()) : cargoConsole(currentCargo());
   }
 
   function renderShop() {
     var filtered = filteredItems();
-    document.getElementById('shopCount').textContent = filtered.length + ' позиций';
+    document.getElementById('shopCount').textContent = filtered.length + ' ' + plural(filtered.length, ['позиция', 'позиции', 'позиций']);
     document.getElementById('categoryTabs').innerHTML = categoryTabsHTML();
     document.getElementById('shopList').innerHTML = filtered.length
       ? filtered.map(function (it) {
-        return itemRowHTML(it, state.selectedShop === it.id, 'select-shop');
+        return shopItemRowHTML(it, state.selectedShop === it.id);
       }).join('')
-      : '<div class="list-empty">В этой категории пока нет товаров</div>';
+      : '<div class="list-empty">' + (shopItems.length ? 'В этой категории пока нет объектов' : 'В базе админки пока нет объектов') + '</div>';
     document.getElementById('shopConsole').innerHTML = shopConsoleHTML();
     document.getElementById('cargoList').innerHTML = initialCargo.map(function (it) {
       return itemRowHTML(it, state.selectedCargo === it.id, 'select-cargo');
@@ -411,18 +441,12 @@
     state.amount = 1;
   }
 
-  function transact(mode) {
-    var item = mode === 'buy' ? currentShop() : currentCargo();
+  /* Продажа груза: цены живут в статичном списке «На корабле». */
+  function transact() {
+    var item = currentCargo();
     if (!item) return;
-    var delta = item.price * state.amount;
-    if (mode === 'buy' && delta > state.credits) {
-      state.notice = 'Недостаточно кредитов для покупки';
-      return;
-    }
-    state.credits += mode === 'buy' ? -delta : Math.round(delta * 0.65);
-    state.notice = mode === 'buy'
-      ? item.name + ': куплено ×' + state.amount
-      : item.name + ': продано ×' + state.amount;
+    state.credits += Math.round(item.price * state.amount * 0.65);
+    state.notice = item.name + ': продано ×' + state.amount;
   }
 
   function transferResource() {
@@ -445,7 +469,7 @@
     var el = e.target.closest ? e.target.closest('[data-action]') : null;
     if (!el) return;
     var action = el.getAttribute('data-action');
-    var id = parseInt(el.getAttribute('data-id'), 10);
+    var id = el.getAttribute('data-id') || '';
     var dir = parseInt(el.getAttribute('data-dir'), 10);
 
     if (action === 'tab') state.tab = el.getAttribute('data-tab');
@@ -453,7 +477,11 @@
     else if (action === 'select-shop') { state.selectedShop = id; state.tradeMode = 'buy'; state.amount = 1; }
     else if (action === 'select-cargo') { state.selectedCargo = id; state.tradeMode = 'sell'; state.amount = 1; }
     else if (action === 'amount') state.amount = Math.min(99, Math.max(1, state.amount + dir));
-    else if (action === 'transact') transact(state.tradeMode);
+    else if (action === 'buy') {
+      var buyItem = currentShop();
+      state.notice = buyItem ? 'Покупка «' + buyItem.name + '» появится позже' : 'Покупка пока не настроена';
+    }
+    else if (action === 'transact') transact();
     else if (action === 'select-resource') {
       state.selectedResource = id;
       state.transferMode = el.getAttribute('data-mode');

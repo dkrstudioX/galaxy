@@ -7,11 +7,13 @@
 
   /* ---------- Общие части форм ---------- */
 
-  /* Селект категорий: подкатегории подписаны полным путём («Корабли / Линкоры»). */
+  /* В объекте выбирается только подкатегория (2-й уровень): она задаёт ветку. */
   function categoryOptions(emptyLabel) {
-    return [{ value: '', label: emptyLabel }].concat(Store.categoryTree().map(function (node) {
-      return { value: node.cat.id, label: node.depth ? Store.categoryPath(node.cat.id) : node.cat.name };
-    }));
+    return [{ value: '', label: emptyLabel }].concat(
+      Store.categoryTree()
+        .filter(function (node) { return node.cat.parentId; })
+        .map(function (node) { return { value: node.cat.id, label: Store.categoryPath(node.cat.id) }; })
+    );
   }
 
   /* Блок полей «свойства категории»: для каждого свойства категории (своё или
@@ -76,12 +78,17 @@
   /* Слева — категории, справа — объекты выбранной категории (с подкатегориями). */
   var selectedCategory = '';
 
-  /* Объекты категории: сама категория и все её подкатегории. */
+  /* Объекты выбранной категории: корневая — вместе с подкатегориями, подкатегория — точное совпадение. */
   function objectsIn(categoryId) {
-    return Store.objects().filter(function (o) {
-      if (!categoryId) return true;
-      return Store.categoryChain(o.categoryId).some(function (c) { return c.id === categoryId; });
-    });
+    if (!categoryId) return Store.objects();
+    var cat = Store.byId('categories', categoryId);
+    if (!cat) return [];
+    if (!cat.parentId) {
+      return Store.objects().filter(function (o) {
+        return o.categoryId === cat.id || o.parentCategoryId === cat.id;
+      });
+    }
+    return Store.objects().filter(function (o) { return o.categoryId === cat.id; });
   }
 
   function categoryRow(id, label, depth, count, isShip) {
@@ -96,17 +103,32 @@
     );
   }
 
+  /* Слева: «Все объекты», категории первого уровня и подкатегории выбранной ветки. */
   function categoryPanel() {
     var panel = h('aside', { class: 'card cat-panel' },
       h('div', { class: 'cat-panel-title', text: 'Категории' })
     );
     panel.appendChild(categoryRow('', 'Все объекты', 0, Store.objects().length, false));
-    (function walk(parentId, depth) {
-      Store.childCategories(parentId).forEach(function (cat) {
-        panel.appendChild(categoryRow(cat.id, cat.name, depth + 1, objectsIn(cat.id).length, Store.categoryIsShip(cat.id)));
-        walk(cat.id, depth + 1);
-      });
-    })('', 0);
+    Store.childCategories('').forEach(function (cat) {
+      panel.appendChild(categoryRow(cat.id, cat.name, 1, objectsIn(cat.id).length, Store.categoryIsShip(cat.id)));
+    });
+
+    /* Подкатегории: для выбранной категории (или родителя выбранной подкатегории). */
+    var selected = selectedCategory ? Store.byId('categories', selectedCategory) : null;
+    var rootId = selected ? (selected.parentId || selected.id) : '';
+    if (!rootId) return panel;
+
+    var kids = Store.childCategories(rootId);
+    if (!kids.length) {
+      panel.appendChild(h('div', { class: 'cat-panel-title cat-panel-sub', text: 'Подкатегории' }));
+      panel.appendChild(h('div', { class: 'cat-panel-empty', text: 'У этой категории нет подкатегорий' }));
+      return panel;
+    }
+
+    panel.appendChild(h('div', { class: 'cat-panel-title cat-panel-sub', text: 'Подкатегории' }));
+    kids.forEach(function (cat) {
+      panel.appendChild(categoryRow(cat.id, cat.name, 2, objectsIn(cat.id).length, Store.categoryIsShip(cat.id)));
+    });
     return panel;
   }
 
@@ -116,7 +138,7 @@
 
     root.appendChild(UI.pageHead({
       title: 'Объекты',
-      subtitle: 'Слева — категории, справа — их объекты. Тип задаёт категория: у категорий кораблей есть слоты, остальные объекты вставляются в слот.',
+      subtitle: 'Слева — категории первого уровня и их подкатегории, справа — объекты выбранной ветки. Объект всегда привязан к подкатегории, а тип (слоты или слот вставки) задаёт её корневая категория.',
       addLabel: 'Добавить объект',
       onAdd: function () { openObjectModal(null, selectedCategory); }
     }));
@@ -528,11 +550,21 @@
   function openObjectModal(existing, presetCategoryId) {
     var isEdit = !!existing;
     var categories = Store.categoryTree();
+    var hasLeaf = categories.some(function (node) { return node.cat.parentId; });
+
+    /* Объект привязывается к подкатегории: если пришли из корневой категории,
+       подставляем её первую подкатегорию. */
+    var presetId = isEdit ? existing.categoryId : (presetCategoryId || '');
+    var presetCat = presetId ? Store.byId('categories', presetId) : null;
+    if (!isEdit && presetCat && !presetCat.parentId) {
+      var firstChild = Store.childCategories(presetCat.id)[0];
+      presetId = firstChild ? firstChild.id : '';
+    }
 
     var nameInput = UI.input({ value: isEdit ? existing.name : '', placeholder: 'Например: Титан' });
     var catSelect = UI.select({
-      options: categoryOptions('— выберите категорию —'),
-      value: isEdit ? existing.categoryId : (presetCategoryId || '')
+      options: categoryOptions('— выберите подкатегорию —'),
+      value: presetId
     });
     var massInput = UI.input({
       type: 'number', min: 0, step: 'any',
@@ -604,7 +636,7 @@
       shipBlock.hidden = !isShip;
       itemBlock.hidden = isShip || !known;
       if (!known) {
-        typeHint.textContent = 'Выберите категорию: у категорий кораблей объект получает слоты, у остальных — слот вставки.';
+        typeHint.textContent = 'Выберите подкатегорию: у ветки кораблей объект получает слоты, у остальных — слот вставки.';
       } else if (isShip) {
         typeHint.textContent = 'Категория кораблей: у объекта будут собственные слоты, сам он никуда не вставляется.';
       } else {
@@ -617,9 +649,9 @@
     var body = h('div', {},
       UI.field('Название', nameInput),
       h('div', { class: 'field' },
-        h('label', { class: 'field-label', text: 'Категория' }),
+        h('label', { class: 'field-label', text: 'Подкатегория' }),
         catSelect,
-        categories.length ? null : h('div', { class: 'hint', text: 'Категорий пока нет — создайте их на странице «Категории».' }),
+        hasLeaf ? null : h('div', { class: 'hint', text: 'Подкатегорий пока нет — создайте их на странице «Категории»: объект привязывается к подкатегории.' }),
         typeHint
       ),
       shipBlock,
@@ -638,7 +670,7 @@
       onSave: function () {
         var name = nameInput.value.trim();
         if (!name) return 'Укажите название объекта.';
-        if (!catSelect.value) return 'Выберите категорию.';
+        if (!catSelect.value) return 'Выберите подкатегорию.';
         var isShip = Store.categoryIsShip(catSelect.value);
         if (!isShip && !anySlotRow.input.checked && !slotSelect.value) {
           return 'Выберите слот или отметьте «Вставляется в любой слот».';
@@ -655,9 +687,11 @@
           }
         }
 
+        var chosenCat = Store.byId('categories', catSelect.value);
         var data = {
           name: name,
           categoryId: catSelect.value,
+          parentCategoryId: chosenCat ? (chosenCat.parentId || '') : '',
           mass: massInput.value.trim(),
           values: collectInputs(inputs),
           slotId: isShip || anySlotRow.input.checked ? null : slotSelect.value,
