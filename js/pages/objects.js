@@ -75,8 +75,12 @@
   function typeChip(isShip) {
     return h('span', {
       class: 'type-chip' + (isShip ? ' type-chip-ship' : ''),
-      text: isShip ? 'корабль' : 'предмет'
-    });
+      title: isShip ? 'корабль' : 'предмет'
+    }, (function () {
+      var mark = document.createElement('span');
+      if (window.Icons) mark.innerHTML = Icons.svg(isShip ? 'ship' : 'box', 14);
+      return mark;
+    })());
   }
 
   /* ---------- Объекты ---------- */
@@ -140,6 +144,45 @@
     return panel;
   }
 
+  /* ---------- Сортировка списка ---------- */
+
+  var sortMode = 'category';
+
+  var SORT_OPTIONS = [
+    { value: 'category', label: 'по дочерней категории' },
+    { value: 'name', label: 'по названию' },
+    { value: 'price', label: 'по цене' },
+    { value: 'mass', label: 'по массе' }
+  ];
+
+  function cmpText(a, b) {
+    return String(a).localeCompare(String(b), 'ru', { sensitivity: 'base' });
+  }
+
+  function sortObjects(items) {
+    var list = items.slice();
+    list.sort(function (a, b) {
+      if (sortMode === 'name') return cmpText(a.name, b.name);
+      if (sortMode === 'price') return Store.priceOf(b) - Store.priceOf(a) || cmpText(a.name, b.name);
+      if (sortMode === 'mass') return Store.massOf(b) - Store.massOf(a) || cmpText(a.name, b.name);
+      /* По дочерней категории: сначала путь «Корабли / Линкоры», внутри — по имени. */
+      return cmpText(Store.categoryPath(a.categoryId), Store.categoryPath(b.categoryId)) || cmpText(a.name, b.name);
+    });
+    return list;
+  }
+
+  function sortTools() {
+    var sel = UI.select({ options: SORT_OPTIONS, value: sortMode });
+    sel.addEventListener('change', function () {
+      sortMode = sel.value;
+      App.refresh();
+    });
+    return h('div', { class: 'list-tools' },
+      h('span', { class: 'list-tools-label', text: 'сортировка' }),
+      sel
+    );
+  }
+
   function renderObjects(root) {
     var current = selectedCategory ? Store.byId('categories', selectedCategory) : null;
     if (!current) selectedCategory = '';
@@ -151,8 +194,9 @@
       onAdd: function () { openObjectModal(null, selectedCategory); }
     }));
 
-    var items = objectsIn(selectedCategory);
+    var items = sortObjects(objectsIn(selectedCategory));
     var main = h('div', { class: 'split-main' });
+    main.appendChild(sortTools());
 
     if (!items.length) {
       main.appendChild(UI.emptyState({
@@ -218,7 +262,8 @@
   function slotsSummary(o) {
     if (!Store.categoryIsShip(o.categoryId)) {
       var sl = o.slotId ? Store.byId('slots', o.slotId) : null;
-      return h('span', { class: (sl ? '' : 'muted') + ' nowrap', text: sl ? 'слот «' + sl.name + '»' : 'любой слот' });
+      var itemText = sl ? 'слот «' + sl.name + '»' : 'любой слот';
+      return h('span', { class: (sl ? '' : 'muted') + ' slots-cell', text: itemText, title: itemText });
     }
     var parts = (o.slots || []).map(function (e) {
       var slot = Store.byId('slots', e.slotId);
@@ -229,7 +274,8 @@
       }).filter(Boolean);
       return names.length ? slot.name + ' (' + names.join(', ') + ')' : slot.name;
     }).filter(Boolean);
-    return h('span', { class: parts.length ? '' : 'muted', text: parts.length ? parts.join(', ') : '—' });
+    var text = parts.join(', ');
+    return h('span', { class: (parts.length ? '' : 'muted') + ' slots-cell', text: parts.length ? text : '—', title: text });
   }
 
   function deleteObject(o) {
