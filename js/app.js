@@ -5,7 +5,7 @@
   var h = UI.h;
 
   /* Метка сборки: видна в консоли, помогает понять, какая версия открыта. */
-  var BUILD = '17.10.2026';
+  var BUILD = 'v20 · 17.10.2026';
   console.info('Galaxy Admin — сборка ' + BUILD);
 
   var ROUTES = [

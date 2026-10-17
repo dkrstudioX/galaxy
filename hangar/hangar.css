@@ -225,6 +225,68 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 .category-tabs button:hover { color: #9fb3b3; background: rgba(122, 236, 224, .06); }
 .category-tabs button.active { color: #100b1b; background: linear-gradient(100deg, #75dfd2, #aa88f6); box-shadow: 0 0 18px rgba(169, 133, 245, .45); }
 
+/* Подкатегории выбранной ветки */
+.subcategory-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  margin: -4px 0 12px;
+  padding: 7px 14px 7px 12px;
+  border: 1px solid rgba(150, 190, 255, .12);
+  border-left: 2px solid rgba(122, 236, 224, .55);
+  background: rgba(9, 24, 25, .32);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+}
+.subcategory-title {
+  flex: none;
+  font: 9px "IBM Plex Mono";
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #6e8b8b;
+}
+.subcategory-tabs { display: flex; flex-wrap: wrap; gap: 7px; }
+.sub-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border: 1px solid rgba(150, 190, 255, .18);
+  border-radius: 999px;
+  background: rgba(12, 27, 30, .55);
+  color: #9fb3b3;
+  font: 500 10.5px "IBM Plex Mono";
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: color .12s ease, border-color .12s ease, background .12s ease;
+}
+.sub-chip:hover { color: #d8ecec; border-color: rgba(122, 236, 224, .45); background: rgba(20, 44, 46, .65); }
+.sub-chip.active {
+  color: #0f0c19;
+  border-color: transparent;
+  background: linear-gradient(100deg, #75dfd2, #aa88f6);
+  box-shadow: 0 0 14px rgba(169, 133, 245, .35);
+}
+.sub-chip .sub-count { font-size: 9px; opacity: .7; }
+.sub-chip.active .sub-count { opacity: .8; }
+
+/* Метка сборки в верхней панели */
+.build-badge {
+  margin-left: 6px;
+  padding: 3px 8px;
+  border: 1px solid rgba(122, 236, 224, .35);
+  border-radius: 3px;
+  color: #7bdcca;
+  background: rgba(122, 236, 224, .07);
+  font: 600 9px "IBM Plex Mono";
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .market-grid { display: grid; grid-template-columns: minmax(310px, 1fr) 154px minmax(310px, 1fr); grid-template-rows: minmax(0, 1fr); flex: 1; min-height: 0; gap: 12px; }
 .hangar-grid { grid-template-columns: minmax(290px, 1fr) 230px minmax(290px, 1fr); }
 .inventory-panel, .trade-console {

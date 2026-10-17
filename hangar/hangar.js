@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  console.info('HELIOS 7 — сборка 17.10.2026');
+  console.info('HELIOS 7 — сборка v20 · 17.10.2026');
 
   /* ---------- Иконки ---------- */
 
@@ -130,6 +130,7 @@
   var state = {
     tab: 'shop',
     category: 'all',
+    subcategory: '',
     selectedShop: '',
     selectedCargo: '',
     amount: 1,
@@ -165,8 +166,24 @@
     return item.categoryId === categoryId || item.parentCategoryId === categoryId;
   }
 
+  /* Подкатегории выбранной ветки: id, имя и сколько объектов в каждой. */
+  function buildSubcategories(rootId) {
+    if (!window.Store || !rootId || rootId === 'all') return [];
+    return Store.childCategories(rootId).map(function (cat) {
+      return {
+        id: cat.id,
+        label: cat.name,
+        count: shopItems.filter(function (it) { return it.categoryId === cat.id; }).length
+      };
+    });
+  }
+
   function filteredItems() {
-    return shopItems.filter(function (it) { return inCategory(it, state.category); });
+    return shopItems.filter(function (it) {
+      if (!inCategory(it, state.category)) return false;
+      if (state.subcategory && it.categoryId !== state.subcategory) return false;
+      return true;
+    });
   }
   function currentShop() {
     var item = byId(shopItems, state.selectedShop);
@@ -227,6 +244,18 @@
     }).join('');
   }
 
+  /* Чипы подкатегорий под табами: показываются только для выбранной ветки. */
+  function renderSubcategories() {
+    var bar = document.getElementById('subcategoryBar');
+    if (!bar) return;
+    var list = buildSubcategories(state.category);
+    bar.hidden = !list.length;
+    document.getElementById('subcategoryTabs').innerHTML = list.map(function (s) {
+      return '<button class="sub-chip' + (state.subcategory === s.id ? ' active' : '') + '" data-action="subcategory" data-sub="' + s.id + '">' +
+        s.label + '<span class="sub-count">' + s.count + '</span></button>';
+    }).join('');
+  }
+
   /* Центр: объект из админки — информация и кнопка «Купить» (оплату подключим позже). */
   function shopObjectConsole(item) {
     if (!item) {
@@ -275,6 +304,7 @@
     var filtered = filteredItems();
     document.getElementById('shopCount').textContent = filtered.length + ' ' + plural(filtered.length, ['позиция', 'позиции', 'позиций']);
     document.getElementById('categoryTabs').innerHTML = categoryTabsHTML();
+    renderSubcategories();
     document.getElementById('shopList').innerHTML = filtered.length
       ? filtered.map(function (it) {
         return shopItemRowHTML(it, state.selectedShop === it.id);
@@ -444,6 +474,17 @@
 
   function changeCategory(next) {
     state.category = next;
+    /* Смена ветки сбрасывает выбранную подкатегорию. */
+    state.subcategory = '';
+    var list = filteredItems();
+    if (list.length) state.selectedShop = list[0].id;
+    state.tradeMode = 'buy';
+    state.amount = 1;
+  }
+
+  /* Клик по чипу: повторный клик снимает фильтр подкатегории. */
+  function changeSubcategory(next) {
+    state.subcategory = state.subcategory === next ? '' : next;
     var list = filteredItems();
     if (list.length) state.selectedShop = list[0].id;
     state.tradeMode = 'buy';
@@ -483,6 +524,7 @@
 
     if (action === 'tab') state.tab = el.getAttribute('data-tab');
     else if (action === 'category') changeCategory(el.getAttribute('data-cat'));
+    else if (action === 'subcategory') changeSubcategory(el.getAttribute('data-sub'));
     else if (action === 'select-shop') { state.selectedShop = id; state.tradeMode = 'buy'; state.amount = 1; }
     else if (action === 'select-cargo') { state.selectedCargo = id; state.tradeMode = 'sell'; state.amount = 1; }
     else if (action === 'amount') state.amount = Math.min(99, Math.max(1, state.amount + dir));
