@@ -230,10 +230,18 @@
     } else {
       toggle = h('span', { class: 'tree-toggle tree-toggle-empty' });
     }
+    var chips = [];
+    if (row.cat.isShip) {
+      chips.push(h('span', { class: 'type-chip type-chip-ship', text: 'корабль' }));
+    } else if (Store.categoryIsShip(row.cat.id)) {
+      var from = Store.categoryChain(row.cat.id).filter(function (c) { return c.isShip; })[0];
+      chips.push(h('span', { class: 'type-chip', text: 'корабль', title: 'Унаследовано от «' + from.name + '»' }));
+    }
     return h('div', { class: 'tree-cell' },
       h('span', { class: 'tree-indent', style: 'width:' + (row.depth * 22) + 'px' }),
       toggle,
-      h('span', { class: 'cell-main', text: row.cat.name })
+      h('span', { class: 'cell-main', text: row.cat.name }),
+      chips
     );
   }
 
@@ -312,7 +320,7 @@
 
     root.appendChild(h('div', {
       class: 'hint',
-      text: 'Подкатегория наследует свойства родительской категории. Стрелка слева сворачивает ветку, кнопка «Подкатегория» создаёт вложенную категорию внутри строки.'
+      text: 'Подкатегория наследует свойства и флажок «корабль» родительской категории. Стрелка слева сворачивает ветку, кнопка «Подкатегория» создаёт вложенную категорию внутри строки.'
     }));
   }
 
@@ -334,6 +342,9 @@
       value: excluded[initialParent] ? '' : initialParent
     });
     var parentHint = h('div', { class: 'hint' });
+
+    /* Флажок «корабль»: у объектов такой категории появляются слоты. */
+    var shipRow = UI.checkRow('Категория кораблей', isEdit ? !!existing.isShip : false);
 
     /* Отметки собственных свойств — единственный источник правды: список
        перерисовывается при смене родителя, а выбор пользователя сохраняется. */
@@ -394,6 +405,11 @@
         parentHint
       ),
       h('div', { class: 'field' },
+        h('label', { class: 'field-label', text: 'Тип категории' }),
+        shipRow.el,
+        h('div', { class: 'hint', text: 'У категории кораблей объекты получают список слотов, сам объект никуда не вставляется. Флажок наследуется подкатегориями; у остальных категорий объект вставляется в слот.' })
+      ),
+      h('div', { class: 'field' },
         h('label', { class: 'field-label', text: 'Свойства категории' }),
         listHost,
         listHint
@@ -412,10 +428,10 @@
         }
         var propIds = Store.props().filter(function (p) { return ownChecked[p.id]; }).map(function (p) { return p.id; });
         if (isEdit) {
-          Store.patch('categories', existing.id, { name: name, parentId: parentSelect.value || '', propIds: propIds });
+          Store.patch('categories', existing.id, { name: name, parentId: parentSelect.value || '', propIds: propIds, isShip: shipRow.input.checked });
           UI.toast('Категория изменена', 'ok');
         } else {
-          Store.createCategory(name, propIds, parentSelect.value);
+          Store.createCategory(name, propIds, parentSelect.value, shipRow.input.checked);
           UI.toast(parentSelect.value ? 'Подкатегория добавлена' : 'Категория добавлена', 'ok');
         }
         App.refresh();

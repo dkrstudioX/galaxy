@@ -41,21 +41,34 @@
     }).filter(function (s) { return s.name; });
 
     /* Категории — одно дерево: прежние типы 'ship' и 'goods' больше не различаются,
-       parentId сохраняется ('' — корневая). */
+       parentId сохраняется ('' — корневая). isShip — категория корабля:
+       флаг наследуется по цепочке до корня. */
     out.categories = arr(data.categories).filter(isObj).map(function (c) {
       return {
         id: str(c.id) || uid(), name: str(c.name).trim(),
-        propIds: arr(c.propIds).map(str), parentId: str(c.parentId)
+        propIds: arr(c.propIds).map(str), parentId: str(c.parentId),
+        isShip: c.isShip === true || c.isShip === 'true'
       };
     }).filter(function (c) { return c.name; });
 
-    /* Объекты: корабли и предметы — одна коллекция с флажком isShip.
+    /* Совместимость со старой моделью: «кораблём» был объект, теперь — категория.
+       Помечаем категории старых кораблей, чтобы их слоты не потерялись. */
+    function markShipCategory(categoryId) {
+      var id = str(categoryId);
+      out.categories.forEach(function (c) { if (c.id === id) c.isShip = true; });
+    }
+    arr(data.objects).filter(isObj).forEach(function (o) {
+      if (o.isShip === true || o.isShip === 'true') markShipCategory(o.categoryId);
+    });
+    arr(data.ships).filter(isObj).forEach(function (o) { markShipCategory(o.categoryId); });
+
+    /* Объекты: корабли и предметы — одна коллекция.
        Старые выгрузки читаются из objects, ships, goods, resources и equipments. */
-    function collect(list, forceShip) {
-      return arr(list).filter(isObj).map(function (o) { return makeObject(o, forceShip); });
+    function collect(list) {
+      return arr(list).filter(isObj).map(makeObject);
     }
     out.objects = collect(data.objects)
-      .concat(collect(data.ships, true))
+      .concat(collect(data.ships))
       .concat(collect(data.goods))
       .concat(collect(data.resources))
       .concat(collect(data.equipments))
@@ -64,17 +77,15 @@
     pruneRefs(out);
     return out;
 
-    function makeObject(o, forceShip) {
-      var isShip = forceShip === true || o.isShip === true || o.isShip === 'true';
+    function makeObject(o) {
       return {
         id: str(o.id) || uid(),
         name: str(o.name).trim(),
         categoryId: str(o.categoryId),
         values: obj(o.values),
         mass: str(o.mass).trim(),
-        isShip: isShip,
-        slotId: isShip ? null : (o.slotId ? str(o.slotId) : null),
-        slots: isShip ? makeSlots(o) : []
+        slotId: o.slotId ? str(o.slotId) : null,
+        slots: makeSlots(o)
       };
     }
 
@@ -99,11 +110,29 @@
     }
   }
 
+  /* Корабль ли категория: флаг наследуется по цепочке до корня (parentId = ''). */
+  function isShipIn(map, categoryId) {
+    var seen = {};
+    var cat = categoryId ? map[categoryId] : null;
+    while (cat && !seen[cat.id]) {
+      if (cat.isShip) return true;
+      seen[cat.id] = true;
+      cat = cat.parentId ? map[cat.parentId] : null;
+    }
+    return false;
+  }
+
+  function categoryIsShip(categoryId) {
+    var map = {};
+    all('categories').forEach(function (c) { map[c.id] = c; });
+    return isShipIn(map, categoryId);
+  }
+
   /* Убираем ссылки на несуществующие записи, чтобы база всегда была согласованной. */
   function pruneRefs(out) {
-    var propIds = {}, catIds = {}, slotIds = {}, objIds = {};
+    var propIds = {}, catById = {}, slotIds = {}, objIds = {};
     out.props.forEach(function (p) { propIds[p.id] = true; });
-    out.categories.forEach(function (c) { catIds[c.id] = true; });
+    out.categories.forEach(function (c) { catById[c.id] = c; });
     out.slots.forEach(function (s) { slotIds[s.id] = true; });
     out.objects.forEach(function (o) { objIds[o.id] = true; });
 
@@ -113,8 +142,8 @@
     fixParents(out.categories);
 
     out.objects.forEach(function (o) {
-      if (!catIds[o.categoryId]) o.categoryId = '';
-      if (o.isShip) {
+      if (!catById[o.categoryId]) o.categoryId = '';
+      if (isShipIn(catById, o.categoryId)) {
         /* Корабль никуда не вставляется, у него только свои слоты. */
         o.slotId = null;
         o.slots = o.slots.filter(function (e) { return slotIds[e.slotId]; });
@@ -312,8 +341,9 @@
       contains: all('objects').filter(function (o) {
         return o.slots.some(function (e) { return e.slotId === slotId; });
       }).map(function (o) { return o.name; }),
-      fits: all('objects').filter(function (o) { return !o.isShip && o.slotId === slotId; })
-        .map(function (o) { return o.name; })
+      fits: all('objects').filter(function (o) {
+        return !categoryIsShip(o.categoryId) && o.slotId === slotId;
+      }).map(function (o) { return o.name; })
     };
   }
 
@@ -362,8 +392,8 @@
 
     function addProp(name, value) { var p = { id: uid(), name: name, value: value }; d.props.push(p); return p; }
     function addSlot(name, capacity) { var s = { id: uid(), name: name, capacity: capacity || '' }; d.slots.push(s); return s; }
-    function addCat(name, propIds, parent) {
-      var c = { id: uid(), name: name, propIds: propIds, parentId: parent ? parent.id : '' };
+    function addCat(name, propIds, parent, isShip) {
+      var c = { id: uid(), name: name, propIds: propIds, parentId: parent ? parent.id : '', isShip: !!isShip };
       d.categories.push(c);
       return c;
     }
@@ -372,11 +402,11 @@
       for (var i = 0; i < pairs.length; i++) out[pairs[i][0].id] = pairs[i][1];
       return out;
     }
-    /* Корабль: свои слоты с содержимым по умолчанию. */
+    /* Корабль: свои слоты с содержимым по умолчанию (тип задаёт категория). */
     function addShip(name, cat, valuePairs, slotEntries) {
       d.objects.push({
         id: uid(), name: name, categoryId: cat.id, values: vals(valuePairs), mass: '',
-        isShip: true, slotId: null,
+        slotId: null,
         slots: slotEntries.map(function (e) {
           return {
             slotId: e.slot.id,
@@ -389,7 +419,7 @@
     function addItem(name, cat, valuePairs, mass, slot) {
       var item = {
         id: uid(), name: name, categoryId: cat.id, values: vals(valuePairs), mass: mass,
-        isShip: false, slotId: slot ? slot.id : null, slots: []
+        slotId: slot ? slot.id : null, slots: []
       };
       d.objects.push(item);
       return item;
@@ -409,8 +439,8 @@
     var slotShield = addSlot('Щит', '25');
     var slotCargo = addSlot('Грузовой отсек', '200');
 
-    /* Одно дерево категорий: корабли и предметы в общей иерархии. */
-    var catShips = addCat('Корабли', [durability.id, speed.id, mass.id]);
+    /* Одно дерево категорий: «Корабли» — категория кораблей, флаг наследуется. */
+    var catShips = addCat('Корабли', [durability.id, speed.id, mass.id], null, true);
     var catLiners = addCat('Линкоры', [cargo.id], catShips);
     var catShuttles = addCat('Шатлы', [], catShips);
     var catResources = addCat('Ресурсы', [rarity.id]);
@@ -472,17 +502,19 @@
 
     createProp: function (name, value) { return insert('props', { name: name, value: value }); },
     createSlot: function (name, capacity) { return insert('slots', { name: name, capacity: capacity || '' }); },
-    createCategory: function (name, propIds, parentId) {
-      return insert('categories', { name: name, propIds: (propIds || []).slice(), parentId: parentId || '' });
+    createCategory: function (name, propIds, parentId, isShip) {
+      return insert('categories', {
+        name: name, propIds: (propIds || []).slice(), parentId: parentId || '', isShip: !!isShip
+      });
     },
     createObject: function (data) {
-      var isShip = !!data.isShip;
+      /* Тип объекта определяет категория: у корабля слоты, у остальных — слот вставки. */
+      var isShip = categoryIsShip(data.categoryId);
       return insert('objects', {
         name: data.name,
         categoryId: data.categoryId,
         values: data.values || {},
         mass: data.mass || '',
-        isShip: isShip,
         slotId: isShip ? null : (data.slotId || null),
         slots: isShip ? (data.slots || []).map(function (e) {
           return {
@@ -499,6 +531,7 @@
     categoryUsage: categoryUsage,
 
     childCategories: childrenOf,
+    categoryIsShip: categoryIsShip,
     categoryTree: categoryTree,
     categoryChain: categoryChain,
     categoryDescendants: categoryDescendants,

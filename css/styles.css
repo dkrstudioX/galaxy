@@ -274,6 +274,50 @@ body.modal-open { overflow: hidden; }
 }
 .type-chip-ship { color: #dfe6ff; border-color: rgba(124, 92, 255, 0.45); background: rgba(124, 92, 255, 0.18); }
 
+/* ---------- Страница объектов: слева категории, справа список ---------- */
+
+.split { display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 16px; align-items: start; }
+.split-main { min-width: 0; }
+.cat-panel { padding: 8px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
+
+.cat-panel-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 8px 10px 6px;
+}
+
+.cat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.cat-item:hover { background: rgba(168, 85, 247, 0.10); }
+.cat-item.active {
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.28), rgba(55, 201, 238, 0.12));
+  border-color: rgba(168, 85, 247, 0.40);
+  font-weight: 600;
+}
+.cat-item .cat-indent { flex: none; }
+.cat-item .cat-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-item .cat-count { flex: none; color: var(--muted); font-size: 12px; font-weight: 400; }
+
+@media (max-width: 980px) {
+  .split { grid-template-columns: 1fr; }
+  .cat-panel { position: static; max-height: 240px; }
+}
+
 /* ---------- Модальные окна ---------- */
 
 .overlay {
