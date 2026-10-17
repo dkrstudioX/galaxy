@@ -57,13 +57,42 @@
     { id: 103, name: 'Плазменные ячейки', category: 'resource', rarity: 'Ресурс', stats: 'Боезапас · 8 ед.', price: 190, stock: 16 }
   ];
 
-  var categories = [
-    { id: 'all', label: 'Все', icon: 'grid' },
+  /* ---------- Категории магазина ---------- */
+
+  /* Запасной набор: если в базе админки ещё нет ни одной категории. */
+  var FALLBACK_CATEGORIES = [
     { id: 'weapon', label: 'Оружие', icon: 'weapon' },
     { id: 'shield', label: 'Щиты', icon: 'shield' },
     { id: 'resource', label: 'Ресурсы', icon: 'resource' },
     { id: 'ship', label: 'Корабли', icon: 'ship' }
   ];
+
+  /* Встроенный ключ категории предмета -> название категории в базе админки. */
+  var KEY_TO_CATEGORY_NAME = { weapon: 'Оружие', shield: 'Щиты', resource: 'Ресурсы', ship: 'Корабли' };
+
+  /* Иконок в данных админки нет — подбираем по названию категории. */
+  function iconForCategory(name) {
+    var n = String(name).toLowerCase();
+    if (n.indexOf('кораб') === 0) return 'ship';
+    if (n.indexOf('оруж') === 0) return 'weapon';
+    if (n.indexOf('щит') > -1) return 'shield';
+    if (n.indexOf('ресурс') > -1 || n.indexOf('матери') > -1 || n.indexOf('топл') > -1) return 'resource';
+    return 'grid';
+  }
+
+  /* Табы: «Все» + категории первого уровня из базы админки (data/store.js). */
+  function buildCategories() {
+    var roots = [];
+    if (window.Store) {
+      roots = Store.childCategories('').map(function (cat) {
+        return { id: cat.id, label: cat.name, icon: iconForCategory(cat.name) };
+      });
+    }
+    if (!roots.length) roots = FALLBACK_CATEGORIES.slice();
+    return [{ id: 'all', label: 'Все', icon: 'grid' }].concat(roots);
+  }
+
+  var categories = buildCategories();
 
   var ships = [
     { name: 'Asterion', className: 'Фрегат', level: 'MK.IV', active: true },
@@ -113,10 +142,32 @@
     for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
     return null;
   }
-  function filteredItems() {
-    return shopItems.filter(function (it) { return state.category === 'all' || it.category === state.category; });
+  /* Категория предмета в базе админки: null, если базы нет или категория не найдена. */
+  function dbCategoryOf(item) {
+    if (!window.Store) return null;
+    var name = KEY_TO_CATEGORY_NAME[item.category];
+    if (!name) return null;
+    var list = Store.categories();
+    for (var i = 0; i < list.length; i++) if (list[i].name === name) return list[i];
+    return null;
   }
-  function currentShop() { return byId(shopItems, state.selectedShop) || filteredItems()[0]; }
+
+  /* Предмет подходит, если выбранная категория — он сам или один из его предков. */
+  function inCategory(item, categoryId) {
+    if (categoryId === 'all') return true;
+    var cat = dbCategoryOf(item);
+    if (!cat) return item.category === categoryId;
+    return Store.categoryChain(cat.id).some(function (c) { return c.id === categoryId; });
+  }
+
+  function filteredItems() {
+    return shopItems.filter(function (it) { return inCategory(it, state.category); });
+  }
+  function currentShop() {
+    var item = byId(shopItems, state.selectedShop);
+    if (item && inCategory(item, state.category)) return item;
+    return filteredItems()[0] || null;
+  }
   function currentCargo() { return byId(initialCargo, state.selectedCargo) || initialCargo[0]; }
   function activeTradeItem() { return state.tradeMode === 'buy' ? currentShop() : currentCargo(); }
   function activeResource() { return byId(hangarResources, state.selectedResource) || hangarResources[0]; }
@@ -157,6 +208,7 @@
 
   function shopConsoleHTML() {
     var item = activeTradeItem();
+    if (!item) return '<div class="trade-empty">В этой категории пока нет товаров</div>';
     var total = state.tradeMode === 'buy'
       ? currentShop().price * state.amount
       : Math.round(currentCargo().price * state.amount * 0.65);
@@ -184,9 +236,11 @@
     var filtered = filteredItems();
     document.getElementById('shopCount').textContent = filtered.length + ' позиций';
     document.getElementById('categoryTabs').innerHTML = categoryTabsHTML();
-    document.getElementById('shopList').innerHTML = filtered.map(function (it) {
-      return itemRowHTML(it, state.selectedShop === it.id, 'select-shop');
-    }).join('');
+    document.getElementById('shopList').innerHTML = filtered.length
+      ? filtered.map(function (it) {
+        return itemRowHTML(it, state.selectedShop === it.id, 'select-shop');
+      }).join('')
+      : '<div class="list-empty">В этой категории пока нет товаров</div>';
     document.getElementById('shopConsole').innerHTML = shopConsoleHTML();
     document.getElementById('cargoList').innerHTML = initialCargo.map(function (it) {
       return itemRowHTML(it, state.selectedCargo === it.id, 'select-cargo');
@@ -351,15 +405,15 @@
 
   function changeCategory(next) {
     state.category = next;
-    for (var i = 0; i < shopItems.length; i++) {
-      if (next === 'all' || shopItems[i].category === next) { state.selectedShop = shopItems[i].id; break; }
-    }
+    var list = filteredItems();
+    if (list.length) state.selectedShop = list[0].id;
     state.tradeMode = 'buy';
     state.amount = 1;
   }
 
   function transact(mode) {
     var item = mode === 'buy' ? currentShop() : currentCargo();
+    if (!item) return;
     var delta = item.price * state.amount;
     if (mode === 'buy' && delta > state.credits) {
       state.notice = 'Недостаточно кредитов для покупки';
