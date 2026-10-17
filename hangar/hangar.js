@@ -135,7 +135,6 @@
     selectedCargo: '',
     amount: 1,
     tradeMode: 'buy',
-    credits: 42860,
     notice: 'Торговый терминал подключён',
     infoSection: 'properties',
     selectedResource: '201',
@@ -197,7 +196,8 @@
   /* ---------- Рендер: шапка и вкладки ---------- */
 
   function renderTop() {
-    document.getElementById('creditsValue').innerHTML = fmt(state.credits) + ' <i>¤</i>';
+    var balance = window.Store ? Store.credits() : 0;
+    document.getElementById('creditsValue').innerHTML = fmt(balance) + ' <i>¤</i>';
   }
 
   function renderTabs() {
@@ -504,7 +504,7 @@
   function transact() {
     var item = currentCargo();
     if (!item) return;
-    state.credits += Math.round(item.price * state.amount * 0.65);
+    Store.addCredits(Math.round(item.price * state.amount * 0.65));
     state.notice = item.name + ': продано ×' + state.amount;
   }
 
@@ -537,6 +537,10 @@
     else if (action === 'select-shop') { state.selectedShop = id; state.tradeMode = 'buy'; state.amount = 1; }
     else if (action === 'select-cargo') { state.selectedCargo = id; state.tradeMode = 'sell'; state.amount = 1; }
     else if (action === 'amount') state.amount = Math.min(99, Math.max(1, state.amount + dir));
+    else if (action === 'add-credits') {
+      var total = Store.addCredits(1000);
+      state.notice = 'Баланс пополнен на 1 000 ¤ — теперь ' + fmt(total) + ' ¤';
+    }
     else if (action === 'buy') {
       var buyItem = currentShop();
       state.notice = buyItem ? 'Покупка «' + buyItem.name + '» появится позже' : 'Покупка пока не настроена';

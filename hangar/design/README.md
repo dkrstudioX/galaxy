@@ -36,3 +36,9 @@ chrome --headless --disable-gpu --hide-scrollbars --window-size=1600,1000 \
 ```
 
 Макеты — только визуальный слой: рабочее приложение живёт в `hangar/index.html` + `hangar/hangar.js`.
+
+## Баланс
+
+Стартовые 1000 ¤ хранятся вместе с базой (`credits` в `data/store.js`, ключ `galaxy_admin_db_v1`).
+Клик по блоку баланса в шапке ангара начисляет 1000 ¤ (`Store.addCredits`), продажа груза тоже пополняет баланс.
+Старые базы без поля `credits` получают 1000 ¤ при загрузке.

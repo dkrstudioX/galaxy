@@ -11,10 +11,13 @@
 
   var KEY = 'galaxy_admin_db_v1';
 
+  /* Стартовый баланс: он же в демо-наборе. */
+  var DEFAULT_CREDITS = 1000;
+
   var db = null;
 
   function blank() {
-    return { props: [], slots: [], categories: [], objects: [] };
+    return { credits: DEFAULT_CREDITS, props: [], slots: [], categories: [], objects: [] };
   }
 
   function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
@@ -38,6 +41,11 @@
   function sanitize(data) {
     var out = blank();
     if (!isObj(data)) return out;
+
+    /* Баланс хранится вместе с базой; пусто/мусор — стартовые 1000 ¤. */
+    var rawCredits = str(data.credits).trim();
+    var credits = rawCredits ? Math.floor(Number(rawCredits.replace(',', '.'))) : DEFAULT_CREDITS;
+    out.credits = isFinite(credits) && credits >= 0 ? credits : DEFAULT_CREDITS;
 
     out.props = arr(data.props).filter(isObj).map(function (p) {
       return { id: str(p.id) || uid(), name: str(p.name).trim(), value: str(p.value) };
@@ -412,6 +420,21 @@
     };
   }
 
+  /* ---------- Баланс ---------- */
+
+  /* Сколько кредитов у игрока. */
+  function credits() { return ensure().credits; }
+
+  /* Начислить кредиты: возвращает новое значение. */
+  function addCredits(delta) {
+    var d = ensure();
+    var add = Math.round(Number(delta));
+    if (!isFinite(add) || add === 0) return d.credits;
+    d.credits = Math.max(0, d.credits + add);
+    persist();
+    return d.credits;
+  }
+
   /* ---------- Демонстрационный набор ---------- */
 
   /* Набор для быстрого старта: всё держится на массе.
@@ -422,6 +445,7 @@
      Свойство «Редкость» намеренно не используется. */
   function demoData() {
     var d = blank();
+    d.credits = DEFAULT_CREDITS;
     var byName = {};
 
     function addProp(name, value) { var p = { id: uid(), name: name, value: value }; d.props.push(p); return p; }
@@ -781,6 +805,8 @@
     exportJSON: exportJSON,
     importJSON: importJSON,
     clearAll: clearAll,
+    credits: credits,
+    addCredits: addCredits,
     loadDemo: function () { db = demoData(); persist(); },
     counts: counts
   };
