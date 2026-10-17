@@ -42,12 +42,13 @@
 
     /* Категории — одно дерево: прежние типы 'ship' и 'goods' больше не различаются,
        parentId сохраняется ('' — корневая). isShip — категория корабля:
-       флаг наследуется по цепочке до корня. */
+       флаг наследуется по цепочке до корня; icon — ключ иконки из data/icons.js. */
     out.categories = arr(data.categories).filter(isObj).map(function (c) {
       return {
         id: str(c.id) || uid(), name: str(c.name).trim(),
         propIds: arr(c.propIds).map(str), parentId: str(c.parentId),
-        isShip: c.isShip === true || c.isShip === 'true'
+        isShip: c.isShip === true || c.isShip === 'true',
+        icon: str(c.icon)
       };
     }).filter(function (c) { return c.name; });
 
@@ -409,9 +410,9 @@
 
     createProp: function (name, value) { return insert('props', { name: name, value: value }); },
     createSlot: function (name, capacity) { return insert('slots', { name: name, capacity: capacity || '' }); },
-    createCategory: function (name, propIds, parentId, isShip) {
+    createCategory: function (name, propIds, parentId, isShip, icon) {
       return insert('categories', {
-        name: name, propIds: (propIds || []).slice(), parentId: parentId || '', isShip: !!isShip
+        name: name, propIds: (propIds || []).slice(), parentId: parentId || '', isShip: !!isShip, icon: icon || ''
       });
     },
     createObject: function (data) {

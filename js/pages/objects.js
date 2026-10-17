@@ -91,15 +91,17 @@
     return Store.objects().filter(function (o) { return o.categoryId === cat.id; });
   }
 
-  function categoryRow(id, label, depth, count, isShip) {
+  function categoryRow(id, label, depth, iconKey, isShip) {
+    var mark = h('span', { class: 'cat-icon' });
+    mark.innerHTML = Icons.svg(iconKey, 16);
     return h('button', {
       class: 'cat-item' + (selectedCategory === id ? ' active' : ''),
       title: isShip ? 'Категория кораблей' : label,
       onclick: function () { selectedCategory = id; App.refresh(); }
     },
       h('span', { class: 'cat-indent', style: 'width:' + (depth * 14) + 'px' }),
-      h('span', { class: 'cat-name', text: label }),
-      h('span', { class: 'cat-count', text: String(count) })
+      mark,
+      h('span', { class: 'cat-name', text: label })
     );
   }
 
@@ -108,9 +110,9 @@
     var panel = h('aside', { class: 'card cat-panel' },
       h('div', { class: 'cat-panel-title', text: 'Категории' })
     );
-    panel.appendChild(categoryRow('', 'Все объекты', 0, Store.objects().length, false));
+    panel.appendChild(categoryRow('', 'Все объекты', 0, 'grid', false));
     Store.childCategories('').forEach(function (cat) {
-      panel.appendChild(categoryRow(cat.id, cat.name, 1, objectsIn(cat.id).length, Store.categoryIsShip(cat.id)));
+      panel.appendChild(categoryRow(cat.id, cat.name, 1, cat.icon || Icons.forCategory(cat.name), Store.categoryIsShip(cat.id)));
     });
 
     /* Подкатегории: для выбранной категории (или родителя выбранной подкатегории). */
@@ -127,7 +129,7 @@
 
     panel.appendChild(h('div', { class: 'cat-panel-title cat-panel-sub', text: 'Подкатегории' }));
     kids.forEach(function (cat) {
-      panel.appendChild(categoryRow(cat.id, cat.name, 2, objectsIn(cat.id).length, Store.categoryIsShip(cat.id)));
+      panel.appendChild(categoryRow(cat.id, cat.name, 2, cat.icon || Icons.forCategory(cat.name), Store.categoryIsShip(cat.id)));
     });
     return panel;
   }
@@ -158,6 +160,7 @@
       }));
     } else {
       main.appendChild(UI.table({
+        className: 'table-dense',
         columns: [
           {
             title: 'Название',
@@ -180,14 +183,14 @@
             title: 'Масса',
             render: function (o) {
               var m = Store.massOf(o);
-              return h('span', { class: m ? '' : 'muted', text: m ? Store.fmtNum(m) + ' кг' : '—' });
+              return h('span', { class: (m ? '' : 'muted') + ' nowrap', text: m ? Store.fmtNum(m) + ' кг' : '—' });
             }
           },
           {
             title: 'Цена',
             render: function (o) {
               var p = Store.priceOf(o);
-              return h('span', { class: p ? '' : 'muted', text: p ? Store.fmtNum(p) + ' ¤' : '—' });
+              return h('span', { class: (p ? '' : 'muted') + ' nowrap', text: p ? Store.fmtNum(p) + ' ¤' : '—' });
             }
           },
           { title: 'Слоты', render: function (o) { return slotsSummary(o); } }
@@ -209,7 +212,7 @@
   function slotsSummary(o) {
     if (!Store.categoryIsShip(o.categoryId)) {
       var sl = o.slotId ? Store.byId('slots', o.slotId) : null;
-      return h('span', { class: sl ? '' : 'muted', text: sl ? 'в слот «' + sl.name + '»' : 'в любой слот' });
+      return h('span', { class: (sl ? '' : 'muted') + ' nowrap', text: sl ? 'слот «' + sl.name + '»' : 'любой слот' });
     }
     var parts = (o.slots || []).map(function (e) {
       var slot = Store.byId('slots', e.slotId);
@@ -593,22 +596,7 @@
     });
 
     /* Иконка: у нового объекта сразу выбрана случайная, можно взять другую. */
-    var iconValue = isEdit ? (existing.icon || Icons.random()) : Icons.random();
-    var iconButtons = {};
-    var iconGrid = h('div', { class: 'icon-picker' });
-    function setIcon(key) {
-      iconValue = key;
-      Object.keys(iconButtons).forEach(function (k) {
-        iconButtons[k].classList.toggle('active', k === key);
-      });
-    }
-    Icons.keys().forEach(function (key) {
-      var btn = h('button', { class: 'icon-pick', title: key, onclick: function () { setIcon(key); } });
-      btn.innerHTML = Icons.svg(key, 20);
-      iconButtons[key] = btn;
-      iconGrid.appendChild(btn);
-    });
-    setIcon(iconValue);
+    var iconField = UI.iconPicker(isEdit ? existing.icon : '');
 
     var propsHost = h('div');
     var inputs = {};
@@ -694,13 +682,7 @@
       ),
       h('div', { class: 'field' },
         h('label', { class: 'field-label', text: 'Иконка' }),
-        iconGrid,
-        h('button', {
-          class: 'btn btn-sm icon-random',
-          text: 'Случайная иконка',
-          onclick: function () { setIcon(Icons.random()); }
-        }),
-        h('div', { class: 'hint', text: 'Иконка показывается в списке объектов и в магазине ангара.' })
+        iconField.el
       ),
       shipBlock,
       itemBlock,
@@ -743,7 +725,7 @@
           parentCategoryId: chosenCat ? (chosenCat.parentId || '') : '',
           mass: massInput.value.trim(),
           price: priceInput.value.trim(),
-          icon: iconValue,
+          icon: iconField.value(),
           values: collectInputs(inputs),
           slotId: isShip || anySlotRow.input.checked ? null : slotSelect.value,
           slots: slotEntries

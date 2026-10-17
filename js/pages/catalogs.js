@@ -237,9 +237,12 @@
       var from = Store.categoryChain(row.cat.id).filter(function (c) { return c.isShip; })[0];
       chips.push(h('span', { class: 'type-chip', text: 'корабль', title: 'Унаследовано от «' + from.name + '»' }));
     }
+    var mark = h('span', { class: 'obj-icon' });
+    mark.innerHTML = Icons.svg(row.cat.icon || Icons.forCategory(row.cat.name), 18);
     return h('div', { class: 'tree-cell' },
       h('span', { class: 'tree-indent', style: 'width:' + (row.depth * 22) + 'px' }),
       toggle,
+      mark,
       h('span', { class: 'cell-main', text: row.cat.name }),
       chips
     );
@@ -346,6 +349,9 @@
     /* Флажок «корабль»: у объектов такой категории появляются слоты. */
     var shipRow = UI.checkRow('Категория кораблей', isEdit ? !!existing.isShip : false);
 
+    /* Иконка категории — из того же каталога, что и у объектов. */
+    var iconField = UI.iconPicker(isEdit ? existing.icon : '');
+
     /* Отметки собственных свойств — единственный источник правды: список
        перерисовывается при смене родителя, а выбор пользователя сохраняется. */
     var ownChecked = {};
@@ -400,6 +406,10 @@
     var body = h('div', {},
       UI.field('Название', nameInput),
       h('div', { class: 'field' },
+        h('label', { class: 'field-label', text: 'Иконка' }),
+        iconField.el
+      ),
+      h('div', { class: 'field' },
         h('label', { class: 'field-label', text: 'Родительская категория' }),
         parentSelect,
         parentHint
@@ -428,10 +438,10 @@
         }
         var propIds = Store.props().filter(function (p) { return ownChecked[p.id]; }).map(function (p) { return p.id; });
         if (isEdit) {
-          Store.patch('categories', existing.id, { name: name, parentId: parentSelect.value || '', propIds: propIds, isShip: shipRow.input.checked });
+          Store.patch('categories', existing.id, { name: name, parentId: parentSelect.value || '', propIds: propIds, isShip: shipRow.input.checked, icon: iconField.value() });
           UI.toast('Категория изменена', 'ok');
         } else {
-          Store.createCategory(name, propIds, parentSelect.value, shipRow.input.checked);
+          Store.createCategory(name, propIds, parentSelect.value, shipRow.input.checked, iconField.value());
           UI.toast(parentSelect.value ? 'Подкатегория добавлена' : 'Категория добавлена', 'ok');
         }
         App.refresh();

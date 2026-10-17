@@ -178,6 +178,41 @@
     return { el: row, input: box };
   }
 
+  /* Выбор иконки из общего каталога (data/icons.js): сетка кнопок + «случайная».
+     Возвращает { el, value() }; у нового объекта/категории сразу выбрана случайная. */
+  function iconPicker(initial) {
+    var hasLib = !!window.Icons;
+    var current = initial || (hasLib ? Icons.random() : '');
+    var buttons = {};
+    var grid = h('div', { class: 'icon-picker' });
+
+    function set(key) {
+      current = key;
+      Object.keys(buttons).forEach(function (k) {
+        buttons[k].classList.toggle('active', k === key);
+      });
+    }
+
+    if (hasLib) {
+      Icons.keys().forEach(function (key) {
+        var btn = h('button', { class: 'icon-pick', title: key, onclick: function () { set(key); } });
+        btn.innerHTML = Icons.svg(key, 20);
+        buttons[key] = btn;
+        grid.appendChild(btn);
+      });
+      set(current);
+    }
+
+    return {
+      el: h('div', {},
+        grid,
+        hasLib ? h('button', { class: 'btn btn-sm icon-random', text: 'Случайная иконка', onclick: function () { set(Icons.random()); } }) : null,
+        h('div', { class: 'hint', text: 'Одна библиотека иконок для объектов и категорий.' })
+      ),
+      value: function () { return current; }
+    };
+  }
+
   /* ---------- Каркас страниц ---------- */
 
   function pageHead(opts) {
@@ -190,7 +225,7 @@
     );
   }
 
-  /* opts: { columns: [{ title, render(row) }], rows: [...], actions(row) -> node[] } */
+  /* opts: { columns: [{ title, render(row) }], rows: [...], actions(row) -> node[], className } */
   function table(opts) {
     var head = h('tr', {}, opts.columns.map(function (c) { return h('th', { text: c.title }); }), h('th', { class: 'th-actions' }));
     var body = h('tbody', {}, opts.rows.map(function (row) {
@@ -198,7 +233,7 @@
       tr.appendChild(h('td', { class: 'td-actions' }, opts.actions ? opts.actions(row) : null));
       return tr;
     }));
-    return h('div', { class: 'card table-card' }, h('table', { class: 'table' }, h('thead', {}, head), body));
+    return h('div', { class: 'card table-card' + (opts.className ? ' ' + opts.className : '') }, h('table', { class: 'table' }, h('thead', {}, head), body));
   }
 
   function emptyState(opts) {
@@ -228,6 +263,7 @@
     input: input,
     select: select,
     checkRow: checkRow,
+    iconPicker: iconPicker,
     pageHead: pageHead,
     table: table,
     emptyState: emptyState,

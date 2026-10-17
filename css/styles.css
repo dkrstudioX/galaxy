@@ -209,6 +209,9 @@ body.modal-open { overflow: hidden; }
 /* ---------- Таблицы ---------- */
 
 .table-card { margin-top: 14px; overflow-x: auto; }
+.table-dense th { padding: 12px 8px; }
+.table-dense td { padding: 11px 8px; }
+.table-dense .td-actions .btn { margin-left: 5px; padding: 5px 8px; }
 
 .table { width: 100%; border-collapse: collapse; }
 .table th {
@@ -228,6 +231,7 @@ body.modal-open { overflow: hidden; }
 
 .cell-main { font-weight: 600; }
 .muted { color: var(--muted); }
+.nowrap { white-space: nowrap; }
 .th-actions, .td-actions { text-align: right; white-space: nowrap; }
 .td-actions .btn { margin-left: 8px; }
 
@@ -283,7 +287,7 @@ body.modal-open { overflow: hidden; }
 
 /* ---------- Страница объектов: слева категории, справа список ---------- */
 
-.split { display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 16px; align-items: start; }
+.split { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 14px; align-items: start; }
 .split-main { min-width: 0; }
 .cat-panel { padding: 8px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
 
@@ -319,8 +323,9 @@ body.modal-open { overflow: hidden; }
   font-weight: 600;
 }
 .cat-item .cat-indent { flex: none; }
+.cat-item .cat-icon { flex: none; display: inline-flex; color: #b9a7ff; opacity: .8; }
+.cat-item.active .cat-icon { color: #fff; opacity: 1; }
 .cat-item .cat-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cat-item .cat-count { flex: none; color: var(--muted); font-size: 12px; font-weight: 400; }
 
 @media (max-width: 980px) {
   .split { grid-template-columns: 1fr; }
