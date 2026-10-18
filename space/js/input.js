@@ -38,6 +38,7 @@ export function initInput(canvas, ui) {
 
     canvas.addEventListener('touchstart', e => {
         e.preventDefault();
+        state.fly = null;   // тач-жест перебивает полёт камеры
         const touches = e.touches;
         if (touches.length === 1) {
             touch1 = touches[0];
@@ -82,6 +83,7 @@ export function initInput(canvas, ui) {
     // === КОЛЕСО МЫШИ: зум к точке под курсором ===
     canvas.addEventListener('wheel', e => {
         e.preventDefault();
+        state.fly = null;   // ручной зум перебивает полёт камеры
         zoomAt(e.clientX, e.clientY, state.zoom * (e.deltaY > 0 ? 0.9 : 1.1));
     }, { passive: false });
 
@@ -101,11 +103,13 @@ export function initInput(canvas, ui) {
         const moved = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY);
         if (moved > 5 || !state.hoverTargets) return; // это было перетаскивание
         if (state.baseMode) { confirmBase(e.clientX, e.clientY); return; } // выбираем орбиту базы
+        state.fly = null;   // клик по карте перебивает полёт камеры
         selectBody(findBodyAt(state.hoverTargets, e.clientX, e.clientY));
     });
 
     canvas.addEventListener('mousedown', e => {
         if (e.button !== 2) return;
+        state.fly = null;                       // панорамирование перебивает полёт
         if (state.baseMode) cancelBaseMode();   // правая кнопка отменяет выбор орбиты
         mouseDragging = true;
         mouseStartX = e.clientX;

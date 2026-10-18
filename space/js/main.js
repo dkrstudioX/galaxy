@@ -12,7 +12,7 @@ import { MS_PER_DAY } from './config.js';
 import { initInput } from './input.js';
 import { renderScene } from './render.js';
 import { drawHover } from './hover.js';
-import { getHudElements, getSpeedButtons, updateHud, buildSidePanel } from './ui.js';
+import { getHudElements, getSpeedButtons, updateHud, buildSidePanel, updateFlyTo } from './ui.js';
 import { drawSelection } from './hover.js';
 
 // --- Инициализация --------------------------------------------------------------
@@ -39,6 +39,8 @@ function frame() {
 
     state.simDays += dt / MS_PER_DAY * 1000 * state.timeScale; // dt(сек) -> сутки
     state.time += dt * state.timeScale;
+
+    updateFlyTo();   // полёт камеры к строке блока «Малые тела» — до отрисовки мира
 
     // фон: очищаем весь канвас в экранных координатах
     ctx.fillStyle = '#020205';

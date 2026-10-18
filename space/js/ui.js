@@ -1,14 +1,17 @@
 // =============================================================================
 // ui.js — DOM-интерфейс: HUD-показатели (зум/скорость/дата), боковые блоки
-// «КАРТА СИСТЕМЫ» (дерево планет/лун) и «ОБЪЕКТ» (информация о выбранном).
-// Выбор делается кликом по канвасу (selectBody вызывает input.js) или по
-// элементу дерева. Шапка каждого блока сворачивает его — отдельных кнопок
-// «скрыть/показать» нет. Работает с DOM, не с канвасом.
+// «КАРТА СИСТЕМЫ» (дерево планет/лун), «ОБЪЕКТ» (информация о выбранном) и
+// «МАЛЫЕ ТЕЛА» (группы малых тел: полёт камеры и выбор по клику).
+// Выбор делается кликом по канвасу (selectBody вызывает input.js), по
+// элементу дерева или по строке блока малых тел. Шапка каждого блока
+// сворачивает его — отдельных кнопок «скрыть/показать» нет. Здесь же твин
+// полёта камеры (flyToCamera/updateFlyTo), которым main.js двигает камеру.
+// Работает с DOM, не с канвасом.
 // =============================================================================
 
 import { state } from './state.js';
-import { formatSimDate } from './math.js';
-import { SUN_R, COLORS } from './config.js';
+import { formatSimDate, clamp } from './math.js';
+import { SUN_R, COLORS, MIN_ZOOM, MAX_ZOOM } from './config.js';
 import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, baseOrbitRadius } from './data.js';
 import { bases, basesAt } from './bases.js';
 
@@ -97,10 +100,102 @@ export function buildSidePanel() {
 
     // Солнце в дереве нет — выбирается только кликом по канвасу.
 
+    // Блок «03 Малые тела»: статические строки-группы, клик — полёт и выбор.
+    buildSmallBodiesBlock();
+
     // Шапки блоков сворачивают своё тело: отдельные кнопки «скрыть/показать» не нужны.
     document.querySelectorAll('#sidePanel .panel-head').forEach(head => {
         head.addEventListener('click', () => head.parentElement.classList.toggle('collapsed'));
     });
+}
+
+/* ---------- Блок «03 Малые тела»: группы-источники метеоритов Земли ---------- */
+
+// Строки блока. У групп-представителей клик — полёт камеры и выбор тела;
+// у Койпера и Оорта выбора нет — камера просто показывает кольцо; строки
+// метеоритов (met) ведут к Марсу и Луне и подсвечены отдельным типом.
+const SMALL_ROWS = [
+    { name: 'Главный пояс',          note: '99% метеоритов Земли',    to: 'Церера', z: 4 },
+    { name: 'Околоземные (ОЗА)',     note: 'пересекают орбиту Земли', to: 'Эрос',   z: 4 },
+    { name: 'Троянцы Юпитера',       note: 'попутчики Юпитера',       to: 'Гектор', z: 4 },
+    { name: 'Кометы',                note: 'метеорные потоки',        to: 'Галлея', z: 3.5 },
+    { name: 'Пояс Койпера',          note: 'родина короткопериодических комет', cam: [0, 0, 0.38] },
+    { name: 'Облако Оорта',          note: 'родина долгопериодических комет',   cam: [0, 0, 0.3] },
+    { name: 'Марсианские метеориты', note: '≈300 найдено на Земле',   to: 'Mars',   z: 5, met: true },
+    { name: 'Лунные метеориты',      note: '≈500 найдено на Земле',   to: 'Луна',   z: 8, met: true }
+];
+
+/** Цель текущего кадра для строки блока: представитель, Марс или Луна. */
+function smallRowTarget(row) {
+    const tg = state.hoverTargets || [];
+    if (row.to === 'Mars') return tg.find(t => t.kind === 'planet' && t.p.name === 'Mars') || null;
+    if (row.to === 'Луна') {
+        const earth = tg.find(t => t.kind === 'planet' && t.p.name === 'Earth');
+        const mh = earth && earth.moons.find(x => x.m.n.indexOf('Луна') === 0);
+        return mh ? { kind: 'moon', name: mh.m.n, x: mh.mx, y: mh.my, p: earth.p, m: mh.m } : null;
+    }
+    return tg.find(t => t.small && t.name.indexOf(row.to) === 0) || null;
+}
+
+/** Клик по строке блока: полёт камеры и выбор (Койпер/Оорт — только полёт). */
+function onSmallRowClick(row) {
+    if (row.cam) {   // выбора нет — просто показываем кольцо издалека
+        flyToCamera(row.cam[0], row.cam[1], row.cam[2], 1.0);
+        return;
+    }
+    const t = smallRowTarget(row);
+    if (!t) return;
+    flyToCamera(t.x, t.y, row.z, 0.8);
+    if (t.small) {
+        selectBody({ kind: t.kind, name: t.name,
+            orbit: t.small.poly ? { poly: t.small.poly } : t.small.orbit,
+            p: null, m: null, small: t.small });
+    } else if (t.kind === 'moon') {
+        selectBody({ kind: 'moon', p: t.p, m: t.m });
+    } else {
+        selectBody({ kind: 'planet', p: t.p });
+    }
+}
+
+/** Собрать строки блока «03 Малые тела» (клики — полёт камеры + выбор). */
+function buildSmallBodiesBlock() {
+    const list = document.getElementById('smallList');
+    if (!list) return;
+    SMALL_ROWS.forEach(row => {
+        const el = document.createElement('div');
+        el.className = 'sb-row' + (row.met ? ' met' : '');
+        el.title = row.note;
+        el.innerHTML = '<span class="sb-name">' + row.name + '</span>' +
+                       '<span class="sb-note">' + row.note + '</span>';
+        el.addEventListener('click', () => onSmallRowClick(row));
+        list.appendChild(el);
+    });
+}
+
+/**
+ * Плавно переместить камеру к точке карты (длительность — секунды реального
+ * времени). Полёт продвигает updateFlyTo() из кадрового цикла; жест
+ * пользователя (колесо, панорамирование, тач, клик) полёт отменяет (input.js).
+ */
+export function flyToCamera(x, y, zoom, dur = 0.8) {
+    state.fly = {
+        t0: performance.now() / 1000,
+        dur,
+        from: { x: state.camX, y: state.camY, z: state.zoom },
+        to: { x, y, z: clamp(zoom, MIN_ZOOM, MAX_ZOOM) }
+    };
+}
+
+/** Продвинуть полёт камеры (каждый кадр из main.js до отрисовки мира). */
+export function updateFlyTo() {
+    const f = state.fly;
+    if (!f) return;
+    const p = Math.min(1, (performance.now() / 1000 - f.t0) / f.dur);
+    const e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;  // easeInOutCubic
+    state.camX = f.from.x + (f.to.x - f.from.x) * e;
+    state.camY = f.from.y + (f.to.y - f.from.y) * e;
+    state.zoom = f.from.z * Math.pow(f.to.z / f.from.z, e);   // зум — геометрически
+    if (p >= 1) state.fly = null;
 }
 
 /**
@@ -153,6 +248,7 @@ function renderObjectInfo() {
             row('Радиус орбиты', orbitR + ' <em>ед.</em>') +
             row('Известных лун', moonTotals[p.name]) +
             row('На карте (крупные)', mapMoons.length) +
+            (p.name === 'Mars' ? row('Марсианские метеориты', '≈300 <em>на Земле</em>', 'met') : '') +
             basesSectionHTML('planet', p.name, null);
     } else if (sel.kind === 'asteroid') {
         html = asteroidInfoHTML(sel.small);
@@ -176,6 +272,7 @@ function renderObjectInfo() {
             row('Планета', (RU[p.name] || p.name) + ' / ' + p.name) +
             (m.period ? row('Период обращения', fmtPeriod(m.period)) : '') +
             row('Радиус орбиты', Math.round(md * 10) / 10 + ' <em>ед.</em>') +
+            (p.name === 'Earth' && m.n.indexOf('Луна') === 0 ? row('Лунные метеориты', '≈500 <em>на Земле</em>', 'met') : '') +
             basesSectionHTML('moon', p.name, m.n);
     }
     box.innerHTML = html;
@@ -358,8 +455,8 @@ function newBaseInfoHTML(b) {
         moveBaseButtonHTML(b);
 }
 
-function row(k, v) {
-    return '<div class="obj-row"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
+function row(k, v, cls) {
+    return '<div class="obj-row' + (cls ? ' ' + cls : '') + '"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
 }
 
 /* ---------- База: купленные корабли из data/store.js ---------- */

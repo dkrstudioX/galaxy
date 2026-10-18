@@ -246,3 +246,27 @@ canvas { display: block; width: 100vw; height: 100vh; }
     border-color: rgba(255, 205, 120, .55); background: rgba(255, 205, 120, .10);
     color: #ffd79a;
 }
+
+/* ===== Малые тела: блок «03», строки-группы и метеоритные строки карточек ===== */
+.sb-list { display: flex; flex-direction: column; }
+.sb-row {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    padding: 7px 2px; cursor: pointer;
+    border-bottom: 1px solid rgba(120, 160, 170, .10);
+    transition: background .12s ease;
+}
+.sb-row:last-child { border-bottom: 0; }
+.sb-row:hover { background: rgba(122, 236, 224, .06); }
+.sb-row .sb-name { font: 600 11px "Manrope", sans-serif; color: #dce8e8; }
+.sb-row .sb-note { color: #637a7a; font: 9px "IBM Plex Mono", monospace; text-align: right; }
+.sb-row:hover .sb-name { color: #eafcfa; }
+.sb-row.met .sb-name { color: #ffd79a; }
+.sb-row.met .sb-note { color: #b9946a; }
+.sb-fact {
+    margin-top: 9px; padding: 9px 2px 2px;
+    border-top: 1px dashed rgba(150, 190, 255, .14);
+    color: #7d9a9a; font: 9px "IBM Plex Mono", monospace; line-height: 1.5;
+}
+/* метеоритные строки в карточках Марса и Луны — отдельный тип (акцент) */
+.obj-row.met .k { color: #b9946a; }
+.obj-row.met .v { color: #ffd79a; }
