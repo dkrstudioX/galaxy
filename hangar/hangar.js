@@ -60,7 +60,8 @@
         categoryPath: cat ? Store.categoryPath(cat.id) : '—',
         icon: o.icon || (cat ? iconForCategory(cat.name) : 'grid'),
         mass: Store.massOf(o),
-        price: Store.priceOf(o),
+        price: Store.priceBuy(o),
+        sale: Store.priceSale(o),
         props: props
       };
     });
@@ -277,7 +278,8 @@
       lines += '<span class="trade-preview-stats">' + p.name + ': ' + p.value + '</span>';
     });
     var price = item.price
-      ? '<span class="trade-preview-price">' + fmt(item.price) + ' ¤<small> / шт.</small></span>'
+      ? '<span class="trade-preview-price">' + fmt(item.price) + ' ¤<small> / шт.</small></span>' +
+        (item.sale ? '<span class="trade-preview-stats">продажа: ' + fmt(item.sale) + ' ¤</span>' : '')
       : '<span class="trade-preview-stats">Цена не задана</span>';
     return '<div class="trade-preview">' +
       '<span class="trade-preview-icon">' + iconMarkup(item.icon, 27) + '</span>' +

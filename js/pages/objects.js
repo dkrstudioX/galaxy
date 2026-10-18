@@ -163,7 +163,7 @@
     var list = items.slice();
     list.sort(function (a, b) {
       if (sortMode === 'name') return cmpText(a.name, b.name);
-      if (sortMode === 'price') return Store.priceOf(b) - Store.priceOf(a) || cmpText(a.name, b.name);
+      if (sortMode === 'price') return Store.priceBuy(b) - Store.priceBuy(a) || cmpText(a.name, b.name);
       if (sortMode === 'mass') return Store.massOf(b) - Store.massOf(a) || cmpText(a.name, b.name);
       /* По дочерней категории: сначала путь «Корабли / Линкоры», внутри — по имени. */
       return cmpText(Store.categoryPath(a.categoryId), Store.categoryPath(b.categoryId)) || cmpText(a.name, b.name);
@@ -237,9 +237,16 @@
             }
           },
           {
-            title: 'Цена',
+            title: 'Покупка',
             render: function (o) {
-              var p = Store.priceOf(o);
+              var p = Store.priceBuy(o);
+              return h('span', { class: (p ? '' : 'muted') + ' nowrap', text: p ? Store.fmtNum(p) + ' ¤' : '—' });
+            }
+          },
+          {
+            title: 'Продажа',
+            render: function (o) {
+              var p = Store.priceSale(o);
               return h('span', { class: (p ? '' : 'muted') + ' nowrap', text: p ? Store.fmtNum(p) + ' ¤' : '—' });
             }
           },
@@ -639,10 +646,15 @@
       options: categoryOptions('— выберите подкатегорию —'),
       value: presetId
     });
-    var priceInput = UI.input({
+    var priceBuyInput = UI.input({
       type: 'number', min: 0, step: 'any',
-      value: isEdit ? existing.price : '',
-      placeholder: 'Например: 1450'
+      value: isEdit ? existing.price_buy : '',
+      placeholder: 'Например: 900'
+    });
+    var priceSaleInput = UI.input({
+      type: 'number', min: 0, step: 'any',
+      value: isEdit ? existing.price_sale : '',
+      placeholder: 'Например: 650'
     });
 
     /* Иконка: у нового объекта сразу выбрана случайная, можно взять другую. */
@@ -736,7 +748,8 @@
       ),
       shipBlock,
       itemBlock,
-      UI.field('Цена, ¤', priceInput, 'Цена покупки в ангаре. Пусто — цена не задана.'),
+      UI.field('Цена покупки, ¤', priceBuyInput, 'Сколько объект стоит в магазине. Пусто — цена не задана.'),
+      UI.field('Цена продажи, ¤', priceSaleInput, 'Сколько дадут за объект при продаже. Пусто — как цена покупки.'),
       h('div', { class: 'field' },
         h('label', { class: 'field-label', text: 'Свойства категории' }),
         propsHost
@@ -772,7 +785,8 @@
           name: name,
           categoryId: catSelect.value,
           parentCategoryId: chosenCat ? (chosenCat.parentId || '') : '',
-          price: priceInput.value.trim(),
+          price_buy: priceBuyInput.value.trim(),
+          price_sale: priceSaleInput.value.trim(),
           icon: iconField.value(),
           values: collectInputs(inputs),
           slotId: isShip || anySlotRow.input.checked ? null : slotSelect.value,

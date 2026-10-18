@@ -107,7 +107,9 @@
         values: obj(o.values),
         /* Старое поле массы: перенесём в свойство при санитизации. */
         mass: str(o.mass).trim(),
-        price: str(o.price).trim(),
+        /* Цены: покупка и продажа. Старое одиночное price мигрирует в оба поля. */
+        price_buy: str(o.price_buy).trim() || str(o.price).trim(),
+        price_sale: str(o.price_sale).trim() || str(o.price).trim(),
         icon: str(o.icon),
         slotId: o.slotId ? str(o.slotId) : null,
         slots: makeSlots(o)
@@ -467,12 +469,22 @@
       for (var i = 0; i < pairs.length; i++) out[pairs[i][0].id] = pairs[i][1];
       return out;
     }
+    /* Цена покупки до 1000 ¤, продажа на 150–350 меньше. */
+    var priceStep = 0;
+    function prices(buy) {
+      var offsets = [150, 250, 350];
+      var b = Math.min(1000, Math.max(351, Math.round(Number(buy) || 0)));
+      var sale = Math.max(0, b - offsets[priceStep % offsets.length]);
+      priceStep++;
+      return { buy: String(b), sale: String(sale) };
+    }
     /* Предмет: масса — значение свойства «Масса», плюс свойства категории. */
-    function addItem(name, cat, mass, valuePairs, slot, price, icon) {
+    function addItem(name, cat, mass, valuePairs, slot, buy, icon) {
+      var p = prices(buy);
       var item = {
         id: uid(), name: name, categoryId: cat.id, parentCategoryId: cat.parentId || '',
         values: vals([[massProp, String(mass)]].concat(valuePairs || [])),
-        price: price || '', icon: icon || '',
+        price_buy: p.buy, price_sale: p.sale, icon: icon || '',
         slotId: slot ? slot.id : null, slots: []
       };
       d.objects.push(item);
@@ -540,24 +552,24 @@
     /* ---------- Ресурсы: двадцать добытых позиций ---------- */
 
     var ores = [
-      ['Железная руда', '12', '60'], ['Медная руда', '10', '75'], ['Титановая руда', '15', '120'],
-      ['Вольфрамовая руда', '18', '160'], ['Урановая руда', '22', '340'], ['Кобальтовая руда', '14', '190'],
-      ['Никелевая руда', '11', '95'], ['Хромовая руда', '13', '140'], ['Боксит', '9', '55'],
-      ['Кварцевая руда', '7', '45']
+      ['Железная руда', '12', '350'], ['Медная руда', '10', '360'], ['Титановая руда', '15', '380'],
+      ['Вольфрамовая руда', '18', '400'], ['Урановая руда', '22', '450'], ['Кобальтовая руда', '14', '420'],
+      ['Никелевая руда', '11', '370'], ['Хромовая руда', '13', '390'], ['Боксит', '9', '355'],
+      ['Кварцевая руда', '7', '351']
     ];
     var minerals = [
-      ['Иридий', '12', '480'], ['Платина', '16', '620'], ['Золото', '14', '700'], ['Серебро', '11', '310'],
-      ['Литий', '4', '220'], ['Магний', '6', '130'], ['Цинк', '8', '110'], ['Олово', '9', '90'],
-      ['Графит', '5', '70'], ['Кремний', '6', '85']
+      ['Иридий', '12', '520'], ['Платина', '16', '640'], ['Золото', '14', '700'], ['Серебро', '11', '480'],
+      ['Литий', '4', '420'], ['Магний', '6', '400'], ['Цинк', '8', '380'], ['Олово', '9', '370'],
+      ['Графит', '5', '360'], ['Кремний', '6', '355']
     ];
     ores.forEach(function (r) { addItem(r[0], catOres, r[1], [], null, r[2], 'crate'); });
     minerals.forEach(function (r) { addItem(r[0], catMinerals, r[1], [], null, r[2], 'gem'); });
 
     /* ---------- Топливо: баки на 1, 5 и 10 тонн; чем больше объём, тем дешевле тонна ---------- */
 
-    addItem('Топливный бак, 1 т', catFuelTanks, '1000', [], null, '1000', 'fuel');
-    addItem('Топливный бак, 5 т', catFuelTanks, '5000', [], null, '4500', 'fuel');
-    addItem('Топливный бак, 10 т', catFuelTanks, '10000', [], null, '8000', 'fuel');
+    addItem('Топливный бак, 1 т', catFuelTanks, '1000', [], null, '400', 'fuel');
+    addItem('Топливный бак, 5 т', catFuelTanks, '5000', [], null, '800', 'fuel');
+    addItem('Топливный бак, 10 т', catFuelTanks, '10000', [], null, '1000', 'fuel');
 
     /* ---------- Оружие и защита: по десять позиций ---------- */
 
@@ -565,125 +577,126 @@
     for (i = 1; i <= 10; i++) {
       addItem('Лазер M-' + i, catLasers, 4 + i,
         [[damage, String(20 + i * 15)], [power, String(80 + i * 42)]],
-        slotTurret, String(900 + i * 430), 'bolt');
+        slotTurret, String(300 + i * 70), 'bolt');
     }
     for (i = 1; i <= 10; i++) {
       addItem('Пулемёт P-' + i, catGuns, 6 + i * 2,
         [[damage, String(6 + i * 4)], [fireRate, String(2 + i * 2)]],
-        slotGun, String(600 + i * 280), 'weapon');
+        slotGun, String(310 + i * 45), 'weapon');
     }
     for (i = 1; i <= 10; i++) {
       addItem('Щит S-' + i, catShields, 25 + i * 8,
         [[defense, String(150 + i * 130)], [regen, String(4 + i * 3)]],
-        slotShield, String(1500 + i * 700), 'shield');
+        slotShield, String(300 + i * 65), 'shield');
     }
 
     /* ---------- Двигатели ---------- */
 
-    addItem('Двигатель E-1', catEngines, '80', [[thrust, '120'], [fuelUse, '2']], slotEngine, '2400', 'engine');
-    addItem('Двигатель E-2', catEngines, '120', [[thrust, '200'], [fuelUse, '3']], slotEngine, '4200', 'engine');
-    addItem('Двигатель E-3', catEngines, '190', [[thrust, '340'], [fuelUse, '5']], slotEngine, '7600', 'engine');
-    addItem('Двигатель E-4', catEngines, '280', [[thrust, '520'], [fuelUse, '8']], slotEngine, '12400', 'engine');
+    addItem('Двигатель E-1', catEngines, '80', [[thrust, '120'], [fuelUse, '2']], slotEngine, '550', 'engine');
+    addItem('Двигатель E-2', catEngines, '120', [[thrust, '200'], [fuelUse, '3']], slotEngine, '700', 'engine');
+    addItem('Двигатель E-3', catEngines, '190', [[thrust, '340'], [fuelUse, '5']], slotEngine, '850', 'engine');
+    addItem('Двигатель E-4', catEngines, '280', [[thrust, '520'], [fuelUse, '8']], slotEngine, '1000', 'engine');
 
     /* ---------- Добыча и переработка ---------- */
 
     for (i = 1; i <= 5; i++) {
       addItem('Бур D-' + i, catMining, 120 + i * 50, [[mineSpeed, String(4 + i * 4)]],
-        slotMining, String(2600 + i * 1800), 'tool');
+        slotMining, String(400 + i * 100), 'tool');
     }
     for (i = 1; i <= 5; i++) {
       addItem('Переработчик R-' + i, catRefining, 200 + i * 70, [[refineSpeed, String(1 + i * 2)]],
-        slotRefinery, String(3800 + i * 2400), 'tool');
+        slotRefinery, String(450 + i * 100), 'tool');
     }
 
     /* ---------- Радары и сканеры ---------- */
 
     for (i = 1; i <= 4; i++) {
       addItem('Радар R-' + i, catSensors, 20 + i * 6, [[scanRange, String(20 + i * 15)]],
-        slotRadar, String(1200 + i * 600), 'radar');
+        slotRadar, String(300 + i * 90), 'radar');
     }
     for (i = 1; i <= 4; i++) {
       addItem('Сканер C-' + i, catSensors, 12 + i * 5, [[scanRange, String(8 + i * 4)]],
-        slotRadar, String(900 + i * 500), 'radar');
+        slotRadar, String(290 + i * 80), 'radar');
     }
 
     /* ---------- Грузовые отсеки: продаются как модули ---------- */
 
-    addItem('Грузовой отсек 500 кг', catHolds, '60', [[holdCapacity, '500']], null, '1200', 'crate');
-    addItem('Грузовой отсек 2 т', catHolds, '140', [[holdCapacity, '2000']], null, '3400', 'crate');
-    addItem('Грузовой отсек 5 т', catHolds, '260', [[holdCapacity, '5000']], null, '6800', 'crate');
-    addItem('Грузовой отсек 10 т', catHolds, '450', [[holdCapacity, '10000']], null, '11000', 'crate');
+    addItem('Грузовой отсек 500 кг', catHolds, '60', [[holdCapacity, '500']], null, '350', 'crate');
+    addItem('Грузовой отсек 2 т', catHolds, '140', [[holdCapacity, '2000']], null, '500', 'crate');
+    addItem('Грузовой отсек 5 т', catHolds, '260', [[holdCapacity, '5000']], null, '700', 'crate');
+    addItem('Грузовой отсек 10 т', catHolds, '450', [[holdCapacity, '10000']], null, '900', 'crate');
 
     /* ---------- Расходники ---------- */
 
-    addItem('Ремкомплект', catConsumables, '2', [], null, '180', 'tool');
-    addItem('Набор запчастей', catConsumables, '6', [], null, '420', 'tool');
-    addItem('Аптечка', catConsumables, '3', [], null, '260', 'tool');
+    addItem('Ремкомплект', catConsumables, '2', [], null, '350', 'tool');
+    addItem('Набор запчастей', catConsumables, '6', [], null, '380', 'tool');
+    addItem('Аптечка', catConsumables, '3', [], null, '420', 'tool');
 
     /* ---------- Корабли: шесть классов по три ---------- */
 
     var shipSpecs = [
       /* Линкоры: тяжёлые, медленные, дорогие */
-      { name: 'Гром', cat: catLiners, hp: '5200', sp: '11', mass: '18000', price: '184000',
+      { name: 'Гром', cat: catLiners, hp: '5200', sp: '11', mass: '18000', price: '1000',
         slots: [[slotTurret], [slotTurret], [slotTurret], [slotTurret], [slotGun],
           [slotShield], [slotShield], [slotEngine], [slotRadar],
           [slotHold5, [['Железная руда', 100], ['Медная руда', 50]]]] },
-      { name: 'Молот', cat: catLiners, hp: '6100', sp: '9', mass: '22000', price: '214000',
+      { name: 'Молот', cat: catLiners, hp: '6100', sp: '9', mass: '22000', price: '950',
         slots: [[slotTurret], [slotTurret], [slotTurret], [slotTurret], [slotTurret], [slotGun],
           [slotShield], [slotShield], [slotShield], [slotEngine], [slotRadar], [slotHold5]] },
-      { name: 'Цитадель', cat: catLiners, hp: '4800', sp: '12', mass: '16000', price: '158000',
+      { name: 'Цитадель', cat: catLiners, hp: '4800', sp: '12', mass: '16000', price: '900',
         slots: [[slotTurret], [slotTurret], [slotTurret], [slotGun], [slotGun],
           [slotShield], [slotShield], [slotEngine], [slotRadar], [slotHold5]] },
 
       /* Фрегаты: универсалы */
-      { name: 'Сокол', cat: catFrigates, hp: '2100', sp: '22', mass: '4200', price: '64000',
+      { name: 'Сокол', cat: catFrigates, hp: '2100', sp: '22', mass: '4200', price: '700',
         slots: [[slotTurret], [slotTurret], [slotGun], [slotShield], [slotEngine], [slotRadar], [slotHold1]] },
-      { name: 'Клинок', cat: catFrigates, hp: '1900', sp: '25', mass: '3600', price: '58000',
+      { name: 'Клинок', cat: catFrigates, hp: '1900', sp: '25', mass: '3600', price: '650',
         slots: [[slotTurret], [slotTurret], [slotGun], [slotShield], [slotEngine], [slotRadar], [slotHold1]] },
-      { name: 'Страж', cat: catFrigates, hp: '2400', sp: '19', mass: '5100', price: '71000',
+      { name: 'Страж', cat: catFrigates, hp: '2400', sp: '19', mass: '5100', price: '750',
         slots: [[slotTurret], [slotTurret], [slotGun], [slotGun], [slotShield], [slotEngine], [slotRadar], [slotHold1]] },
 
       /* Корветы: быстрые и маневренные */
-      { name: 'Оса', cat: catCorvettes, hp: '1200', sp: '30', mass: '1800', price: '32000',
+      { name: 'Оса', cat: catCorvettes, hp: '1200', sp: '30', mass: '1800', price: '500',
         slots: [[slotTurret], [slotTurret], [slotGun], [slotGun], [slotShield], [slotEngine], [slotHold1]] },
-      { name: 'Шершень', cat: catCorvettes, hp: '980', sp: '34', mass: '1400', price: '28000',
+      { name: 'Шершень', cat: catCorvettes, hp: '980', sp: '34', mass: '1400', price: '450',
         slots: [[slotTurret], [slotGun], [slotGun], [slotGun], [slotShield], [slotEngine], [slotHold1]] },
-      { name: 'Вихрь', cat: catCorvettes, hp: '1100', sp: '32', mass: '1600', price: '30000',
+      { name: 'Вихрь', cat: catCorvettes, hp: '1100', sp: '32', mass: '1600', price: '480',
         slots: [[slotTurret], [slotTurret], [slotGun], [slotGun], [slotShield], [slotEngine], [slotHold1]] },
 
       /* Перехватчики: максимум скорости */
-      { name: 'Стриж', cat: catInterceptors, hp: '620', sp: '52', mass: '420', price: '21000',
+      { name: 'Стриж', cat: catInterceptors, hp: '620', sp: '52', mass: '420', price: '350',
         slots: [[slotTurret], [slotTurret], [slotGun], [slotEngine], [slotRadar]] },
-      { name: 'Комета', cat: catInterceptors, hp: '540', sp: '58', mass: '360', price: '19000',
+      { name: 'Комета', cat: catInterceptors, hp: '540', sp: '58', mass: '360', price: '360',
         slots: [[slotTurret], [slotGun], [slotGun], [slotEngine], [slotRadar]] },
-      { name: 'Игла', cat: catInterceptors, hp: '480', sp: '62', mass: '300', price: '17000',
+      { name: 'Игла', cat: catInterceptors, hp: '480', sp: '62', mass: '300', price: '380',
         slots: [[slotGun], [slotGun], [slotEngine], [slotRadar]] },
 
       /* Шаттлы: лёгкие грузовики */
-      { name: 'Челнок', cat: catShuttles, hp: '380', sp: '28', mass: '240', price: '9800',
+      { name: 'Челнок', cat: catShuttles, hp: '380', sp: '28', mass: '240', price: '350',
         slots: [[slotGun], [slotEngine], [slotHold1]] },
-      { name: 'Курьер', cat: catShuttles, hp: '420', sp: '34', mass: '300', price: '12400',
+      { name: 'Курьер', cat: catShuttles, hp: '420', sp: '34', mass: '300', price: '380',
         slots: [[slotGun], [slotEngine], [slotHold1]] },
-      { name: 'Паром', cat: catShuttles, hp: '520', sp: '20', mass: '600', price: '15600',
+      { name: 'Паром', cat: catShuttles, hp: '520', sp: '20', mass: '600', price: '360',
         slots: [[slotGun], [slotShield], [slotEngine], [slotHold1]] },
 
       /* Грузовозы: промышленники с добычей и переработкой */
-      { name: 'Баржа', cat: catFreighters, hp: '2600', sp: '8', mass: '12000', price: '96000',
+      { name: 'Баржа', cat: catFreighters, hp: '2600', sp: '8', mass: '12000', price: '1000',
         slots: [[slotGun], [slotShield], [slotEngine], [slotEngine],
           [slotHold10, [['Титановая руда', 200], ['Вольфрамовая руда', 100]]],
           [slotHold5, [['Железная руда', 100]]]] },
-      { name: 'Мамонт', cat: catFreighters, hp: '3400', sp: '6', mass: '16000', price: '138000',
+      { name: 'Мамонт', cat: catFreighters, hp: '3400', sp: '6', mass: '16000', price: '950',
         slots: [[slotGun], [slotGun], [slotShield], [slotEngine], [slotEngine],
           [slotHold10, [['Кварцевая руда', 300]]], [slotHold10]] },
-      { name: 'Тягач', cat: catFreighters, hp: '2200', sp: '10', mass: '9000', price: '74000',
+      { name: 'Тягач', cat: catFreighters, hp: '2200', sp: '10', mass: '9000', price: '850',
         slots: [[slotGun], [slotShield], [slotEngine], [slotMining], [slotRefinery], [slotHold5]] }
     ];
 
     shipSpecs.forEach(function (spec) {
+      var p = prices(spec.price);
       d.objects.push({
         id: uid(), name: spec.name, categoryId: spec.cat.id, parentCategoryId: spec.cat.parentId || '',
         values: vals([[durability, spec.hp], [speed, spec.sp], [massProp, spec.mass]]),
-        price: spec.price, icon: 'ship', slotId: null,
+        price_buy: p.buy, price_sale: p.sale, icon: 'ship', slotId: null,
         slots: spec.slots.map(function (e) {
           return {
             slotId: e[0].id,
@@ -731,7 +744,8 @@
         categoryId: data.categoryId,
         parentCategoryId: cat ? str(cat.parentId) : '',
         values: data.values || {},
-        price: data.price || '',
+        price_buy: data.price_buy || '',
+        price_sale: data.price_sale || '',
         icon: data.icon || '',
         slotId: isShip ? null : (data.slotId || null),
         slots: isShip ? (data.slots || []).map(function (e) {
@@ -784,9 +798,16 @@
       return found;
     },
     /* Цена объекта: пусто или не число — 0. */
-    priceOf: function (item) {
+    priceBuy: function (item) {
       if (!item) return 0;
-      var n = parseFloat(str(item.price).replace(',', '.'));
+      var n = parseFloat(str(item.price_buy).replace(',', '.'));
+      return isFinite(n) && n > 0 ? n : 0;
+    },
+    /* Цена продажи: если не задана, считаем равной цене покупки. */
+    priceSale: function (item) {
+      if (!item) return 0;
+      var raw = str(item.price_sale).trim() || str(item.price_buy);
+      var n = parseFloat(raw.replace(',', '.'));
       return isFinite(n) && n > 0 ? n : 0;
     },
     /* Суммарная масса содержимого слота: масса объекта × количество. */
