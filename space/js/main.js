@@ -2,17 +2,19 @@
 // main.js — точка входа. Подготавливает канвас, ввод и панель, запускает
 // главный цикл requestAnimationFrame, который каждый кадр:
 //   1) двигает симуляционное время,
-//   2) рисует мир (render.js),
-//   3) рисует hover-подсказки поверх (hover.js),
-//   4) обновляет HUD (ui.js).
+//   2) завершает удаления баз с вышедшим таймером и тикает карточку,
+//   3) рисует мир (render.js),
+//   4) рисует hover-подсказки поверх (hover.js),
+//   5) обновляет HUD (ui.js).
 // =============================================================================
 
 import { state, resize } from './state.js';
 import { MS_PER_DAY } from './config.js';
 import { initInput } from './input.js';
+import { updateBaseRemovals } from './bases.js';
 import { renderScene } from './render.js';
 import { drawHover } from './hover.js';
-import { getHudElements, getSpeedButtons, updateHud, buildSidePanel, updateFlyTo } from './ui.js';
+import { getHudElements, getSpeedButtons, updateHud, buildSidePanel, updateFlyTo, updateBaseTimerCard } from './ui.js';
 import { drawSelection } from './hover.js';
 
 // --- Инициализация --------------------------------------------------------------
@@ -41,6 +43,8 @@ function frame() {
     state.time += dt * state.timeScale;
 
     updateFlyTo();   // полёт камеры к строке блока «Малые тела» — до отрисовки мира
+    updateBaseRemovals();    // удаления баз: завершить те, у кого вышел таймер
+    updateBaseTimerCard();   // и обновить открытую карточку с таймером (раз в секунду)
 
     // фон: очищаем весь канвас в экранных координатах
     ctx.fillStyle = '#020205';

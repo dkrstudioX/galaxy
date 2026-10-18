@@ -5,7 +5,7 @@
 import re, pathlib
 
 ROOT = pathlib.Path(__file__).parent
-ORDER = ['config', 'math', 'data', 'state', 'scene', 'smallbodies', 'bases_name', 'bases', 'sky', 'render', 'hover', 'input', 'ui', 'main']
+ORDER = ['config', 'math', 'data', 'state', 'scene', 'smallbodies', 'bases_name', 'bases_removed', 'bases', 'sky', 'render', 'hover', 'input', 'ui', 'main']
 
 out = ['// СГЕНЕРИРОВАНО build.py — не редактировать вручную, править js/*.js и пересобрать.',
        '// Без модулей, чтобы страница открывалась как file:// без сервера.', '']

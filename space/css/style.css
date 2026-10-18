@@ -241,10 +241,14 @@ canvas { display: block; width: 100vw; height: 100vh; }
     font: 600 10px "Manrope", sans-serif; letter-spacing: .1em; text-transform: uppercase;
     cursor: pointer; transition: background .12s ease, border-color .12s ease;
 }
-.base-create:hover { background: rgba(0, 255, 255, .16); }
+.base-create:not(:disabled):hover { background: rgba(0, 255, 255, .16); }
 .base-create.active {
     border-color: rgba(255, 205, 120, .55); background: rgba(255, 205, 120, .10);
     color: #ffd79a;
+}
+.base-create:disabled {
+    border-color: rgba(120, 160, 170, .25); background: rgba(120, 160, 170, .06);
+    color: #7d9a9a; opacity: .55; cursor: default;
 }
 
 /* ===== Малые тела: блок «03», строки-группы и метеоритные строки карточек ===== */

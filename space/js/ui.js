@@ -13,7 +13,7 @@ import { state } from './state.js';
 import { formatSimDate, clamp } from './math.js';
 import { SUN_R, COLORS, MIN_ZOOM, MAX_ZOOM } from './config.js';
 import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, moonOrbitRadius, moonPeriod, baseOrbitRadius } from './data.js';
-import { bases, basesAt, baseRadiusRange, deleteBase } from './bases.js';
+import { bases, basesAt, baseRadiusRange, startBaseRemoval, removalSecondsLeft } from './bases.js';
 
 // Русские названия и подписи классов для блока «ОБЪЕКТ».
 const RU = {
@@ -352,9 +352,12 @@ function asteroidInfoHTML(b) {
 function basesSectionHTML(kind, planet, moon) {
     const rows = [];
     if (kind === 'moon' && planet === 'Earth' && moon === 'Луна / Moon') {
-        rows.push(baseRowHTML('', 'LUNA-ORBIT', baseOrbitRadius)); // стартовая база
+        rows.push(baseRowHTML('', 'LUNA-ORBIT', 'орбита ' + Math.round(baseOrbitRadius) + ' ед.')); // стартовая база
     }
-    basesAt(kind, planet, moon).forEach(b => rows.push(baseRowHTML(b.id, b.name, b.orbitRadius)));
+    basesAt(kind, planet, moon).forEach(b => rows.push(baseRowHTML(b.id, b.name,
+        b.status === 'removing'
+            ? 'демонтаж ' + removalSecondsLeft(b) + ' с'
+            : 'орбита ' + Math.round(b.orbitRadius) + ' ед.')));
 
     const active = state.baseMode && state.baseMode.kind === kind &&
         state.baseMode.planet === planet && (state.baseMode.moon || null) === (moon || null);
@@ -369,25 +372,41 @@ function basesSectionHTML(kind, planet, moon) {
             (active ? 'Отмена — выберите орбиту' : 'Создать базу') + '</button>';
 }
 
-/** Строка базы в списке: имя и радиус орбиты (id пустой — стартовая LUNA-ORBIT). */
-function baseRowHTML(id, name, radius) {
+/** Строка базы в списке: имя и хвостик-подпись (id пустой — стартовая LUNA-ORBIT). */
+function baseRowHTML(id, name, tail) {
     return '<div class="base-row" data-base="' + id + '"><span class="b-dot"></span>' +
         '<span class="b-name">' + name + '</span>' +
-        '<small>орбита ' + Math.round(radius) + ' ед.</small></div>';
+        '<small>' + tail + '</small></div>';
 }
 
 /** Кнопка «Переместить базу» у созданной базы — в том же месте, что «Создать базу». */
 function moveBaseButtonHTML(b) {
     const active = state.baseMode && state.baseMode.moveId === b.id;
+    const off = b.status !== 'active' ? ' disabled' : '';   // удаляемую не переносим
     return '<button class="base-create' + (active ? ' active' : '') + '" id="baseMoveBtn"' +
-        ' data-move-id="' + b.id + '">' +
+        ' data-move-id="' + b.id + '"' + off + '>' +
         (active ? 'Отмена — выберите орбиту' : 'Переместить базу') + '</button>';
 }
 
 /** Кнопка «Удалить базу» — рядом с переносом, там же под описанием базы. */
 function deleteBaseButtonHTML(b) {
+    const off = b.status !== 'active' ? ' disabled' : '';   // повторно не удаляем
     return '<button class="base-create" id="baseDeleteBtn"' +
-        ' data-delete-id="' + b.id + '">Удалить базу</button>';
+        ' data-delete-id="' + b.id + '"' + off + '>Удалить базу</button>';
+}
+
+/** Выбрать хозяина базы (планету или луну) — карточка с её списком баз. */
+function selectBaseHost(rec) {
+    const p = planets.find(q => q.name === rec.planet);
+    if (!p) { selectBody(null); return; }
+    if (rec.hostKind === 'moon') {
+        // Луна Земли рисуется отдельным блоком (render.js) — как и там
+        const m = (moonsByPlanet[rec.planet] || []).find(x => x.n === rec.moon) ||
+            { n: rec.moon, r: 3, period: moonPeriod };
+        selectBody({ kind: 'moon', name: rec.moon, p, m });
+    } else {
+        selectBody({ kind: 'planet', name: p.name, p, m: null });
+    }
 }
 
 /**
@@ -434,7 +453,7 @@ function wireObjectCard(box) {
             state.baseMode = null;
         } else {
             const rec = bases.find(b => b.id === mvBtn.dataset.moveId);
-            if (!rec) return;
+            if (!rec || rec.status !== 'active') return;   // удаляемую не переносим
             state.baseMode = { kind: rec.hostKind, planet: rec.planet, moon: rec.moon || null, moveId: rec.id };
             // Стартуем с текущего радиуса базы, но в коридоре хоста.
             const rg = baseRadiusRange(state.baseMode);
@@ -449,18 +468,8 @@ function wireObjectCard(box) {
         if (!rec) return;
         // Если эта база как раз переносилась — сначала выходим из режима.
         if (state.baseMode && state.baseMode.moveId === rec.id) state.baseMode = null;
-        if (!deleteBase(rec)) return;
-        // Показываем карточку хозяина — её список баз уже без удалённой.
-        const p = planets.find(q => q.name === rec.planet);
-        if (!p) { selectBody(null); return; }
-        if (rec.hostKind === 'moon') {
-            // Луна Земли рисуется отдельным блоком (render.js) — как и там
-            const m = (moonsByPlanet[rec.planet] || []).find(x => x.n === rec.moon) ||
-                { n: rec.moon, r: 3, period: moonPeriod };
-            selectBody({ kind: 'moon', name: rec.moon, p, m });
-        } else {
-            selectBody({ kind: 'planet', name: p.name, p, m: null });
-        }
+        if (!startBaseRemoval(rec)) return;
+        renderObjectInfo();   // карточка покажет статус и таймер до конца разбора
     });
 }
 
@@ -469,11 +478,40 @@ export function refreshObjectCard() {
     renderObjectInfo();
 }
 
+/* ---------- Удаление баз: секундный тик карточки ---------- */
+
+let cardTickSec = -1;            // секунда последней перерисовки карточки
+let cardTickHadRemoving = false; // была ли удаляемая база на прошлом тике
+
+/**
+ * Кадр (main.js): пока идёт удаление, раз в секунду обновлять открытую
+ * карточку — в ней тикает таймер. Когда выбранная база доудалилась,
+ * карточка сама переключается на её хозяина (планету или луну).
+ */
+export function updateBaseTimerCard() {
+    const sel = state.selected;
+    if (sel && sel.local && sel.local.status === 'removed') {
+        selectBaseHost(sel.local);
+        return;
+    }
+    const removing = bases.some(b => b.status === 'removing');
+    const relevant = sel && (sel.kind === 'base' || sel.kind === 'planet' || sel.kind === 'moon');
+    if (!relevant) { cardTickHadRemoving = removing; return; }
+    const wasRemoving = cardTickHadRemoving;
+    cardTickHadRemoving = removing;
+    if (!removing && !wasRemoving) return;      // ничего не удаляется — карточку не трогаем
+    const s = Math.floor(Date.now() / 1000);
+    if (removing && s === cardTickSec) return;  // идёт разбор: не чаще раза в секунду
+    cardTickSec = s;
+    renderObjectInfo();
+}
+
 /** Блок «Объект» для звездной базы, созданной игроком на карте. */
 function newBaseInfoHTML(b) {
     const host = b.hostKind === 'moon'
         ? 'луна ' + b.moon
         : 'планета ' + (RU[b.planet] || b.planet);
+    const removing = b.status === 'removing';   // идёт разбор: статус и таймер, кнопки выключены
     return '<div class="obj-title"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
             '<strong>База ' + b.name + '</strong></div>' +
         '<div class="obj-kind">Звёздная база · ' + host + '</div>' +
@@ -481,8 +519,13 @@ function newBaseInfoHTML(b) {
             row('Радиус орбиты', b.orbitRadius + ' <em>ед.</em>') +
             row('Период обращения', fmtPeriod(b.period)) +
             row('Создана', (b.created || '').slice(0, 10)) +
+            (removing
+                ? row('Статус', 'удаляется') + row('Осталось', removalSecondsLeft(b) + ' <em>с</em>')
+                : '') +
         '</div>' +
-        '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>' +
+        '<div class="obj-note">' + (removing
+            ? 'База разбирается — перенос и повторное удаление недоступны'
+            : 'Новая база на орбите — корабли и постройки появятся позже') + '</div>' +
         moveBaseButtonHTML(b) +
         deleteBaseButtonHTML(b);
 }

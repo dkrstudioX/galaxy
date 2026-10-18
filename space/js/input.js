@@ -255,7 +255,7 @@ function confirmBase(x, y) {
     state.baseMode = null;
     if (mode.moveId) {             // перенос: та же запись на новой орбите
         const rec = bases.find(b => b.id === mode.moveId);
-        if (!rec) { refreshObjectCard(); return; }
+        if (!rec || rec.status !== 'active') { refreshObjectCard(); return; }   // удаляемую не трогаем
         moveBase(rec, mode, state.baseRadius, mode.ang);   // и со стороны курсора
         const p = planets.find(q => q.name === rec.planet);
         selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });

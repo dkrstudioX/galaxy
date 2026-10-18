@@ -933,6 +933,58 @@ const BASE_NAMES = [
     'Тихий причал'
 ];
 
+// ===== bases_removed.js =====
+// =============================================================================
+// bases_removed.js — архив удалённых баз игрока.
+//
+// Когда удаление базы (bases.js, статус 'removing') доходит до конца, её
+// запись целиком переезжает сюда: копия с отметкой «status: 'removed'» и
+// датой removedAt. В хранилище баз (galaxy_space_bases_v1) остаётся
+// запись-надгробие с тем же статусом — «где была информация о базе, отметка,
+// что она удалена»; на карте такие базы не рисуются, в списках не
+// показываются.
+//
+// Архив — свой ключ localStorage («galaxy_space_bases_removed_v1»); данные
+// админки/ангара не задействованы.
+// =============================================================================
+
+const REMOVED_KEY = 'galaxy_space_bases_removed_v1';
+
+/** Прочитать архив удалённых баз; битые данные не роняют карту. */
+function loadRemoved() {
+    try {
+        const raw = localStorage.getItem(REMOVED_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr.filter(b => b && b.id && b.planet) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+/** Записать архив удалённых баз (ключ отдельный от хранилища баз). */
+function saveRemoved() {
+    try {
+        localStorage.setItem(REMOVED_KEY, JSON.stringify(basesRemoved));
+    } catch (e) { /* нет доступа/переполнено — архив не сохранится */ }
+}
+
+/** Удалённые базы — полные копии записей на момент конца удаления. */
+const basesRemoved = loadRemoved();
+
+/**
+ * Перенести запись базы в архив: полная копия со статусом 'removed'.
+ * Зовёт bases.js, когда у базы вышел таймер удаления.
+ * @param {Object} rec запись базы
+ */
+function archiveBase(rec) {
+    basesRemoved.push({
+        ...rec,
+        status: 'removed',
+        removedAt: rec.removedAt || new Date().toISOString()
+    });
+    saveRemoved();
+}
+
 // ===== bases.js =====
 // =============================================================================
 // bases.js — звёздные базы игрока: хранилище, создание и отрисовка.
@@ -943,7 +995,12 @@ const BASE_NAMES = [
 // клик подтверждает (input.js). У созданной базы в карточке есть кнопка
 // «Переместить базу» — тот же режим; клик переносит запись на выбранную
 // орбиту (хост при этом выбирается по правилу ближайшего тела). Второй
-// кнопкой — «Удалить базу»: запись убирается из хранилища. При переносе
+// кнопкой — «Удалить базу»: база уходит в статус 'removing' на
+// BASE_REMOVAL_MS реального времени — ей нельзя пользоваться (перенос и
+// повторное удаление недоступны), а на карте и в карточке висит таймер
+// до конца разбора. Потом запись получает статус 'removed' (надгробие в
+// хранилище) и целиком переезжает в архив bases_removed.js — с орбиты база
+// исчезает. При переносе
 // база встаёт со стороны курсора: направление от центра хозяина к курсору
 // становится её положением на орбите и в превью, и в записи (phase0); новая
 // база тоже появляется с этой стороны, а не в случайной точке. Радиус орбиты
@@ -972,6 +1029,7 @@ const BASE_NAMES = [
 
 
 
+
 const STORAGE_KEY = 'galaxy_space_bases_v1';
 const NAMES_KEY = 'galaxy_space_base_names_v1';   // реестр имён новых баз
 
@@ -981,6 +1039,9 @@ const BASE_MAX_R = 300;
 
 // Запас между орбитой базы и поверхностью тел: хозяина и соседей (единицы мира).
 const BASE_CLEAR = 4;
+
+// Сколько реального времени база «разбирается» после нажатия «Удалить базу».
+const BASE_REMOVAL_MS = 30000;
 
 /** Период обращения базы на радиусе r: как у Луны, дальше — по Кеплеру. */
 function basePeriodAt(r) {
@@ -1025,6 +1086,7 @@ function loadBases() {
         const arr = raw ? JSON.parse(raw) : [];
         return Array.isArray(arr)
             ? arr.filter(b => b && b.id && b.planet && b.orbitRadius > 0)
+                 .map(b => ({ status: 'active', ...b }))   // старые записи — активные
             : [];
     } catch (e) {
         return [];
@@ -1048,7 +1110,8 @@ function hostKey(kind, planet, moon) {
 
 // --- Реестр имён баз (отдельный ключ localStorage) --------------------------
 // По индексу имени в BASE_NAMES: сколько раз оно выпадало (count — для
-// суффикса « - N») и какие базы им названы, с местом (kind/planet/moon).
+// суффикса « - N») и какие базы им названы, с местом (kind/planet/moon) и
+// статусом (active/removing/removed — запись остаётся и после удаления).
 
 /** Прочитать реестр имён; битые данные не роняют карту. */
 function loadNameRegistry() {
@@ -1087,9 +1150,10 @@ function syncNameRegistry() {
         if (b.nameCount > reg.count) { reg.count = b.nameCount; dirty = true; }
         const place = reg.bases.find(x => x.baseId === b.id);
         if (!place) {
-            reg.bases.push({ baseId: b.id, name: b.name, kind: b.hostKind, planet: b.planet, moon: b.moon || null });
+            reg.bases.push({ baseId: b.id, name: b.name, kind: b.hostKind, planet: b.planet, moon: b.moon || null, status: b.status });
             dirty = true;
-        } else if (place.kind !== b.hostKind || place.planet !== b.planet || (place.moon || null) !== (b.moon || null)) {
+        } else if (place.status !== b.status || place.kind !== b.hostKind || place.planet !== b.planet || (place.moon || null) !== (b.moon || null)) {
+            place.status = b.status;
             place.kind = b.hostKind;
             place.planet = b.planet;
             place.moon = b.moon || null;
@@ -1127,7 +1191,7 @@ function takeBaseName() {
 function registerBasePlace(rec) {
     const reg = nameRegistry.names[rec.nameId];
     if (!reg) return;
-    reg.bases.push({ baseId: rec.id, name: rec.name, kind: rec.hostKind, planet: rec.planet, moon: rec.moon || null });
+    reg.bases.push({ baseId: rec.id, name: rec.name, kind: rec.hostKind, planet: rec.planet, moon: rec.moon || null, status: rec.status });
 }
 
 /** Обновить в реестре место базы после переноса. */
@@ -1159,11 +1223,12 @@ function phaseFor(ang, period) {
     return ((ang - twoPi * state.simDays / period) % twoPi + twoPi) % twoPi;
 }
 
-/** Убрать из реестра запись о базе: она удалена (счётчик имени остаётся). */
-function removeBasePlace(rec) {
+/** Пометить место базы в реестре ('removing'/'removed') — запись остаётся. */
+function markBasePlaceStatus(rec, status) {
     Object.keys(nameRegistry.names).forEach(k => {
-        const reg = nameRegistry.names[k];
-        reg.bases = reg.bases.filter(x => x.baseId !== rec.id);
+        nameRegistry.names[k].bases.forEach(place => {
+            if (place.baseId === rec.id) place.status = status;
+        });
     });
 }
 
@@ -1189,6 +1254,7 @@ function createBase(host, r, ang) {
         name,
         nameId,
         nameCount,
+        status: 'active',
         hostKind: host.kind,
         planet: host.planet,
         moon: host.moon || null,
@@ -1217,6 +1283,7 @@ function createBase(host, r, ang) {
  *   сторона орбиты у базы сохраняется
  */
 function moveBase(rec, host, r, ang) {
+    if (rec.status !== 'active') return rec;   // удаляемую базу не трогаем
     rec.hostKind = host.kind;
     rec.planet = host.planet;
     rec.moon = host.moon || null;
@@ -1230,26 +1297,56 @@ function moveBase(rec, host, r, ang) {
     return rec;
 }
 
+/** Сколько секунд осталось до конца удаления базы (0 — уже пора). */
+function removalSecondsLeft(rec) {
+    return Math.max(0, Math.ceil((rec.removeEndsAt - Date.now()) / 1000));
+}
+
 /**
- * Удалить созданную базу: убрать запись и её место из реестра имён. Счётчик
- * использований имени не трогаем — номер у следующих баз не повторится.
- * Карточку/список обновляет вызывающий код (ui.js).
+ * Начать удаление базы: статус 'removing', таймер removeEndsAt (реальное
+ * время, BASE_REMOVAL_MS). Пока идёт разбор, базой нельзя пользоваться —
+ * перенос и повторное удаление недоступны, а на карте и в карточке висит
+ * таймер. Завершает удаление updateBaseRemovals() в кадре (main.js).
  * @param {Object} rec запись базы
- * @returns {boolean} нашлась ли запись
+ * @returns {boolean} запустилось ли удаление
  */
-function deleteBase(rec) {
-    const i = bases.indexOf(rec);
-    if (i < 0) return false;
-    bases.splice(i, 1);
-    removeBasePlace(rec);
+function startBaseRemoval(rec) {
+    if (rec.status !== 'active') return false;
+    rec.status = 'removing';
+    rec.removeEndsAt = Date.now() + BASE_REMOVAL_MS;
+    markBasePlaceStatus(rec, 'removing');
     saveBases();
     saveNameRegistry();
     return true;
 }
 
+/**
+ * Кадр: завершить удаление баз с вышедшим таймером. Запись получает статус
+ * 'removed' (надгробие в хранилище баз — отметка, что база удалена) и
+ * целиком переезжает в архив bases_removed.js; место в реестре имён тоже
+ * помечается 'removed' (счётчик использований имени остаётся).
+ */
+function updateBaseRemovals() {
+    let changed = false;
+    bases.forEach(b => {
+        if (b.status !== 'removing' || Date.now() < b.removeEndsAt) return;
+        b.status = 'removed';
+        b.removedAt = new Date().toISOString();
+        delete b.removeEndsAt;
+        archiveBase(b);   // информация о базе переезжает в bases_removed
+        markBasePlaceStatus(b, 'removed');
+        changed = true;
+    });
+    if (changed) {
+        saveBases();
+        saveNameRegistry();
+    }
+}
+
 /** Базы на данном хосте — для списка в карточке планеты/луны. */
 function basesAt(kind, planet, moon) {
-    return bases.filter(b => b.hostKind === kind && b.planet === planet && (b.moon || null) === (moon || null));
+    return bases.filter(b => b.status !== 'removed' &&
+        b.hostKind === kind && b.planet === planet && (b.moon || null) === (moon || null));
 }
 
 /**
@@ -1263,6 +1360,7 @@ function drawBases(ctx, hostPos) {
     const targets = [];
 
     bases.forEach(b => {
+        if (b.status === 'removed') return;   // надгробие — с орбиты уже убрана
         const mode = state.baseMode;
         // База в режиме переноса рисуется сразу по превью: хост режима и
         // текущий радиус выбора (до подтверждения запись не меняется).
@@ -1327,7 +1425,11 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR) {
 
     ctx.fillStyle = COLORS.base;
     ctx.font = `bold ${Math.max(9, 10 / zoom)}px monospace`;
-    ctx.fillText(b.name, b.x + bs + 3 / zoom, b.y - 3 / zoom);
+    // у удаляемой базы в подписи тикает таймер до конца разбора
+    const label = b.status === 'removing'
+        ? b.name + ' · демонтаж ' + removalSecondsLeft(b) + ' с'
+        : b.name;
+    ctx.fillText(label, b.x + bs + 3 / zoom, b.y - 3 / zoom);
 }
 
 /** Превью режима «выбрать орбиту»: окружность радиуса, лучик и подсказка. */
@@ -2376,7 +2478,7 @@ function confirmBase(x, y) {
     state.baseMode = null;
     if (mode.moveId) {             // перенос: та же запись на новой орбите
         const rec = bases.find(b => b.id === mode.moveId);
-        if (!rec) { refreshObjectCard(); return; }
+        if (!rec || rec.status !== 'active') { refreshObjectCard(); return; }   // удаляемую не трогаем
         moveBase(rec, mode, state.baseRadius, mode.ang);   // и со стороны курсора
         const p = planets.find(q => q.name === rec.planet);
         selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
@@ -2748,9 +2850,12 @@ function asteroidInfoHTML(b) {
 function basesSectionHTML(kind, planet, moon) {
     const rows = [];
     if (kind === 'moon' && planet === 'Earth' && moon === 'Луна / Moon') {
-        rows.push(baseRowHTML('', 'LUNA-ORBIT', baseOrbitRadius)); // стартовая база
+        rows.push(baseRowHTML('', 'LUNA-ORBIT', 'орбита ' + Math.round(baseOrbitRadius) + ' ед.')); // стартовая база
     }
-    basesAt(kind, planet, moon).forEach(b => rows.push(baseRowHTML(b.id, b.name, b.orbitRadius)));
+    basesAt(kind, planet, moon).forEach(b => rows.push(baseRowHTML(b.id, b.name,
+        b.status === 'removing'
+            ? 'демонтаж ' + removalSecondsLeft(b) + ' с'
+            : 'орбита ' + Math.round(b.orbitRadius) + ' ед.')));
 
     const active = state.baseMode && state.baseMode.kind === kind &&
         state.baseMode.planet === planet && (state.baseMode.moon || null) === (moon || null);
@@ -2765,25 +2870,41 @@ function basesSectionHTML(kind, planet, moon) {
             (active ? 'Отмена — выберите орбиту' : 'Создать базу') + '</button>';
 }
 
-/** Строка базы в списке: имя и радиус орбиты (id пустой — стартовая LUNA-ORBIT). */
-function baseRowHTML(id, name, radius) {
+/** Строка базы в списке: имя и хвостик-подпись (id пустой — стартовая LUNA-ORBIT). */
+function baseRowHTML(id, name, tail) {
     return '<div class="base-row" data-base="' + id + '"><span class="b-dot"></span>' +
         '<span class="b-name">' + name + '</span>' +
-        '<small>орбита ' + Math.round(radius) + ' ед.</small></div>';
+        '<small>' + tail + '</small></div>';
 }
 
 /** Кнопка «Переместить базу» у созданной базы — в том же месте, что «Создать базу». */
 function moveBaseButtonHTML(b) {
     const active = state.baseMode && state.baseMode.moveId === b.id;
+    const off = b.status !== 'active' ? ' disabled' : '';   // удаляемую не переносим
     return '<button class="base-create' + (active ? ' active' : '') + '" id="baseMoveBtn"' +
-        ' data-move-id="' + b.id + '">' +
+        ' data-move-id="' + b.id + '"' + off + '>' +
         (active ? 'Отмена — выберите орбиту' : 'Переместить базу') + '</button>';
 }
 
 /** Кнопка «Удалить базу» — рядом с переносом, там же под описанием базы. */
 function deleteBaseButtonHTML(b) {
+    const off = b.status !== 'active' ? ' disabled' : '';   // повторно не удаляем
     return '<button class="base-create" id="baseDeleteBtn"' +
-        ' data-delete-id="' + b.id + '">Удалить базу</button>';
+        ' data-delete-id="' + b.id + '"' + off + '>Удалить базу</button>';
+}
+
+/** Выбрать хозяина базы (планету или луну) — карточка с её списком баз. */
+function selectBaseHost(rec) {
+    const p = planets.find(q => q.name === rec.planet);
+    if (!p) { selectBody(null); return; }
+    if (rec.hostKind === 'moon') {
+        // Луна Земли рисуется отдельным блоком (render.js) — как и там
+        const m = (moonsByPlanet[rec.planet] || []).find(x => x.n === rec.moon) ||
+            { n: rec.moon, r: 3, period: moonPeriod };
+        selectBody({ kind: 'moon', name: rec.moon, p, m });
+    } else {
+        selectBody({ kind: 'planet', name: p.name, p, m: null });
+    }
 }
 
 /**
@@ -2830,7 +2951,7 @@ function wireObjectCard(box) {
             state.baseMode = null;
         } else {
             const rec = bases.find(b => b.id === mvBtn.dataset.moveId);
-            if (!rec) return;
+            if (!rec || rec.status !== 'active') return;   // удаляемую не переносим
             state.baseMode = { kind: rec.hostKind, planet: rec.planet, moon: rec.moon || null, moveId: rec.id };
             // Стартуем с текущего радиуса базы, но в коридоре хоста.
             const rg = baseRadiusRange(state.baseMode);
@@ -2845,18 +2966,8 @@ function wireObjectCard(box) {
         if (!rec) return;
         // Если эта база как раз переносилась — сначала выходим из режима.
         if (state.baseMode && state.baseMode.moveId === rec.id) state.baseMode = null;
-        if (!deleteBase(rec)) return;
-        // Показываем карточку хозяина — её список баз уже без удалённой.
-        const p = planets.find(q => q.name === rec.planet);
-        if (!p) { selectBody(null); return; }
-        if (rec.hostKind === 'moon') {
-            // Луна Земли рисуется отдельным блоком (render.js) — как и там
-            const m = (moonsByPlanet[rec.planet] || []).find(x => x.n === rec.moon) ||
-                { n: rec.moon, r: 3, period: moonPeriod };
-            selectBody({ kind: 'moon', name: rec.moon, p, m });
-        } else {
-            selectBody({ kind: 'planet', name: p.name, p, m: null });
-        }
+        if (!startBaseRemoval(rec)) return;
+        renderObjectInfo();   // карточка покажет статус и таймер до конца разбора
     });
 }
 
@@ -2865,11 +2976,40 @@ function refreshObjectCard() {
     renderObjectInfo();
 }
 
+/* ---------- Удаление баз: секундный тик карточки ---------- */
+
+let cardTickSec = -1;            // секунда последней перерисовки карточки
+let cardTickHadRemoving = false; // была ли удаляемая база на прошлом тике
+
+/**
+ * Кадр (main.js): пока идёт удаление, раз в секунду обновлять открытую
+ * карточку — в ней тикает таймер. Когда выбранная база доудалилась,
+ * карточка сама переключается на её хозяина (планету или луну).
+ */
+function updateBaseTimerCard() {
+    const sel = state.selected;
+    if (sel && sel.local && sel.local.status === 'removed') {
+        selectBaseHost(sel.local);
+        return;
+    }
+    const removing = bases.some(b => b.status === 'removing');
+    const relevant = sel && (sel.kind === 'base' || sel.kind === 'planet' || sel.kind === 'moon');
+    if (!relevant) { cardTickHadRemoving = removing; return; }
+    const wasRemoving = cardTickHadRemoving;
+    cardTickHadRemoving = removing;
+    if (!removing && !wasRemoving) return;      // ничего не удаляется — карточку не трогаем
+    const s = Math.floor(Date.now() / 1000);
+    if (removing && s === cardTickSec) return;  // идёт разбор: не чаще раза в секунду
+    cardTickSec = s;
+    renderObjectInfo();
+}
+
 /** Блок «Объект» для звездной базы, созданной игроком на карте. */
 function newBaseInfoHTML(b) {
     const host = b.hostKind === 'moon'
         ? 'луна ' + b.moon
         : 'планета ' + (RU[b.planet] || b.planet);
+    const removing = b.status === 'removing';   // идёт разбор: статус и таймер, кнопки выключены
     return '<div class="obj-title"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
             '<strong>База ' + b.name + '</strong></div>' +
         '<div class="obj-kind">Звёздная база · ' + host + '</div>' +
@@ -2877,8 +3017,13 @@ function newBaseInfoHTML(b) {
             row('Радиус орбиты', b.orbitRadius + ' <em>ед.</em>') +
             row('Период обращения', fmtPeriod(b.period)) +
             row('Создана', (b.created || '').slice(0, 10)) +
+            (removing
+                ? row('Статус', 'удаляется') + row('Осталось', removalSecondsLeft(b) + ' <em>с</em>')
+                : '') +
         '</div>' +
-        '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>' +
+        '<div class="obj-note">' + (removing
+            ? 'База разбирается — перенос и повторное удаление недоступны'
+            : 'Новая база на орбите — корабли и постройки появятся позже') + '</div>' +
         moveBaseButtonHTML(b) +
         deleteBaseButtonHTML(b);
 }
@@ -2993,10 +3138,12 @@ function highlightTree() {
 // main.js — точка входа. Подготавливает канвас, ввод и панель, запускает
 // главный цикл requestAnimationFrame, который каждый кадр:
 //   1) двигает симуляционное время,
-//   2) рисует мир (render.js),
-//   3) рисует hover-подсказки поверх (hover.js),
-//   4) обновляет HUD (ui.js).
+//   2) завершает удаления баз с вышедшим таймером и тикает карточку,
+//   3) рисует мир (render.js),
+//   4) рисует hover-подсказки поверх (hover.js),
+//   5) обновляет HUD (ui.js).
 // =============================================================================
+
 
 
 
@@ -3032,6 +3179,8 @@ function frame() {
     state.time += dt * state.timeScale;
 
     updateFlyTo();   // полёт камеры к строке блока «Малые тела» — до отрисовки мира
+    updateBaseRemovals();    // удаления баз: завершить те, у кого вышел таймер
+    updateBaseTimerCard();   // и обновить открытую карточку с таймером (раз в секунду)
 
     // фон: очищаем весь канвас в экранных координатах
     ctx.fillStyle = '#020205';
