@@ -820,6 +820,119 @@ function drawSmallBodies(ctx) {
     return targets;
 }
 
+// ===== bases_name.js =====
+// =============================================================================
+// bases_name.js — имена новых баз игрока: список для случайного выбора.
+//
+// При создании базы bases.js берёт отсюда случайное название (индекс в этом
+// массиве — «id имени», хранится в записи базы). Если название уже выпадало,
+// к нему дописывается номер («Красная луна - 2») по счётчику реестра имён —
+// отдельного ключа localStorage «galaxy_space_base_names_v1» (bases.js).
+// =============================================================================
+
+const BASE_NAMES = [
+    'Красная луна',
+    'Тихая гавань',
+    'Полярная звезда',
+    'Лунный свет',
+    'Звёздный мост',
+    'Ночной дозор',
+    'Северное сияние',
+    'Чёрная бездна',
+    'Белый карлик',
+    'Синий гигант',
+    'Красный карлик',
+    'Железный ветер',
+    'Солнечный парус',
+    'Ледяная комета',
+    'Огненный шар',
+    'Млечный путь',
+    'Туманность Андромеды',
+    'Пояс Ориона',
+    'Лунная тень',
+    'Звёздная пыль',
+    'Кольца Сатурна',
+    'Утренняя заря',
+    'Дальний рубеж',
+    'Тихий океан',
+    'Стальная орбита',
+    'Серебряный луч',
+    'Золотая игла',
+    'Ледяной щит',
+    'Огненный хребет',
+    'Кристальный грот',
+    'Тёмная сторона',
+    'Обратный отсчёт',
+    'Первый рассвет',
+    'Последний рубеж',
+    'Алмазный дождь',
+    'Металлический шторм',
+    'Кислородный сад',
+    'Зелёная долина',
+    'Красная пустыня',
+    'Голубая лагуна',
+    'Стеклянный купол',
+    'Купол надежды',
+    'Восход Земли',
+    'Голубая планета',
+    'Пыльный шторм',
+    'Солнечный ветер',
+    'Магнитный полюс',
+    'Радиационный пояс',
+    'Внешний рубеж',
+    'Внутренний круг',
+    'Гравитационный колодец',
+    'Точка Лагранжа',
+    'Пояс Кларка',
+    'Синхронная орбита',
+    'Галактический маяк',
+    'Маяк надежды',
+    'Дальний маяк',
+    'Синий лёд',
+    'Белая ночь',
+    'Полярный день',
+    'Траектория света',
+    'Искра жизни',
+    'Орбитальный причал',
+    'Свободный порт',
+    'Синий поток',
+    'Железный лес',
+    'Магнитная буря',
+    'Ионный след',
+    'Плазменный факел',
+    'Фотонный луч',
+    'Кварцевый берег',
+    'Янтарная заря',
+    'Изумрудный остров',
+    'Обсидиановая крепость',
+    'Титановая воля',
+    'Звёздный ковчег',
+    'Северный ковчег',
+    'Вечный странник',
+    'Комета удачи',
+    'Кратер Армстронга',
+    'Море Спокойствия',
+    'Океан Бурь',
+    'Море Дождей',
+    'Море Ясности',
+    'Вершина Олимпа',
+    'Ледяное эхо',
+    'Ветер пустоты',
+    'Космическая тишина',
+    'За гранью',
+    'Край тьмы',
+    'Око бури',
+    'Ядро галактики',
+    'Рукав Ориона',
+    'Свет Веги',
+    'Врата Центавра',
+    'Путь домой',
+    'Порт мечты',
+    'Зов звёзд',
+    'Эхо вселенной',
+    'Тихий причал'
+];
+
 // ===== bases.js =====
 // =============================================================================
 // bases.js — звёздные базы игрока: хранилище, создание и отрисовка.
@@ -842,6 +955,12 @@ function drawSmallBodies(ctx) {
 // админки/ангара (window.Store) не задействованы. Пока это только создание
 // и отображение; корабли и экономика — позже.
 //
+// Имя новой базы — случайное из BASE_NAMES (bases_name.js); в записи базы
+// хранятся id имени, текст и счётчик использований. Повтор выпадения получает
+// суффикс («Красная луна - 2»). Сколько раз имя выпадало и где стоят названные
+// им базы, помнит реестр имён — ещё один отдельный ключ localStorage
+// («galaxy_space_base_names_v1»); с записями он синхронизируется при загрузке.
+//
 // Рисуется из render.js в мировой системе координат; позиции хост-тел
 // (планет/лун) передаются картой hostPos после их отрисовки.
 // =============================================================================
@@ -851,7 +970,9 @@ function drawSmallBodies(ctx) {
 
 
 
+
 const STORAGE_KEY = 'galaxy_space_bases_v1';
+const NAMES_KEY = 'galaxy_space_base_names_v1';   // реестр имён новых баз
 
 // Абсолютный потолок радиуса орбиты базы (единицы мира): дальше она теряется
 // на фоне системы. Нижняя граница и потолок по соседям — в baseRadiusRange().
@@ -924,14 +1045,99 @@ function hostKey(kind, planet, moon) {
     return kind === 'planet' ? 'planet:' + planet : 'moon:' + planet + ':' + moon;
 }
 
-/** Имя следующей базы: BASE-2, BASE-3… (BASE-1 — стартовая LUNA-ORBIT). */
-function nextName() {
-    let max = 1;
+// --- Реестр имён баз (отдельный ключ localStorage) --------------------------
+// По индексу имени в BASE_NAMES: сколько раз оно выпадало (count — для
+// суффикса « - N») и какие базы им названы, с местом (kind/planet/moon).
+
+/** Прочитать реестр имён; битые данные не роняют карту. */
+function loadNameRegistry() {
+    try {
+        const raw = localStorage.getItem(NAMES_KEY);
+        const obj = raw ? JSON.parse(raw) : null;
+        if (obj && obj.names && typeof obj.names === 'object') return obj;
+    } catch (e) { /* битый реестр — начнём заново */ }
+    return { v: 1, names: {} };
+}
+
+/** Записать реестр имён в localStorage (ключ отдельный от баз). */
+function saveNameRegistry() {
+    try {
+        localStorage.setItem(NAMES_KEY, JSON.stringify(nameRegistry));
+    } catch (e) { /* нет доступа/переполнено — не сохранится */ }
+}
+
+/** Реестр: { v, names: { '<id имени>': { id, name, count, bases: [...] } } }. */
+let nameRegistry = loadNameRegistry();
+
+/**
+ * Синхронизировать реестр с загруженными базами: счётчики использований не
+ * теряем (берём максимум из реестра и записей), места баз поправляем, записи
+ * о пропавших базах убираем.
+ */
+function syncNameRegistry() {
+    let dirty = false;
     bases.forEach(b => {
-        const m = /^BASE-(\d+)$/.exec(b.name || '');
-        if (m && +m[1] > max) max = +m[1];
+        if (typeof b.nameId !== 'number') return;   // старые BASE-N — вне реестра
+        let reg = nameRegistry.names[b.nameId];
+        if (!reg) {
+            reg = nameRegistry.names[b.nameId] = { id: b.nameId, name: BASE_NAMES[b.nameId] || b.name, count: 0, bases: [] };
+            dirty = true;
+        }
+        if (b.nameCount > reg.count) { reg.count = b.nameCount; dirty = true; }
+        const place = reg.bases.find(x => x.baseId === b.id);
+        if (!place) {
+            reg.bases.push({ baseId: b.id, name: b.name, kind: b.hostKind, planet: b.planet, moon: b.moon || null });
+            dirty = true;
+        } else if (place.kind !== b.hostKind || place.planet !== b.planet || (place.moon || null) !== (b.moon || null)) {
+            place.kind = b.hostKind;
+            place.planet = b.planet;
+            place.moon = b.moon || null;
+            dirty = true;
+        }
     });
-    return 'BASE-' + (max + 1);
+    Object.keys(nameRegistry.names).forEach(k => {
+        const reg = nameRegistry.names[k];
+        const keep = reg.bases.filter(x => bases.some(b => b.id === x.baseId));
+        if (keep.length !== reg.bases.length) { reg.bases = keep; dirty = true; }
+    });
+    if (dirty) saveNameRegistry();
+}
+syncNameRegistry();
+
+/** Реестр имён — для отладки и тестов (живой объект). */
+function baseNamesRegistry() {
+    return nameRegistry;
+}
+
+/**
+ * Взять случайное имя для новой базы. Повтор выпадения увеличивает счётчик
+ * реестра и получает суффикс: «Красная луна», «Красная луна - 2», « - 3»…
+ * @returns {{nameId: number, name: string, nameCount: number}}
+ */
+function takeBaseName() {
+    const id = Math.floor(Math.random() * BASE_NAMES.length);
+    let reg = nameRegistry.names[id];
+    if (!reg) reg = nameRegistry.names[id] = { id, name: BASE_NAMES[id], count: 0, bases: [] };
+    reg.count += 1;
+    return { nameId: id, name: reg.count > 1 ? reg.name + ' - ' + reg.count : reg.name, nameCount: reg.count };
+}
+
+/** Дописать в реестр, что за база создана и где она стоит. */
+function registerBasePlace(rec) {
+    const reg = nameRegistry.names[rec.nameId];
+    if (!reg) return;
+    reg.bases.push({ baseId: rec.id, name: rec.name, kind: rec.hostKind, planet: rec.planet, moon: rec.moon || null });
+}
+
+/** Обновить в реестре место базы после переноса. */
+function updateBasePlace(rec) {
+    Object.keys(nameRegistry.names).forEach(k => {
+        const place = nameRegistry.names[k].bases.find(x => x.baseId === rec.id);
+        if (!place) return;
+        place.kind = rec.hostKind;
+        place.planet = rec.planet;
+        place.moon = rec.moon || null;
+    });
 }
 
 /** Радиус орбиты: округлён до десятых и зажат в коридор хоста (baseRadiusRange). */
@@ -952,9 +1158,13 @@ function phaseFor(ang, period) {
     return ((ang - twoPi * state.simDays / period) % twoPi + twoPi) % twoPi;
 }
 
+/** Счётчик для уникальных id: базы могут создаваться в одну миллисекунду. */
+let baseSeq = 0;
+
 /**
  * Создать базу на орбите радиуса r у планеты/луны; запись сразу пишется в
- * localStorage. Карточку/список обновляет вызывающий код (input.js).
+ * localStorage. Имя выбирается случайно из BASE_NAMES (bases_name.js), повтор
+ * получает суффикс « - 2». Карточку/список обновляет вызывающий код (input.js).
  * @param {{kind: string, planet: string, moon: ?string}} host
  * @param {number} r радиус орбиты, единицы мира (клампится в коридор хоста)
  * @param {?number} ang угол от центра хоста к курсору (радианы): база появится
@@ -964,9 +1174,12 @@ function createBase(host, r, ang) {
     const orbitRadius = radiusOf(r, host);
     const period = basePeriodAt(orbitRadius);
     const phase = phaseFor(ang, period);
+    const { nameId, name, nameCount } = takeBaseName();
     const rec = {
-        id: 'base-' + Date.now().toString(36),
-        name: nextName(),
+        id: 'base-' + Date.now().toString(36) + '-' + (++baseSeq).toString(36),
+        name,
+        nameId,
+        nameCount,
         hostKind: host.kind,
         planet: host.planet,
         moon: host.moon || null,
@@ -976,7 +1189,9 @@ function createBase(host, r, ang) {
         created: new Date().toISOString()
     };
     bases.push(rec);
+    registerBasePlace(rec);   // реестр: какое имя и где стоит
     saveBases();
+    saveNameRegistry();
     return rec;
 }
 
@@ -1000,7 +1215,9 @@ function moveBase(rec, host, r, ang) {
     rec.period = basePeriodAt(rec.orbitRadius);
     const phase = phaseFor(ang, rec.period);
     if (phase !== null) rec.phase0 = phase;
+    updateBasePlace(rec);   // реестр имён: база теперь стоит в другом месте
     saveBases();
+    saveNameRegistry();
     return rec;
 }
 
