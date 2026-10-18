@@ -1531,7 +1531,8 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR) {
     ctx.arc(b.x, b.y, bs + pulse * 4, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.font = `bold ${Math.max(9, 10 / zoom)}px monospace`;
+    // Имя базы — шрифт интерфейса (Manrope, как .b-name в списках базы).
+    ctx.font = `600 ${Math.max(9, 10 / zoom)}px "Manrope", sans-serif`;
     // У удаляемой базы имя краснеет, а вместо текста «демонтаж N с» под
     // именем тянется красная полоска прогресса разбора.
     const removing = b.status === 'removing';
@@ -2182,7 +2183,7 @@ function drawEarthMoonAndBase(ctx, x, y) {
     ctx.stroke();
 
     ctx.fillStyle = COLORS.base;
-    ctx.font = `bold ${Math.max(9, 10 / z)}px monospace`;
+    ctx.font = `600 ${Math.max(9, 10 / z)}px "Manrope", sans-serif`;
     ctx.fillText('BASE', bx + bs + 3 / z, by - 3 / z);
 
     return {
@@ -3390,6 +3391,11 @@ window.addEventListener('resize', () => resize(canvas));
 
 initInput(canvas, getSpeedButtons());
 buildSidePanel();
+
+// Canvas не подгружает веб-шрифты сам: если Manrope ещё не использовал ни один
+// DOM-элемент, подписи баз на карте молча отрисуются fallback-шрифтом. Просим
+// начертание заранее — уже загруженный шрифт следующего кадра подхватит сам.
+if (document.fonts && document.fonts.load) document.fonts.load('600 12px "Manrope"');
 
 // --- Главный цикл -----------------------------------------------------------------
 let lastFrame = performance.now();

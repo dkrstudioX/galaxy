@@ -484,7 +484,8 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR) {
     ctx.arc(b.x, b.y, bs + pulse * 4, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.font = `bold ${Math.max(9, 10 / zoom)}px monospace`;
+    // Имя базы — шрифт интерфейса (Manrope, как .b-name в списках базы).
+    ctx.font = `600 ${Math.max(9, 10 / zoom)}px "Manrope", sans-serif`;
     // У удаляемой базы имя краснеет, а вместо текста «демонтаж N с» под
     // именем тянется красная полоска прогресса разбора.
     const removing = b.status === 'removing';

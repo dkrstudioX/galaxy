@@ -28,6 +28,11 @@ window.addEventListener('resize', () => resize(canvas));
 initInput(canvas, getSpeedButtons());
 buildSidePanel();
 
+// Canvas не подгружает веб-шрифты сам: если Manrope ещё не использовал ни один
+// DOM-элемент, подписи баз на карте молча отрисуются fallback-шрифтом. Просим
+// начертание заранее — уже загруженный шрифт следующего кадра подхватит сам.
+if (document.fonts && document.fonts.load) document.fonts.load('600 12px "Manrope"');
+
 // --- Главный цикл -----------------------------------------------------------------
 let lastFrame = performance.now();
 
