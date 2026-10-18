@@ -228,8 +228,9 @@ function resize(canvas) {
 // ===== scene.js =====
 // =============================================================================
 // scene.js — генерация фона сцены (звёзды, астероиды) и правило раскрытия лун.
-// Позиции тел планет здесь не считаются — это делает render.js каждый кадр.
+// Позиции тел здесь не считаются — это делает render.js каждый кадр из simDays.
 // =============================================================================
+
 
 
 
@@ -247,12 +248,31 @@ for (let i = 0; i < 400; i++) {
 }
 
 // --- Пояс астероидов ------------------------------------------------------------
-// Кольцо точек между орбитами Марса (dist 220) и Юпитера (dist 380).
+// Кольцо частиц между орбитами Марса и Юпитера. Каждый астероид — параметры
+// круговой орбиты (радиус d, долгота l0, период); позицию считает render.js
+// из simDays тем же таймером, что и планеты, поэтому пояс движется и ускоряется
+// вместе со всей системой.
+const MARS = planets.find(p => p.name === 'Mars');
+const JUPITER = planets.find(p => p.name === 'Jupiter');
+
+// Показатель закона «период от расстояния»: в этой карте dist условный,
+// а периоды реальные, поэтому берём его по якорям Марс → Юпитер (~3.37).
+const KEPLER_EXP = Math.log(JUPITER.period / MARS.period) / Math.log(JUPITER.dist / MARS.dist);
+
+/** Период обращения астероида на расстоянии d, сутки. */
+function beltPeriod(d) {
+    return MARS.period * Math.pow(d / MARS.dist, KEPLER_EXP);
+}
+
 const asteroids = [];
 for (let i = 0; i < 400; i++) {
-    const a = Math.random() * Math.PI * 2;
     const d = 270 + Math.random() * 80;
-    asteroids.push({ x: Math.cos(a) * d, y: Math.sin(a) * d, s: 0.5 + Math.random() * 1.5 });
+    asteroids.push({
+        d,
+        l0: Math.random() * 360,                                // стартовая долгота, градусы
+        period: beltPeriod(d) * (0.98 + Math.random() * 0.04),  // разброс, чтобы пояс не был синхронным
+        s: 0.5 + Math.random() * 1.5                            // размер в пикселях мира
+    });
 }
 
 /**
@@ -357,12 +377,18 @@ function drawStars(ctx, time) {
     });
 }
 
-/** Пояс астероидов между Марсом и Юпитером. */
+/** Пояс астероидов между Марсом и Юпитером: движется по общему таймеру simDays. */
 function drawAsteroids(ctx) {
+    const { simDays } = state;
     ctx.fillStyle = '#666';
     asteroids.forEach(a => {
+        // как у планет: y с минусом — против часовой, как видно с севера эклиптики
+        const ang = orbitAngle(a.l0, a.period, simDays);
+        const x = Math.cos(ang) * a.d;
+        const y = -Math.sin(ang) * a.d;
+
         ctx.beginPath();
-        ctx.arc(a.x, a.y, a.s, 0, Math.PI * 2);
+        ctx.arc(x, y, a.s, 0, Math.PI * 2);
         ctx.fill();
     });
 }

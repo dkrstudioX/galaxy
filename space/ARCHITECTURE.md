@@ -22,7 +22,9 @@ space/
     ├── state.js        — единственный мутируемый объект `state` + resize()
     ├── data.js         — данные: planets, moonsByPlanet, Луна/база, moonTree
     ├── math.js         — чистые функции: orbitAngle, formatSimDate, clamp, screenToWorld
-    ├── scene.js        — генерация фона (stars, asteroids) + visibleMoons(zoom)
+    ├── scene.js        — генерация фона (stars, asteroids) + visibleMoons(zoom).
+    │                     У астероидов — параметры орбиты (d, l0, period); пояс
+    │                     движется в render.js от общего simDays
     ├── input.js        — ввод: тач/pinch, колесо, панорамирование правой кнопкой,
     │                     позиция курсора, кнопки скорости времени
     ├── render.js       — отрисовка мира: фон, солнце, планеты, луны, база.
@@ -42,7 +44,7 @@ render ─► state, math, config, data, scene
 hover ──► state, math, config
 input ──► state, math, config
 ui ─────► state, math, data, config (+ window.Store / window.Icons из data/)
-scene ──► state
+scene ──► state, data
 math ───► config
 data, config — ни от кого (чистые данные/константы)
 ```
@@ -58,6 +60,10 @@ state знают все, но меняют только input (камера/зу
 (`math.js orbitAngle`). Поэтому счётчик дней, дата и взаимные положения
 планет всегда согласованы. Симуляция стартует с реальной текущей даты.
 `timeScale` (кнопки внизу) умножает скорость: x2/деление, пределы из config.
+Пояс астероидов живёт по тому же таймеру: параметры орбит задаёт `scene.js`
+(радиус 270–350, период по закону Кеплера от якорей Марс → Юпитер), позиции
+каждый кадр считает `render.js` — пояс вращается и ускоряется вместе со всей
+системой.
 
 ### Система координат
 Мир: солнце в (0,0), орбиты — окружности радиуса `planet.dist`. Камера:
@@ -116,6 +122,7 @@ drawEarthMoonAndBase`), не через moonsByPlanet. База — цианов
 - Поменять цвета/толщины → `config.js`
 - Поменять правило раскрытия лун → `scene.js visibleMoons`
 - Логика орбиты при наведении → `hover.js`
+- Пояс астероидов (плотность, разброс радиусов) → `scene.js asteroids`
 - Список купленных кораблей базы → `ui.js baseInfoHTML/shipRowHTML`
 
 ## История (кратко, ветка space)

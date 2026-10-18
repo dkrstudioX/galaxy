@@ -86,12 +86,18 @@ function drawStars(ctx, time) {
     });
 }
 
-/** Пояс астероидов между Марсом и Юпитером. */
+/** Пояс астероидов между Марсом и Юпитером: движется по общему таймеру simDays. */
 function drawAsteroids(ctx) {
+    const { simDays } = state;
     ctx.fillStyle = '#666';
     asteroids.forEach(a => {
+        // как у планет: y с минусом — против часовой, как видно с севера эклиптики
+        const ang = orbitAngle(a.l0, a.period, simDays);
+        const x = Math.cos(ang) * a.d;
+        const y = -Math.sin(ang) * a.d;
+
         ctx.beginPath();
-        ctx.arc(a.x, a.y, a.s, 0, Math.PI * 2);
+        ctx.arc(x, y, a.s, 0, Math.PI * 2);
         ctx.fill();
     });
 }
