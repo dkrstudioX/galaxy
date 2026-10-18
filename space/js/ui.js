@@ -5,7 +5,8 @@
 // Выбор делается кликом по канвасу (selectBody вызывает input.js), по
 // элементу дерева или по строке блока малых тел. Шапка каждого блока
 // сворачивает его — отдельных кнопок «скрыть/показать» нет. Здесь же твин
-// полёта камеры (flyToCamera/updateFlyTo), которым main.js двигает камеру.
+// полёта камеры (flyToCamera/updateFlyTo), которым main.js двигает камеру,
+// и модальный confirmDialog (общий стиль ангара: .slot-dialog).
 // Работает с DOM, не с канвасом.
 // =============================================================================
 
@@ -13,7 +14,7 @@ import { state } from './state.js';
 import { formatSimDate, clamp } from './math.js';
 import { SUN_R, COLORS, MIN_ZOOM, MAX_ZOOM } from './config.js';
 import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, moonOrbitRadius, moonPeriod, baseOrbitRadius } from './data.js';
-import { bases, basesAt, baseRadiusRange, startBaseRemoval, removalSecondsLeft } from './bases.js';
+import { bases, basesAt, baseRadiusRange, startBaseRemoval, removalSecondsLeft, BASE_REMOVAL_MS } from './bases.js';
 
 // Русские названия и подписи классов для блока «ОБЪЕКТ».
 const RU = {
@@ -465,17 +466,80 @@ function wireObjectCard(box) {
     const delBtn = box.querySelector('#baseDeleteBtn');
     if (delBtn) delBtn.addEventListener('click', () => {
         const rec = bases.find(b => b.id === delBtn.dataset.deleteId);
-        if (!rec) return;
-        // Если эта база как раз переносилась — сначала выходим из режима.
-        if (state.baseMode && state.baseMode.moveId === rec.id) state.baseMode = null;
-        if (!startBaseRemoval(rec)) return;
-        renderObjectInfo();   // карточка покажет статус и таймер до конца разбора
+        if (!rec || rec.status !== 'active') return;
+        // Спрашиваем подтверждение в общем стиле ангара — сразу не удаляем.
+        confirmDialog({
+            eyebrow: 'Звёздная база',
+            title: 'Удалить базу?',
+            text: 'База <b>«' + rec.name + '»</b> будет разбираться ' +
+                Math.round(BASE_REMOVAL_MS / 1000) + ' секунд: ей нельзя будет пользоваться, ' +
+                'затем она исчезнет с орбиты, а запись переедет в архив.',
+            okLabel: 'Удалить',
+            onOk: () => {
+                // Если эта база как раз переносилась — сначала выходим из режима.
+                if (state.baseMode && state.baseMode.moveId === rec.id) state.baseMode = null;
+                if (!startBaseRemoval(rec)) return;
+                renderObjectInfo();   // карточка покажет статус и таймер до конца разбора
+            }
+        });
     });
 }
 
 /** Перерисовать карточку выбранного объекта (зовёт input.js при отмене режима). */
 export function refreshObjectCard() {
     renderObjectInfo();
+}
+
+/* ---------- Диалог подтверждения (общий стиль ангара: .slot-dialog) ---------- */
+
+let dialogEl = null;   // открытый оверлей: одновременно не больше одного
+
+function closeDialog() {
+    if (dialogEl && dialogEl.parentNode) dialogEl.parentNode.removeChild(dialogEl);
+    dialogEl = null;
+    document.removeEventListener('keydown', dialogKey, true);
+}
+
+/** Esc закрывает диалог и не доходит до карты — режим выбора орбиты остаётся. */
+function dialogKey(e) {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    closeDialog();
+}
+
+/**
+ * Модальное подтверждение в общем стиле (как .slot-modal/.slot-dialog в
+ * ангаре): eyebrow, заголовок, текст и две кнопки — «Отмена» и действие
+ * (opts.okLabel). Клик по фону, «×» и Esc закрывают без действия; кнопка
+ * действия закрывает диалог и зовёт opts.onOk.
+ * @param {{eyebrow?: string, title: string, text: string, okLabel: string, onOk: Function}} opts
+ */
+export function confirmDialog(opts) {
+    closeDialog();
+    const ov = document.createElement('div');
+    ov.className = 'dlg-overlay';
+    ov.innerHTML =
+        '<div class="dlg" role="dialog" aria-modal="true">' +
+            '<div class="dlg-head"><div>' +
+                (opts.eyebrow ? '<span class="dlg-eyebrow">' + opts.eyebrow + '</span>' : '') +
+                '<h3>' + opts.title + '</h3></div>' +
+            '<button class="dlg-close" aria-label="Закрыть">×</button></div>' +
+            '<div class="dlg-text">' + opts.text + '</div>' +
+            '<div class="dlg-foot">' +
+                '<button class="dlg-btn" data-act="cancel">Отмена</button>' +
+                '<button class="dlg-btn danger" data-act="ok">' + opts.okLabel + '</button>' +
+            '</div>' +
+        '</div>';
+    ov.addEventListener('mousedown', e => { if (e.target === ov) closeDialog(); });   // клик по фону
+    ov.querySelector('.dlg-close').addEventListener('click', closeDialog);
+    ov.querySelector('[data-act="cancel"]').addEventListener('click', closeDialog);
+    ov.querySelector('[data-act="ok"]').addEventListener('click', () => {
+        closeDialog();
+        if (opts.onOk) opts.onOk();
+    });
+    document.addEventListener('keydown', dialogKey, true);
+    document.getElementById('modal-root').appendChild(ov);
+    dialogEl = ov;
 }
 
 /* ---------- Удаление баз: секундный тик карточки ---------- */

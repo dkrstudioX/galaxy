@@ -251,6 +251,45 @@ canvas { display: block; width: 100vw; height: 100vh; }
     color: #7d9a9a; opacity: .55; cursor: default;
 }
 
+/* ===== Диалог подтверждения: как .slot-modal/.slot-dialog в ангаре ========== */
+.dlg-overlay {
+    position: fixed; inset: 0; z-index: 90;
+    display: grid; place-items: center; padding: 24px;
+    background: rgba(3, 7, 12, .62);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.dlg {
+    width: min(420px, 100%); padding: 18px 20px 20px;
+    border: 1px solid rgba(150, 190, 255, .2);
+    background: linear-gradient(150deg, rgba(10, 26, 30, .96), rgba(20, 14, 36, .96));
+    box-shadow: 0 24px 60px rgba(2, 4, 12, .6);
+}
+.dlg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.dlg-head h3 { margin: 6px 0 0; font-size: 16px; font-weight: 500; color: #dce8e8; }
+.dlg-eyebrow {
+    color: #9c7ee1;
+    font: 500 9px "IBM Plex Mono", monospace; letter-spacing: .19em; text-transform: uppercase;
+}
+.dlg-close {
+    width: 28px; height: 28px; flex: none;
+    border: 1px solid rgba(150, 190, 255, .2); background: transparent;
+    color: #cdd9dc; font-size: 16px; line-height: 1; cursor: pointer;
+}
+.dlg-close:hover { border-color: rgba(143, 245, 227, .45); }
+.dlg-text { color: #8fa6a6; font-size: 11.5px; line-height: 1.55; }
+.dlg-text b { color: #dce8e8; font-weight: 600; }
+.dlg-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.dlg-btn {
+    padding: 9px 16px;
+    border: 1px solid rgba(150, 190, 255, .25); background: rgba(122, 236, 224, .05);
+    color: #bffcfc; cursor: pointer;
+    font: 500 9px "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: .12em;
+    transition: background .14s ease, border-color .14s ease;
+}
+.dlg-btn:hover { background: rgba(122, 236, 224, .12); border-color: rgba(143, 245, 227, .45); }
+.dlg-btn.danger { background: rgba(255, 95, 122, .14); border-color: rgba(255, 95, 122, .4); color: #ffb3c1; }
+.dlg-btn.danger:hover { background: rgba(255, 95, 122, .22); border-color: rgba(255, 95, 122, .55); }
+
 /* ===== Малые тела: блок «03», строки-группы и метеоритные строки карточек ===== */
 .sb-list { display: flex; flex-direction: column; }
 .sb-row {

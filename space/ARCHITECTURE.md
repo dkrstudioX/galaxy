@@ -9,6 +9,11 @@ py -m http.server 8642
 # http://127.0.0.1:8642/space/index.html
 ```
 
+Стиль интерфейса — общий с ангаром (`hangar/`): стеклянные панели, IBM Plex
+Mono для служебных подписей, бирюзово-фиолетовые акценты; модальные окна —
+как ангарные `.slot-modal`/`.slot-dialog` (в `js/ui.js` — `confirmDialog`).
+Общее правило стиля записано в корневом `AGENTS.md`.
+
 ## Структура модулей
 
 ```
@@ -51,7 +56,8 @@ space/
     │                     тел — сэмплированная полилиния), подсказка без рамки
     └── ui.js           — DOM: HUD, боковая панель «01 Карта системы»,
                           «02 Объект», «03 Малые тела»; карточки тел и баз;
-                          твин полёта камеры (flyToCamera/updateFlyTo)
+                          твин полёта камеры (flyToCamera/updateFlyTo);
+                          диалог подтверждения (confirmDialog, стиль ангара)
 ```
 
 ## Зависимости между модулями (кто кого импортирует)
@@ -63,7 +69,7 @@ hover ───► state, math, config
 input ───► state, math, config, data, hover, ui, bases
 ui ──────► state, math, data, config, bases (+ window.Store / window.Icons из data/)
 smallbodies ─► state, math, data, config
-bases ───► state, math, config, data
+bases ───► state, math, config, data, bases_name, bases_removed
 scene ───► state, data
 sky ─────► state
 math ────► config
@@ -155,7 +161,9 @@ drawEarthMoonAndBase`), не через moonsByPlanet. База — цианов
 «Переместить базу» — тот же режим, но клик обновляет хост, радиус, период и
 сторону (фазу) существующей записи — база встаёт со стороны курсора; маркер,
 подпись и ховер-орбита рисуются по превью ещё до
-подтверждения. Второй кнопкой — «Удалить базу»: база уходит в статус
+подтверждения. Второй кнопкой — «Удалить базу»: сначала диалог подтверждения
+в общем стиле ангара (confirmDialog: тёмный фон, стеклянная панель, eyebrow,
+«×» — как .slot-dialog), и только после согласия база уходит в статус
 `removing` на `BASE_REMOVAL_MS` (30 с реального времени) — перенос и
 повторное удаление недоступны, а у подписи на карте и в карточке тикает
 таймер («демонтаж N с»). Когда время вышло (`updateBaseRemovals` в кадре),
@@ -297,7 +305,9 @@ LUNA-ORBIT — фикстура из data.js/render.js:
   правило ближайшего тела → `input.js updateBaseRadius`;
   имена баз (BASE_NAMES) и реестр повторов → `js/bases_name.js` + `bases.js`
 - Удаление баз (таймер, статусы, архив) → `js/bases.js` (`BASE_REMOVAL_MS`,
-  `startBaseRemoval`/`updateBaseRemovals`) + `js/bases_removed.js`
+  `startBaseRemoval`/`updateBaseRemovals`) + `js/bases_removed.js`;
+  диалог подтверждения → `js/ui.js` (`confirmDialog`, стили `.dlg-*` в
+  `css/style.css`)
 - Дальний фон: Млечный Путь, Андромеда, туманности → `js/sky.js`
 - Список купленных кораблей базы → `ui.js baseInfoHTML/shipRowHTML`
 
