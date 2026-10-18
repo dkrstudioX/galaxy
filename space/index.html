@@ -107,12 +107,13 @@
 
 <canvas id="c"></canvas>
 <script>
-// Диагностика загрузки: ловим ошибки модулей до того, как сработает main.js.
+// Диагностика загрузки: ловим ошибки скриптов до того, как сработает app.js.
 // В проде безвреден: просто копит список в window.__bootErrs.
 window.__bootErrs = [];
 window.addEventListener('error', e => window.__bootErrs.push(e.filename + ':' + e.lineno + ' ' + e.message));
 window.addEventListener('unhandledrejection', e => window.__bootErrs.push('promise: ' + e.reason));
 </script>
-<script type="module" src="js/main.js"></script>
+<!-- app.js = сборка js/*.js (py build.py), без модулей — чтобы страница открывалась напрямую с file:// -->
+<script src="app.js"></script>
 </body>
 </html>
