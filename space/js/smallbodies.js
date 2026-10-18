@@ -15,7 +15,7 @@
 
 import { state } from './state.js';
 import { makeRng, auToDist, keplerPos, periodFromA, orbitAngle } from './math.js';
-import { planets, beltNotables } from './data.js';
+import { planets, beltNotables, neas, trojanNames } from './data.js';
 import { STROKE } from './config.js';
 
 // --- Главный пояс: закон Кеплера от якорей Марс → Юпитер ---------------------
@@ -97,6 +97,86 @@ export const notables = beltNotables.map(b => ({
     orbit: orbitEllipse(b.a, b.e, b.peri)
 }));
 
+// --- Околоземные астероиды (ОЗА) ----------------------------------------------
+/** Малое тело карты: общие поля для hover и карточек (элементы, эллипс, тип). */
+function smallBody(id, kind, name, src, r, extra) {
+    return Object.assign({
+        id, kind, name,
+        a: src.a, e: src.e, peri: src.peri, m0: src.m0, dia: src.dia,
+        T: periodFromA(src.a),
+        q: src.a * (1 - src.e), Q: src.a * (1 + src.e),
+        r, x: 0, y: 0,
+        orbit: orbitEllipse(src.a, src.e, src.peri)
+    }, extra || {});
+}
+
+// Реальные элементы — из data.js; шесть безымянных досыпаны по границам групп:
+// амур — перигелий между орбитами Земли и Марса; аполлон — пересекает орбиту
+// Земли, a > 1; атон — пересекает, a < 1. Орбиты заметно эллиптические.
+const NEA_SEED = 20261018;
+const neaRng = makeRng(NEA_SEED);
+
+export const neaBodies = neas.map(n =>
+    smallBody('nea-' + n.n, 'nea', n.ru + ' / ' + n.n, n, 1.6, { group: n.group }));
+
+for (let i = 0; i < 6; i++) {
+    const group = ['amor', 'apollo', 'aten'][i % 3];
+    let q, Q;
+    if (group === 'amor') {
+        q = 1.05 + neaRng() * 0.35;                        // 1.05–1.40: орбиту Земли не пересекает
+        Q = 1.7 + neaRng() * 1.6;
+    } else if (group === 'apollo') {
+        q = 0.30 + neaRng() * 0.65;
+        Q = (2.02 - q) + neaRng() * (3.7 - (2.02 - q));    // a > 1 а.е.
+    } else {
+        const aAten = 0.85 + neaRng() * 0.14;              // a < 1 а.е.
+        q = 0.35 + neaRng() * (Math.min(0.85, 2 * aAten - 1.06) - 0.35);
+        Q = 2 * aAten - q;                                 // афелий выше орбиты Земли
+    }
+    const a = (q + Q) / 2, e = (Q - q) / (Q + q);
+    neaBodies.push(smallBody('nea-gen-' + i, 'nea', null,
+        { a, e, peri: neaRng() * 360, m0: neaRng() * 360 }, 1.2, { group }));
+}
+
+// --- Троянцы Юпитера (L4/L5) ----------------------------------------------------
+// Два облака точек на 60° впереди и позади Юпитера вдоль его орбиты (60 и 40
+// точек) с медленной либрацией ±5° за ~150 лет; точки движутся синхронно с
+// Юпитером. Именованные (Ахиллес, Гектор…) — заметнее и выбираются.
+const TROJAN_SEED = 20261018;
+const TROJAN_LIB_PERIOD = 54786;   // период либрации, сутки (~150 лет)
+const TROJAN_LIB_AMP = 5;          // амплитуда либрации, градусы
+const trojanRng = makeRng(TROJAN_SEED);
+
+export const trojanClouds = [
+    { camp: 4, points: [] },     // L4 — впереди Юпитера
+    { camp: 5, points: [] }      // L5 — позади
+];
+trojanClouds.forEach((c, ci) => {
+    const n = ci === 0 ? 60 : 40;
+    for (let i = 0; i < n; i++) {
+        c.points.push({
+            id: 'trojan-' + c.camp + '-' + i,
+            dAng: (trojanRng() - 0.5) * 16,   // ±8° вокруг центра облака
+            dR: (trojanRng() - 0.5) * 28,     // ±14 ед. поперёк орбиты
+            s: 0.7 + trojanRng() * 0.6
+        });
+    }
+});
+
+/** Либрация облака L4/L5 вокруг точки ±60°, градусы. */
+function trojanLib(t, camp) {
+    return TROJAN_LIB_AMP * Math.sin(2 * Math.PI * t / TROJAN_LIB_PERIOD + (camp === 4 ? 0 : 2.1));
+}
+
+export const trojanBodies = trojanNames.map(t => ({
+    id: 'trojan-' + t.n,
+    kind: 'trojan',
+    name: t.ru + ' / ' + t.n,
+    camp: t.camp, dAng: t.dAng, dR: t.dR,
+    r: 2.2, x: 0, y: 0,
+    orbit: { cx: 0, cy: 0, r: JUPITER.dist }
+}));
+
 /**
  * Нарисовать малые тела в мировой системе координат (вызывается из render.js
  * после звёзд). Возвращает hoverTargets именованных тел.
@@ -130,6 +210,56 @@ export function drawSmallBodies(ctx) {
         ctx.stroke();
 
         targets.push({ kind: 'asteroid', name: b.name, x: pos.x, y: pos.y, r: b.r, moons: [], small: b });
+    });
+
+    // ОЗА: именованные ярче и с обводкой; безымянные — тусклые точки
+    neaBodies.forEach(b => {
+        const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
+        b.x = pos.x;
+        b.y = pos.y;
+
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, b.r, 0, Math.PI * 2);
+        ctx.fillStyle = b.name ? '#d8d8d8' : '#8a8a8a';
+        ctx.fill();
+        if (b.name) {
+            ctx.strokeStyle = '#f0f0f0';
+            ctx.lineWidth = STROKE.moon / zoom;
+            ctx.stroke();
+            targets.push({ kind: 'nea', name: b.name, x: pos.x, y: pos.y, r: b.r, moons: [], small: b });
+        }
+    });
+
+    // Троянцы: два облака точек, синхронных с Юпитером (плюс либрация)
+    const jupAng = orbitAngle(JUPITER.l0, JUPITER.period, simDays);
+    ctx.fillStyle = '#808080';
+    trojanClouds.forEach(c => {
+        const base = jupAng + c.camp * Math.PI / 3 + trojanLib(simDays, c.camp) * Math.PI / 180;
+        c.points.forEach(p => {
+            const ang = base + p.dAng * Math.PI / 180;
+            const rr = JUPITER.dist + p.dR;
+            ctx.beginPath();
+            ctx.arc(Math.cos(ang) * rr, -Math.sin(ang) * rr, p.s, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    });
+
+    // Именованные троянцы — заметные точки с обводкой, выбираются
+    trojanBodies.forEach(b => {
+        const ang = jupAng + b.camp * Math.PI / 3 + (b.dAng + trojanLib(simDays, b.camp)) * Math.PI / 180;
+        const rr = JUPITER.dist + b.dR;
+        b.x = Math.cos(ang) * rr;
+        b.y = -Math.sin(ang) * rr;
+
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.fillStyle = '#cfcfcf';
+        ctx.fill();
+        ctx.strokeStyle = '#efefef';
+        ctx.lineWidth = STROKE.moon / zoom;
+        ctx.stroke();
+
+        targets.push({ kind: 'trojan', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
     });
 
     return targets;

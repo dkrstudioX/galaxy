@@ -156,6 +156,10 @@ function renderObjectInfo() {
             basesSectionHTML('planet', p.name, null);
     } else if (sel.kind === 'asteroid') {
         html = asteroidInfoHTML(sel.small);
+    } else if (sel.kind === 'nea') {
+        html = neaInfoHTML(sel.small);
+    } else if (sel.kind === 'trojan') {
+        html = trojanInfoHTML(sel.small);
     } else if (sel.kind === 'base') {
         html = sel.local ? newBaseInfoHTML(sel.local) : baseInfoHTML();
     } else {
@@ -174,6 +178,40 @@ function renderObjectInfo() {
     }
     box.innerHTML = html;
     wireObjectCard(box);
+}
+
+const NEA_GROUPS = { amor: 'Амур', apollo: 'Аполлон', aten: 'Атон' };
+
+/** Блок «Объект» для околоземного астероида. */
+function neaInfoHTML(b) {
+    const crosses = b.q < 1.017 && b.Q > 0.983;   // заходит внутрь орбиты Земли
+    return '<div class="obj-title"><span class="dot" style="background:#d8d8d8"></span>' +
+            '<strong>' + b.name + '</strong></div>' +
+        '<div class="obj-kind">Околоземный астероид · группа «' + NEA_GROUPS[b.group] + '»</div>' +
+        '<div class="obj-rows">' +
+            row('Большая полуось', b.a.toFixed(3) + ' <em>а.е.</em>') +
+            row('Эксцентриситет', b.e.toFixed(3)) +
+            row('Период обращения', fmtPeriod(b.T)) +
+            row('Перигелий / афелий', b.q.toFixed(3) + ' / ' + b.Q.toFixed(3) + ' <em>а.е.</em>') +
+            row('Пересекает орбиту Земли', crosses ? 'да' : 'сближается') +
+            row('Диаметр', (b.dia != null ? b.dia : '—') + ' <em>км</em>') +
+        '</div>' +
+        '<div class="obj-note">Околоземный объект — цель исследовательских миссий</div>';
+}
+
+/** Блок «Объект» для троянца Юпитера. */
+function trojanInfoHTML(b) {
+    const jupPeriod = planets.find(p => p.name === 'Jupiter').period;
+    return '<div class="obj-title"><span class="dot" style="background:#cfcfcf"></span>' +
+            '<strong>' + b.name + '</strong></div>' +
+        '<div class="obj-kind">Троянец Юпитера · точка ' + (b.camp === 4 ? 'L4' : 'L5') + '</div>' +
+        '<div class="obj-rows">' +
+            row('Орбита', 'как у Юпитера · 5.2 <em>а.е.</em>') +
+            row('Положение', b.camp === 4 ? 'опережает Юпитер на 60°' : 'отстаёт от Юпитера на 60°') +
+            row('Период обращения', fmtPeriod(jupPeriod)) +
+            row('Либрация', '±5° за ~150 лет') +
+        '</div>' +
+        '<div class="obj-note">Реликтовое вещество ранней Солнечной системы</div>';
 }
 
 /** Блок «Объект» для малого тела главного пояса (Церера, Веста, Паллада, Гигея). */
