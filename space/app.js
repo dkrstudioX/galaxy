@@ -1952,7 +1952,7 @@ function hostPosOf(host) {
     return mh ? { x: mh.mx, y: mh.my } : null;
 }
 
-/** Все возможные хозяева базы в кадре: планеты и их нарисованные луны. */
+/** Снимок соседей для режима базы: планеты и их нарисованные луны (позиции — на момент снимка). */
 function baseHosts() {
     const out = [];
     (state.hoverTargets || []).forEach(t => {
@@ -1969,28 +1969,33 @@ function baseHosts() {
  * Правило ближайшего тела: как только точка орбиты уходит дальше половины пути
  * до другого тела (курсор ближе к нему, чем к исходному), орбита переезжает к
  * этому телу — база на Венере, уведённая к Земле, окажется у Земли.
+ * Позиции соседей (планет и видимых лун) снимаются один раз при старте режима
+ * (mode.snap) и на каждом движении мыши НЕ пересчитываются.
  */
 function updateBaseRadius(x, y) {
     const mode = state.baseMode;
     if (!mode) return;
+    if (!mode.snap) mode.snap = baseHosts();   // снимок соседей — один раз на режим
     const w = screenToWorld(x, y, state);
     let best = null, bd = Infinity;
-    for (const h of baseHosts()) {
+    for (const h of mode.snap) {
         const d = Math.hypot(w.x - h.x, w.y - h.y);
         if (d < bd) { bd = d; best = h; }
     }
     if (!best) return;
     if (best.kind !== mode.kind || best.planet !== mode.planet || (best.moon || null) !== (mode.moon || null)) {
-        state.baseMode = { kind: best.kind, planet: best.planet, moon: best.moon };
+        state.baseMode = { kind: best.kind, planet: best.planet, moon: best.moon, snap: mode.snap };
     }
-    state.baseRadius = Math.min(BASE_MAX_R, Math.max(BASE_MIN_R, bd));
+    const hp = hostPosOf(state.baseMode);   // радиус — от живого положения хоста
+    state.baseRadius = Math.min(BASE_MAX_R, Math.max(BASE_MIN_R,
+        hp ? Math.hypot(w.x - hp.x, w.y - hp.y) : bd));
 }
 
 /** Клик в режиме выбора орбиты: создать базу у хоста и сразу выбрать её. */
 function confirmBase(x, y) {
-    const mode = state.baseMode;
-    if (!hostPosOf(mode)) return;   // хост не в кадре (луна скрыта зумом) — клик мимо
+    if (!hostPosOf(state.baseMode)) return;   // хост не в кадре (луна скрыта зумом) — клик мимо
     updateBaseRadius(x, y);
+    const mode = state.baseMode;   // хост мог только что переехать к ближайшему телу
     const rec = createBase(mode, state.baseRadius);
     state.baseMode = null;
     const p = planets.find(q => q.name === rec.planet);
