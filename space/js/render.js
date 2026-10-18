@@ -1,6 +1,6 @@
 // =============================================================================
 // render.js — отрисовка сцены на канвас: фон, малые тела (smallbodies.js),
-// солнце, планеты, луны (скрытые зумом — группой, scene.js moonGroupPlan),
+// солнце, планеты, луны (скрытые зумом — группой, scene.js groupPlan),
 // звёздные базы.
 // Стиль тел: у планет прозрачная заливка — тело читается только по обводке,
 // одинаково толстой у всех; солнце — жёлтая заливка; луны — плоские серые
@@ -13,8 +13,8 @@
 import { state } from './state.js';
 import { orbitAngle } from './math.js';
 import { SUN_R, COLORS, STROKE } from './config.js';
-import { planets, moonDist, moonPeriod, moonL0, baseOrbitRadius, basePeriod, moonOrbitRadius } from './data.js';
-import { stars, moonGroupPlan } from './scene.js';
+import { planets, moonsByPlanet, moonDist, moonPeriod, moonL0, baseOrbitRadius, basePeriod, moonOrbitRadius } from './data.js';
+import { stars, groupPlan, visibleMoons } from './scene.js';
 import { drawSmallBodies } from './smallbodies.js';
 import { bases, drawBases } from './bases.js';
 import { drawSky } from './sky.js';
@@ -172,18 +172,23 @@ function drawMoonBody(ctx, x, y, r) {
 }
 
 /**
- * Луны планеты — по плану группировки scene.js moonGroupPlan. Показанные луны
+ * Луны планеты — по плану группировки scene.js groupPlan. Показанные луны
  * рисуются точками и становятся hover-целями. Скрытые луны группы «встают»
  * в маркер-представитель: их хост-позиция для баз — позиция представителя
- * (bases.js рисует базы у группы), а у самого маркера — подпись в две строки:
- * луны группы, затем базы игрока на них. Имена баз группы у маркеров не
+ * (bases.js рисует базы у группы), а у самого маркера — подпись группы в две
+ * строки (луны, затем базы — drawGroupLabel). Имена баз группы у маркеров не
  * рисуются — их id собираются в groupBaseIds (drawBases гасит их подписи).
  * @param {Set} groupBaseIds  сюда складываются id баз групп (для bases.js)
  * @returns {Array} хиты для hover: { m, md, mx, my }
  */
 function drawPlanetMoons(ctx, x, y, p, hostPos, groupBaseIds) {
     const { simDays, zoom } = state;
-    const plan = moonGroupPlan(p, bases);
+    // Группировка лун: помещается visibleMoons() штук, базы игрока — те, что
+    // стоят именно на луне (hostKind 'moon'); удалённые в подпись не берём.
+    const plan = groupPlan(moonsByPlanet[p.name] || [], visibleMoons(), {
+        baseOf: m => bases.filter(b => b.status !== 'removed'
+            && b.hostKind === 'moon' && b.planet === p.name && b.moon === m.n)
+    });
     const hits = [];
 
     plan.shown.forEach(({ m, i }) => {
@@ -200,23 +205,32 @@ function drawPlanetMoons(ctx, x, y, p, hostPos, groupBaseIds) {
         const rep = hits[plan.group.at];   // маркер-представитель группы
         // Скрытые луны группы считаются стоящими в маркере: базы на них
         // рисуются у группы (bases.js по hostPos), а не пропадают из кадра.
-        plan.group.moons.forEach(m => {
+        plan.group.items.forEach(m => {
             hostPos['moon:' + p.name + ':' + m.n] = { x: rep.mx, y: rep.my };
         });
-        // Имена баз группы у маркеров не подписываем: они стоят второй
-        // строкой подписи группы (drawBases получит id через groupBaseIds).
-        plan.group.bases.forEach(b => groupBaseIds.add(b.id));
-
-        // Подпись группы — как подсказка hover: текст с тенью, кегль
-        // постоянный на экране (10 / zoom мировых пикселей). Первая строка —
-        // луны группы, вторая (цианом, цветом баз) — базы на них.
-        ctx.font = `${10 / zoom}px monospace`;
-        const lx = rep.mx + 6 / zoom, ly = rep.my - 4 / zoom;
-        groupLine(ctx, plan.group.label, lx, ly, COLORS.tooltip, zoom);
-        if (plan.group.baseLabel)
-            groupLine(ctx, plan.group.baseLabel, lx, ly + 12 / zoom, COLORS.base, zoom);
+        // Подпись группы: первая строка — луны, вторая — базы на них
+        // (id баз группы уходят в groupBaseIds — bases.js нарисует их
+        // маркеры без имён: имена уже стоят в подписи).
+        drawGroupLabel(ctx, rep.mx, rep.my, plan.group, zoom, groupBaseIds);
     }
     return hits;
+}
+
+/**
+ * Подпись группы тел у маркера-представителя (plan.group из scene.js
+ * groupPlan) — общая для лун, а дальше планет, систем и малых тел: две
+ * строки, имена тел и базы на них. Стиль подсказки hover: тень 1 px, кегль
+ * постоянный на экране (10 / zoom). Первая строка белая, вторая — цианом
+ * (цвет баз). Базы группы складываются в quietIds: bases.js нарисует их
+ * маркеры без имён — имена уже стоят в подписи.
+ */
+function drawGroupLabel(ctx, mx, my, group, zoom, quietIds) {
+    group.bases.forEach(b => quietIds.add(b.id));
+    ctx.font = `${10 / zoom}px monospace`;
+    const lx = mx + 6 / zoom, ly = my - 4 / zoom;
+    groupLine(ctx, group.label, lx, ly, COLORS.tooltip, zoom);
+    if (group.baseLabel)
+        groupLine(ctx, group.baseLabel, lx, ly + 12 / zoom, COLORS.base, zoom);
 }
 
 /** Строка подписи группы лун: тень со сдвигом в 1 px, затем текст в цвете. */

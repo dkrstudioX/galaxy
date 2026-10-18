@@ -513,7 +513,7 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet) {
 
     if (quiet) {
         // База лунной группы: имя не подписываем — оно стоит второй строкой
-        // подписи группы (scene.js moonGroupPlan.baseLabel).
+        // подписи группы (scene.js groupPlan.baseLabel).
         labelScrollFrom.delete(b.id);
     } else {
         const tw = ctx.measureText(b.name).width;
