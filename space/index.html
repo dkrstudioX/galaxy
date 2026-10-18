@@ -170,33 +170,44 @@ const moonsByPlanet = {
         { n: 'Io',       period: 1.769,  r: 2.3, c: '#d8c26a', phase: 70 },
         { n: 'Europa',   period: 3.551,  r: 2.0, c: '#cbb8a0', phase: 190 },
         { n: 'Ganymede', period: 7.155,  r: 2.7, c: '#9a8f85', phase: 300 },
-        { n: 'Callisto', period: 16.689, r: 2.5, c: '#7d746c', phase: 20 }
+        { n: 'Callisto', period: 16.689, r: 2.5, c: '#7d746c', phase: 20 },
+        { n: 'Amalthea', period: 0.498,  r: 1.2, c: '#b06a4a', phase: 130 },
+        { n: 'Himalia',  period: 250.6,  r: 1.2, c: '#8a8078', phase: 45 }
     ],
     Saturn: [
         { n: 'Mimas',    period: 0.942,  r: 1.5, c: '#b8bcc2', phase: 110 },
         { n: 'Enceladus',period: 1.370,  r: 1.7, c: '#d9dee3', phase: 250 },
         { n: 'Rhea',     period: 4.518,  r: 1.9, c: '#a8adb5', phase: 330 },
-        { n: 'Titan',    period: 15.945, r: 2.9, c: '#c79b5a', phase: 80 }
+        { n: 'Titan',    period: 15.945, r: 2.9, c: '#c79b5a', phase: 80 },
+        { n: 'Dione',    period: 2.737,  r: 1.6, c: '#c2c7cd', phase: 15 },
+        { n: 'Tethys',   period: 1.888,  r: 1.6, c: '#ccd1d6', phase: 200 },
+        { n: 'Iapetus',  period: 79.32,  r: 1.7, c: '#8f8478', phase: 300 }
     ],
     Uranus: [
         { n: 'Miranda',  period: 1.413,  r: 1.4, c: '#a9b3b8', phase: 210 },
         { n: 'Ariel',    period: 2.520,  r: 1.7, c: '#b6c0c4', phase: 20 },
+        { n: 'Umbriel',  period: 4.144,  r: 1.5, c: '#7e888d', phase: 95 },
         { n: 'Titania',  period: 8.706,  r: 2.1, c: '#9aa5ab', phase: 140 },
-        { n: 'Oberon',   period: 13.463, r: 2.0, c: '#8b969c', phase: 260 }
+        { n: 'Oberon',   period: 13.463, r: 2.0, c: '#8b969c', phase: 260 },
+        { n: 'Puck',     period: 0.762,  r: 1.1, c: '#9c9a94', phase: 175 }
     ],
     Neptune: [
         { n: 'Proteus',  period: 1.122,  r: 1.5, c: '#8f9aa3', phase: 310 },
-        { n: 'Triton',   period: 5.877,  r: 2.3, c: '#c3cdd4', phase: 100 }
+        { n: 'Triton',   period: 5.877,  r: 2.3, c: '#c3cdd4', phase: 100 },
+        { n: 'Nereid',   period: 360.1,  r: 1.2, c: '#9aa2ab', phase: 220 }
     ]
 };
 
-// Сколько лун видно при текущем зуме (Земля с Луной — отдельный блок hasBase)
+// Сколько лун видно при текущем зуме (Земля с Луной — отдельный блок hasBase).
+// Логарифмическая шкала: каждая новая луна появляется при умножении зума на ~1.4,
+// к MAX_ZOOM показываются все луны участка. Вызывающий код ограничивает
+// количеством лун конкретной планеты.
+const MAX_ZOOM = 20;
 function visibleMoons() {
-    if (zoom >= 3.5) return 4;
-    if (zoom >= 2.5) return 3;
-    if (zoom >= 1.7) return 2;
-    if (zoom >= 1.0) return 1;
-    return 0;
+    if (zoom < 1.0) return 0;
+    // 1 луна при zoom=1, далее +1 за каждый множитель MOON_ZOOM_STEP
+    const step = 1.4;
+    return 1 + Math.floor(Math.log(zoom) / Math.log(step));
 }
 
 // Звёзды фона
@@ -256,7 +267,7 @@ c.addEventListener('touchmove', e => {
         const dy = t2.clientY - t1.clientY;
         const dist = Math.sqrt(dx*dx + dy*dy);
         zoom = lastZoom * (dist / lastDist);
-        zoom = Math.max(0.3, Math.min(5, zoom));
+        zoom = Math.max(0.3, Math.min(MAX_ZOOM, zoom));
     }
 }, { passive: false });
 
@@ -268,7 +279,7 @@ c.addEventListener('touchend', e => {
 c.addEventListener('wheel', e => {
     e.preventDefault();
     zoom *= e.deltaY > 0 ? 0.9 : 1.1;
-    zoom = Math.max(0.3, Math.min(5, zoom));
+    zoom = Math.max(0.3, Math.min(MAX_ZOOM, zoom));
 }, { passive: false });
 
 // === ПАНОРАМИРОВАНИЕ ПРАВОЙ КНОПОЙ МЫШИ ===
