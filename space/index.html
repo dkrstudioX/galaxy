@@ -446,6 +446,7 @@ function draw() {
 
     // Орбиты скрыты; показываются при наведении на тело (см. hover-блок после restore)
     const hoverTargets = [];
+    hoverTargets.push({ kind: 'sun', name: 'Солнце / Sun', x: 0, y: 0, r: 22, moons: [] });
 
     // === СОЛНЦЕ ===
     ctx.fillStyle = '#eeeeee';
@@ -602,28 +603,32 @@ function draw() {
                 }
             }
             if(!hoverInfo) {
-                const hitR = Math.max(t.p.r, 8/zoom);
+                const name = t.name || t.p.name;
+                const bodyR = t.r || t.p.r;
+                const hitR = Math.max(bodyR, 8/zoom);
                 if((wx-t.x)**2 + (wy-t.y)**2 <= hitR*hitR) {
-                    hoverInfo = { kind: 'planet', name: t.p.name, orbit: { cx: 0, cy: 0, r: t.p.dist } };
+                    hoverInfo = { kind: t.kind, name, orbit: t.kind === 'sun' ? null : { cx: 0, cy: 0, r: t.p.dist } };
                 }
             }
         }
     }
 
     if(hoverInfo) {
-        // орбита наведённого тела
-        ctx.save();
-        ctx.translate(W/2, H/2);
-        ctx.scale(zoom, zoom);
-        ctx.translate(-camX, -camY);
-        ctx.strokeStyle = hoverInfo.kind === 'planet' ? 'rgba(120,140,200,0.6)' : 'rgba(150,160,180,0.6)';
-        ctx.lineWidth = 1/zoom;
-        ctx.setLineDash([4/zoom, 4/zoom]);
-        ctx.beginPath();
-        ctx.arc(hoverInfo.orbit.cx, hoverInfo.orbit.cy, hoverInfo.orbit.r, 0, Math.PI*2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.restore();
+        // орбита наведённого тела (у солнца орбиты нет)
+        if(hoverInfo.orbit) {
+            ctx.save();
+            ctx.translate(W/2, H/2);
+            ctx.scale(zoom, zoom);
+            ctx.translate(-camX, -camY);
+            ctx.strokeStyle = hoverInfo.kind === 'planet' ? 'rgba(120,140,200,0.6)' : 'rgba(150,160,180,0.6)';
+            ctx.lineWidth = 1/zoom;
+            ctx.setLineDash([4/zoom, 4/zoom]);
+            ctx.beginPath();
+            ctx.arc(hoverInfo.orbit.cx, hoverInfo.orbit.cy, hoverInfo.orbit.r, 0, Math.PI*2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
 
         // текстовая подсказка у курсора — просто текст без рамки
         ctx.font = '12px monospace';
