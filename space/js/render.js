@@ -2,7 +2,7 @@
 // render.js — отрисовка сцены на канвас: фон, солнце, планеты, луны, база.
 // Монохромный стиль: все тела — плоские круги, различаются яркостью заливки
 // и толщиной обводки (солнце > планеты > луны). Орбит на карте нет — их рисует
-// hover.js только при наведении.
+// hover.js только при наведении. Дальний фон (небо) — отдельный слой sky.js.
 //
 // Возвращает массив hoverTargets — позиции всех тел для hit-теста наведения.
 // =============================================================================
@@ -12,6 +12,7 @@ import { orbitAngle } from './math.js';
 import { SUN_R, COLORS, STROKE } from './config.js';
 import { planets, moonsByPlanet, moonDist, moonPeriod, moonL0, baseOrbitRadius, basePeriod } from './data.js';
 import { stars, asteroids, visibleMoons } from './scene.js';
+import { drawSky } from './sky.js';
 
 /**
  * Нарисовать один кадр мира в мировой системе координат (save/restore внутри).
@@ -21,6 +22,10 @@ import { stars, asteroids, visibleMoons } from './scene.js';
 export function renderScene(ctx) {
     const { zoom, simDays, time } = state;
     const hoverTargets = [];
+
+    // Дальний фон — отдельный слой sky.js, в экранных координатах:
+    // камера и зум на небо не влияют (оно бесконечно далеко).
+    drawSky(ctx);
 
     // Мировая система координат: центр экрана -> камера -> зум.
     ctx.save();
