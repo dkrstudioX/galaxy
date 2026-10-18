@@ -747,13 +747,16 @@
       shipRefs[spec.name] = ship;
     });
 
-    /* Три корабля уже куплены — стартовый ангар пользователя. */
-    [['Гром', '2026-10-12'], ['Сокол', '2026-10-14'], ['Баржа', '2026-10-15']].forEach(function (pair) {
-      var ship = shipRefs[pair[0]];
+    /* Пятнадцать кораблей уже куплены — стартовый ангар пользователя. */
+    var boughtShips = ['Гром', 'Молот', 'Цитадель', 'Сокол', 'Клинок', 'Страж', 'Оса', 'Шершень',
+      'Вихрь', 'Стриж', 'Комета', 'Игла', 'Челнок', 'Курьер', 'Паром'];
+    boughtShips.forEach(function (name, index) {
+      var ship = shipRefs[name];
       if (!ship) return;
+      var day = new Date(Date.UTC(2026, 8, 20 + index));
       d.users_ships.push({
         id: uid(), shipId: ship.id, name: ship.name, categoryId: ship.categoryId,
-        price: ship.price_buy, boughtAt: pair[1] + 'T09:30:00.000Z'
+        price: ship.price_buy, boughtAt: day.toISOString()
       });
     });
 

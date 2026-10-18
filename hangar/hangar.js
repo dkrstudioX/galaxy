@@ -106,12 +106,6 @@
 
   var categories = buildCategories();
 
-  var ships = [
-    { name: 'Asterion', className: 'Фрегат', level: 'MK.IV', active: true },
-    { name: 'Kestrel', className: 'Перехватчик', level: 'MK.II', active: false },
-    { name: 'Nomad', className: 'Грузовой', level: 'MK.I', active: false }
-  ];
-
   var hangarResources = [
     { id: '201', name: 'Плазменные ячейки', description: 'Стабилизированные энергетические элементы для импульсных систем вооружения.', stats: 'Энергия 80 МДж · Стабильность 96%' },
     { id: '202', name: 'Кристаллы ксенона', description: 'Очищенное топливо для маршевых двигателей и систем сверхсветового перехода.', stats: 'Чистота 99.4% · Класс топлива A' },
@@ -568,14 +562,22 @@
   /* ---------- Рендер: док кораблей ---------- */
 
   function renderDock() {
+    var list = userShipRecords();
+    var active = activeUserShip();
+    var cards = list.map(function (rec) {
+      var ship = window.Store ? Store.byId('objects', rec.shipId) : null;
+      var cat = ship ? Store.byId('categories', ship.categoryId) : null;
+      var on = !!(active && active.shipId === rec.shipId);
+      var sub = cat ? cat.name : '';
+      if (rec.price) sub += (sub ? ' · ' : '') + fmt(Number(rec.price)) + ' ¤';
+      return '<button class="ship-card' + (on ? ' active' : '') + '" data-action="select-user-ship" data-id="' + rec.shipId + '">' +
+        '<div class="ship-visual">' + shipGlyph(true) +
+        (on ? '<span class="active-tag">Выбран</span>' : '') + '</div>' +
+        '<div class="ship-meta"><strong>' + rec.name + '</strong><span>' + sub + '</span></div>' +
+        '</button>';
+    }).join('');
     document.getElementById('shipDock').innerHTML = '<section class="ship-dock"><div class="ship-list">' +
-      ships.map(function (ship) {
-        return '<button class="ship-card' + (ship.active ? ' active' : '') + '">' +
-          '<div class="ship-visual">' + shipGlyph(true) +
-          (ship.active ? '<span class="active-tag">Выбран</span>' : '') + '</div>' +
-          '<div class="ship-meta"><strong>' + ship.name + '</strong><span>' + ship.className + ' · ' + ship.level + '</span></div>' +
-          '</button>';
-      }).join('') +
+      (cards || '<div class="list-empty">Купленных кораблей нет</div>') +
       '</div></section>';
   }
 
@@ -677,10 +679,10 @@
     else return;
 
     render();
+    renderDock();
   });
 
   /* ---------- Старт ---------- */
 
   renderDock();
-  render();
-})();
+  render();})();
