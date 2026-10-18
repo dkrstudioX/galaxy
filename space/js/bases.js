@@ -38,7 +38,10 @@
 // («galaxy_space_base_names_v1»); с записями он синхронизируется при загрузке.
 //
 // Рисуется из render.js в мировой системе координат; позиции хост-тел
-// (планет/лун) передаются картой hostPos после их отрисовки.
+// (планет/лун) передаются картой hostPos после их отрисовки. Подпись базы на
+// видимой луне — в две строки: сверху имя спутника, снизу имя базы (та же
+// связка «тело над базой», что в подписи группы лун; у скрытой зумом луны имя
+// спутника несёт подпись группы, и своя подпись базы гасится).
 // =============================================================================
 
 import { state } from './state.js';
@@ -554,7 +557,11 @@ export function drawBases(ctx, hostPos, quietIds) {
         b.x = hp.x + Math.cos(ang) * orbitR;
         b.y = hp.y - Math.sin(ang) * orbitR;
 
-        drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quietIds && quietIds.has(b.id));
+        // Имя спутника-хозяина для подписи: у переноса — хост режима, иначе
+        // запись базы (у базы на планете строки нет).
+        const hostMoon = (moving ? mode.kind : b.hostKind) === 'moon'
+            ? (moving ? mode.moon : b.moon) || null : null;
+        drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quietIds && quietIds.has(b.id), hostMoon);
         targets.push({
             kind: 'base', name: b.name, x: b.x, y: b.y, r: 4 / zoom,
             orbitCx: hp.x, orbitCy: hp.y, orbitR,
@@ -567,8 +574,11 @@ export function drawBases(ctx, hostPos, quietIds) {
 }
 
 /** Маркер базы: орбита вокруг хоста, свечение, квадрат, пульс и подпись.
- *  quiet — имя не рисуется: база лунной группы, её имя — в подписи группы. */
-function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet) {
+ *  quiet — имя не рисуется: база лунной группы, её имя — в подписи группы.
+ *  hostMoon — имя спутника-хозяина (база на видимой луне): рисуется строкой
+ *  выше имени базы — подпись читается связкой «спутник над базой», как строки
+ *  подписи группы лун. */
+function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet, hostMoon) {
     ctx.strokeStyle = 'rgba(0,255,255,0.27)';
     ctx.lineWidth = 0.5 / zoom;
     ctx.setLineDash([1 / zoom, 1 / zoom]);
@@ -609,6 +619,22 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet) {
     const fontPx = 10 / zoom;                  // кегль: 10 экранных пикселей
     const lx = b.x + bs + 3 / zoom;            // левый край панели
     const ly = b.y - 3 / zoom;                 // базовая линия имени
+
+    // База на видимой луне: над именем базы — имя спутника (той же связкой,
+    // что строки подписи группы лун: сверху тело, снизу база). У базы скрытой
+    // луны строки нет — имя спутника несёт подпись группы.
+    const moonLine = !quiet && hostMoon ? hostMoon : null;
+    if (moonLine) {
+        const mly = ly - 12 / zoom;            // строка выше имени базы
+        ctx.font = `${fontPx}px monospace`;    // как строки подписи группы
+        const mt = ctx.measureText(moonLine).width > pw
+            ? cutForPanel(ctx, moonLine, pw) : moonLine;
+        ctx.fillStyle = COLORS.tooltipShadow;
+        ctx.fillText(mt, lx + 1 / zoom, mly + 1 / zoom);
+        ctx.fillStyle = COLORS.tooltip;
+        ctx.fillText(mt, lx, mly);
+    }
+
     ctx.font = `600 ${fontPx}px "Manrope", sans-serif`;
 
     const removing = b.status === 'removing';
@@ -621,7 +647,7 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet) {
     } else {
         const tw = ctx.measureText(b.name).width;
         const overflow = tw > pw;
-        const scrolling = overflow && labelHovered(b, lx, ly, pw, bs);
+        const scrolling = overflow && labelHovered(b, lx, ly, pw, bs, moonLine ? 12 / zoom : 0);
         const nowMs = performance.now();
         if (scrolling) {
             if (!labelScrollFrom.has(b.id)) labelScrollFrom.set(b.id, nowMs);
@@ -656,15 +682,17 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet) {
     }
 }
 
-/** Наведён ли курсор на базу: её маркер, имя или невидимая панель подписи. */
-function labelHovered(b, lx, ly, pw, bs) {
+/** Наведён ли курсор на базу: её маркер, имя или невидимая панель подписи.
+ *  extraTop — высота строки-спутника над именем: панель ховера растёт вверх
+ *  вместе с подписью (наведение на строку спутника тоже включает бегущую строку). */
+function labelHovered(b, lx, ly, pw, bs, extraTop) {
     if (state.mouseX < 0) return false;
     const m = screenToWorld(state.mouseX, state.mouseY, state);
     const zoom = state.zoom;
     if (Math.hypot(m.x - b.x, m.y - b.y) <= bs + 6 / zoom) return true;
     const fontPx = 10 / zoom;
     return m.x >= lx && m.x <= lx + pw
-        && m.y >= ly - fontPx * 1.3 && m.y <= ly + fontPx * 0.4;
+        && m.y >= ly - fontPx * 1.3 - (extraTop || 0) && m.y <= ly + fontPx * 0.4;
 }
 
 /** Имя, вписанное в панель шириной pw: лишнее заменяется на «…». */
