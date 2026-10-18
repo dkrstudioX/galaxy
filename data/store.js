@@ -451,6 +451,37 @@
 
   /* ---------- Купленные корабли ---------- */
 
+  /* Цена покупки объекта: пусто или не число — 0. */
+  function priceBuy(item) {
+    if (!item) return 0;
+    var n = parseFloat(str(item.price_buy).replace(',', '.'));
+    return isFinite(n) && n > 0 ? n : 0;
+  }
+
+  /* Цена продажи: если не задана, считаем равной цене покупки. */
+  function priceSale(item) {
+    if (!item) return 0;
+    var raw = str(item.price_sale).trim() || str(item.price_buy);
+    var n = parseFloat(raw.replace(',', '.'));
+    return isFinite(n) && n > 0 ? n : 0;
+  }
+
+  /* Продать купленный корабль: запись удаляется, цена продажи идёт на баланс. */
+  function sellShip(recordId) {
+    var d = ensure();
+    var list = all('users_ships');
+    var rec = null;
+    for (var i = 0; i < list.length; i++) if (list[i].id === recordId) rec = list[i];
+    if (!rec) return { ok: false, error: 'Запись не найдена' };
+    var ship = byId('objects', rec.shipId);
+    var price = ship ? priceSale(ship) : 0;
+    if (!price) return { ok: false, error: 'Цена продажи не задана' };
+
+    d.users_ships = list.filter(function (r) { return r.id !== recordId; });
+    var left = addCredits(price);
+    return { ok: true, name: rec.name, price: price, credits: left };
+  }
+
   function userShips() { return all('users_ships'); }
 
   /* Купить корабль: списывает цену покупки и пишет запись в users_ships. */
@@ -458,7 +489,7 @@
     var ship = byId('objects', objectId);
     if (!ship) return { ok: false, error: 'Объект не найден' };
     if (!categoryIsShip(ship.categoryId)) return { ok: false, error: 'Это не корабль' };
-    var price = Store.priceBuy(ship);
+    var price = priceBuy(ship);
     if (!price) return { ok: false, error: 'Цена не задана' };
     if (price > credits()) return { ok: false, error: 'Недостаточно кредитов', price: price, credits: credits() };
 
@@ -850,18 +881,9 @@
       return found;
     },
     /* Цена объекта: пусто или не число — 0. */
-    priceBuy: function (item) {
-      if (!item) return 0;
-      var n = parseFloat(str(item.price_buy).replace(',', '.'));
-      return isFinite(n) && n > 0 ? n : 0;
-    },
+    priceBuy: priceBuy,
     /* Цена продажи: если не задана, считаем равной цене покупки. */
-    priceSale: function (item) {
-      if (!item) return 0;
-      var raw = str(item.price_sale).trim() || str(item.price_buy);
-      var n = parseFloat(raw.replace(',', '.'));
-      return isFinite(n) && n > 0 ? n : 0;
-    },
+    priceSale: priceSale,
     /* Суммарная масса содержимого слота: масса объекта × количество. */
     usedMass: function (contents) {
       var sum = 0;
@@ -882,6 +904,7 @@
     addCredits: addCredits,
     userShips: userShips,
     buyShip: buyShip,
+    sellShip: sellShip,
     loadDemo: function () { db = demoData(); persist(); },
     counts: counts
   };

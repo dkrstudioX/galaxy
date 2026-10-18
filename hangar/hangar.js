@@ -134,6 +134,7 @@
     notice: 'Торговый терминал подключён',
     infoSection: 'properties',
     userShipId: '',
+    ownedShipId: '',
     selectedResource: '201',
     transferMode: 'load',
     transferAmount: 1,
@@ -305,8 +306,40 @@
       '<button class="trade-button sell" data-action="transact">' + icon('arrowLeft') + 'Продать</button>';
   }
 
+  /* Запись о выбранном в доке корабле: пока она есть, консоль предлагает продать. */
+  function ownedShipRecord() {
+    if (!state.ownedShipId || !window.Store) return null;
+    var list = Store.userShips();
+    for (var i = 0; i < list.length; i++) if (list[i].id === state.ownedShipId) return list[i];
+    return null;
+  }
+
+  /* Консоль купленного корабля: цена продажи и кнопка «Продать». */
+  function ownedShipConsole(rec) {
+    var ship = window.Store ? Store.byId('objects', rec.shipId) : null;
+    var cat = ship ? Store.byId('categories', ship.categoryId) : null;
+    var sale = ship ? Store.priceSale(ship) : 0;
+    var bought = rec.boughtAt ? new Date(rec.boughtAt).toLocaleDateString('ru-RU') : '';
+    var lines = '<span class="trade-preview-stats">' + (cat ? Store.categoryPath(cat.id) : 'корабль') + '</span>';
+    if (ship) lines += '<span class="trade-preview-stats">Масса: ' + fmt(Store.massOf(ship)) + ' кг</span>';
+    lines += '<span class="trade-preview-stats">в ангаре с ' + bought + '</span>';
+    var price = sale
+      ? '<span class="trade-preview-price">' + fmt(sale) + ' ¤<small> / шт.</small></span>' +
+        '<span class="trade-preview-stats">выкуп по цене продажи</span>'
+      : '<span class="trade-preview-stats">Цена продажи не задана</span>';
+    return '<div class="trade-preview">' +
+      '<span class="trade-preview-icon">' + iconMarkup(ship ? ship.icon : 'ship', 27) + '</span>' +
+      '<strong>' + rec.name + '</strong>' +
+      lines + price +
+      '</div>' +
+      '<button class="trade-button sell" data-action="sell-ship">' + icon('arrowLeft') + 'Продать</button>';
+  }
+
   function shopConsoleHTML() {
-    return state.tradeMode === 'buy' ? shopObjectConsole(currentShop()) : cargoConsole(currentCargo());
+    if (state.tradeMode !== 'buy') return cargoConsole(currentCargo());
+    var owned = ownedShipRecord();
+    if (owned) return ownedShipConsole(owned);
+    return shopObjectConsole(currentShop());
   }
 
   /* Колонка 1 магазина: сведения о выбранном корабле (по умолчанию — первый). */
@@ -570,7 +603,7 @@
       var on = !!(active && active.shipId === rec.shipId);
       var sub = cat ? cat.name : '';
       if (rec.price) sub += (sub ? ' · ' : '') + fmt(Number(rec.price)) + ' ¤';
-      return '<button class="ship-card' + (on ? ' active' : '') + '" data-action="select-user-ship" data-id="' + rec.shipId + '">' +
+      return '<button class="ship-card' + (on ? ' active' : '') + '" data-action="select-user-ship" data-id="' + rec.shipId + '" data-rec="' + rec.id + '">' +
         '<div class="ship-visual">' + shipGlyph(true) +
         (on ? '<span class="active-tag">Выбран</span>' : '') + '</div>' +
         '<div class="ship-meta"><strong>' + rec.name + '</strong><span>' + sub + '</span></div>' +
@@ -646,7 +679,7 @@
     if (action === 'tab') state.tab = el.getAttribute('data-tab');
     else if (action === 'category') changeCategory(el.getAttribute('data-cat'));
     else if (action === 'subcategory') changeSubcategory(el.getAttribute('data-sub'));
-    else if (action === 'select-shop') { state.selectedShop = id; state.tradeMode = 'buy'; state.amount = 1; }
+    else if (action === 'select-shop') { state.selectedShop = id; state.tradeMode = 'buy'; state.amount = 1; state.ownedShipId = ''; }
     else if (action === 'select-cargo') { state.selectedCargo = id; state.tradeMode = 'sell'; state.amount = 1; }
     else if (action === 'amount') state.amount = Math.min(99, Math.max(1, state.amount + dir));
     else if (action === 'add-credits') {
@@ -675,7 +708,22 @@
     else if (action === 'transfer-amount') state.transferAmount = Math.min(99, Math.max(1, state.transferAmount + dir));
     else if (action === 'transfer') transferResource();
     else if (action === 'info-section') state.infoSection = el.getAttribute('data-sec');
-    else if (action === 'select-user-ship') state.userShipId = el.getAttribute('data-id');
+    else if (action === 'select-user-ship') {
+      state.userShipId = el.getAttribute('data-id');
+      state.ownedShipId = el.getAttribute('data-rec') || '';
+      state.tradeMode = 'buy';
+    }
+    else if (action === 'sell-ship') {
+      var rec = ownedShipRecord();
+      var res = rec ? Store.sellShip(rec.id) : { ok: false, error: 'Корабль не выбран' };
+      state.notice = res.ok
+        ? 'Корабль «' + res.name + '» продан за ' + fmt(res.price) + ' ¤'
+        : 'Не удалось продать: ' + (res.error || 'ошибка');
+      if (res.ok) {
+        state.ownedShipId = '';
+        state.userShipId = '';
+      }
+    }
     else return;
 
     render();
