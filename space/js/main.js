@@ -29,6 +29,7 @@ buildSidePanel();
 let lastFrame = performance.now();
 
 function frame() {
+    //
     // dt в секундах реального времени; симуляция продвигается на dt * timeScale.
     // Потолок 0.1 сек защищает от прыжка после сворачивания вкладки.
     const nowMs = performance.now();
