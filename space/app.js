@@ -1104,6 +1104,16 @@ const BASE_CLEAR = 4;
 // Сколько реального времени база «разбирается» после нажатия «Удалить базу».
 const BASE_REMOVAL_MS = 4000;
 
+// Невидимая «панель» подписи базы на карте: одна ширина на все базы, экранные
+// пиксели (сама панель не рисуется — ни фона, ни рамки). Имя длиннее панели
+// подрезается с «…», при наведении на базу едет бегущей строкой, а полоска
+// разбора при удалении тянется во всю панель.
+const BASE_LABEL_W = 96;
+
+// Бегущая строка подписи: id базы -> момент начала наведения (performance.now),
+// пока курсор на базе. Чисто экранная память — в хранилище не попадает.
+const labelScrollFrom = new Map();
+
 /** Период обращения базы на радиусе r: как у Луны, дальше — по Кеплеру. */
 function basePeriodAt(r) {
     return basePeriod * Math.pow(r / baseOrbitRadius, 1.5);
@@ -1531,22 +1541,78 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR) {
     ctx.arc(b.x, b.y, bs + pulse * 4, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Имя базы — шрифт интерфейса (Manrope, как .b-name в списках базы).
-    ctx.font = `600 ${Math.max(9, 10 / zoom)}px "Manrope", sans-serif`;
-    // У удаляемой базы имя краснеет, а вместо текста «демонтаж N с» под
-    // именем тянется красная полоска прогресса разбора.
+    // Подпись базы: имя — шрифт интерфейса (Manrope, как .b-name в списках),
+    // кегль постоянный на экране (10 пикселей при любом зуме). Имя живёт в
+    // границах невидимой панели BASE_LABEL_W: что не влезает — режется с «…»,
+    // а при наведении на базу (маркер или саму панель) включается бегущая
+    // строка — имя уезжает влево и его можно прочитать целиком.
+    const pw = BASE_LABEL_W / zoom;            // ширина панели, мировые единицы
+    const fontPx = 10 / zoom;                  // кегль: 10 экранных пикселей
+    const lx = b.x + bs + 3 / zoom;            // левый край панели
+    const ly = b.y - 3 / zoom;                 // базовая линия имени
+    ctx.font = `600 ${fontPx}px "Manrope", sans-serif`;
+
     const removing = b.status === 'removing';
     ctx.fillStyle = removing ? COLORS.danger : COLORS.base;
-    const lx = b.x + bs + 3 / zoom;
-    const ly = b.y - 3 / zoom;
-    ctx.fillText(b.name, lx, ly);
-    if (removing) {
-        const bw = 42 / zoom, bh = 3 / zoom, by = ly + 4 / zoom;
-        ctx.fillStyle = 'rgba(255, 95, 122, 0.22)';
-        ctx.fillRect(lx, by, bw, bh);
-        ctx.fillStyle = COLORS.danger;
-        ctx.fillRect(lx, by, bw * removalProgress(b), bh);
+
+    const tw = ctx.measureText(b.name).width;
+    const overflow = tw > pw;
+    const scrolling = overflow && labelHovered(b, lx, ly, pw, bs);
+    const nowMs = performance.now();
+    if (scrolling) {
+        if (!labelScrollFrom.has(b.id)) labelScrollFrom.set(b.id, nowMs);
+    } else {
+        labelScrollFrom.delete(b.id);
     }
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(lx, ly - fontPx * 1.25, pw, fontPx * 1.6);
+    ctx.clip();
+    if (scrolling) {
+        // бегущая строка: имя уходит влево, следом въезжает его же копия
+        const gap = 40 / zoom, cycle = tw + gap;
+        const off = ((nowMs - labelScrollFrom.get(b.id)) / 1000) * 28 / zoom % cycle;
+        ctx.fillText(b.name, lx - off, ly);
+        ctx.fillText(b.name, lx - off + cycle, ly);
+    } else {
+        ctx.fillText(overflow ? cutForPanel(ctx, b.name, pw) : b.name, lx, ly);
+    }
+    ctx.restore();
+
+    if (removing) {
+        // полоска разбора — во всю панель, заполняется справа налево
+        const bh = 3 / zoom, by = ly + 4 / zoom;
+        const p = removalProgress(b);
+        ctx.fillStyle = 'rgba(255, 95, 122, 0.22)';
+        ctx.fillRect(lx, by, pw, bh);
+        ctx.fillStyle = COLORS.danger;
+        ctx.fillRect(lx + pw * (1 - p), by, pw * p, bh);
+    }
+}
+
+/** Наведён ли курсор на базу: её маркер, имя или невидимая панель подписи. */
+function labelHovered(b, lx, ly, pw, bs) {
+    if (state.mouseX < 0) return false;
+    const m = screenToWorld(state.mouseX, state.mouseY, state);
+    const zoom = state.zoom;
+    if (Math.hypot(m.x - b.x, m.y - b.y) <= bs + 6 / zoom) return true;
+    const fontPx = 10 / zoom;
+    return m.x >= lx && m.x <= lx + pw
+        && m.y >= ly - fontPx * 1.3 && m.y <= ly + fontPx * 0.4;
+}
+
+/** Имя, вписанное в панель шириной pw: лишнее заменяется на «…». */
+function cutForPanel(ctx, name, pw) {
+    const ELL = '…';
+    const ew = ctx.measureText(ELL).width;
+    let lo = 0, hi = name.length;
+    while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (ctx.measureText(name.slice(0, mid)).width + ew <= pw) lo = mid;
+        else hi = mid - 1;
+    }
+    return name.slice(0, lo).replace(/\s+$/, '') + ELL;
 }
 
 /** Превью режима «выбрать орбиту»: окружность радиуса, лучик и подсказка. */
@@ -2183,7 +2249,7 @@ function drawEarthMoonAndBase(ctx, x, y) {
     ctx.stroke();
 
     ctx.fillStyle = COLORS.base;
-    ctx.font = `600 ${Math.max(9, 10 / z)}px "Manrope", sans-serif`;
+    ctx.font = `600 ${10 / z}px "Manrope", sans-serif`;
     ctx.fillText('BASE', bx + bs + 3 / z, by - 3 / z);
 
     return {

@@ -238,13 +238,16 @@ canvas { display: block; width: 100vw; height: 100vh; }
 .base-row small { margin-left: auto; color: #637a7a; font: 9px "IBM Plex Mono", monospace; white-space: nowrap; }
 .base-row.removing .b-name { color: #ff5f7a; }
 
-/* ===== Разбор базы: красная полоска прогресса под именем ===================== */
+/* ===== Разбор базы: красная полоска прогресса под именем =====================
+   Заполняется справа налево (margin-left: auto держит правый край на месте,
+   а ширина растёт) — как полоска на карте (bases.js). */
 .rm-bar {
     display: block; height: 3px; margin-top: 4px; overflow: hidden;
     background: rgba(255, 95, 122, .18);
 }
 .rm-bar i {
-    display: block; height: 100%; background: #ff5f7a;
+    display: block; margin-left: auto; height: 100%;
+    background: #ff5f7a;
     box-shadow: 0 0 6px rgba(255, 95, 122, .55);
     animation: rm-progress linear forwards;
 }

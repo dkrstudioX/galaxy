@@ -266,7 +266,7 @@ function drawEarthMoonAndBase(ctx, x, y) {
     ctx.stroke();
 
     ctx.fillStyle = COLORS.base;
-    ctx.font = `600 ${Math.max(9, 10 / z)}px "Manrope", sans-serif`;
+    ctx.font = `600 ${10 / z}px "Manrope", sans-serif`;
     ctx.fillText('BASE', bx + bs + 3 / z, by - 3 / z);
 
     return {
