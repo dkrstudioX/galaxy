@@ -12,7 +12,7 @@ import { MIN_ZOOM, MAX_ZOOM, MIN_SPEED, MAX_SPEED } from './config.js';
 import { planets } from './data.js';
 import { findBodyAt } from './hover.js';
 import { selectBody, refreshObjectCard } from './ui.js';
-import { createBase, moveBase, bases, baseRadiusRange } from './bases.js';
+import { createBase, moveBase, bases, fitBaseRadius } from './bases.js';
 
 /**
  * Зум к точке экрана: мировая точка под (ax, ay) остаётся под ней после
@@ -213,7 +213,9 @@ function baseHosts() {
 }
 
 /**
- * Радиус выбираемой орбиты: расстояние от курсора до ближайшего тела, с клампом.
+ * Радиус выбираемой орбиты: расстояние от курсора до ближайшего тела, затем
+ * механизм баз — кламп в коридор хозяина и разведение с другими его базами
+ * (fitBaseRadius): превью показывает ту же орбиту, на которую база встанет.
  * Правило ближайшего тела: как только точка орбиты уходит дальше половины пути
  * до другого тела (курсор ближе к нему, чем к исходному), орбита переезжает к
  * этому телу — база на Венере, уведённая к Земле, окажется у Земли.
@@ -236,9 +238,10 @@ function updateBaseRadius(x, y) {
         state.baseMode = { ...mode, kind: best.kind, planet: best.planet, moon: best.moon };
     }
     const hp = hostPosOf(state.baseMode);   // радиус — от живого положения хоста
-    const rg = baseRadiusRange(state.baseMode);   // коридор: не пересекать тела
-    state.baseRadius = Math.min(rg.max, Math.max(rg.min,
-        hp ? Math.hypot(w.x - hp.x, w.y - hp.y) : bd));
+    // Механизм баз: коридор «не пересекать тела» + разведение с другими базами
+    // этого хозяина; переносимая база себе не мешает (moveId исключается).
+    const d = hp ? Math.hypot(w.x - hp.x, w.y - hp.y) : bd;
+    state.baseRadius = fitBaseRadius(d, state.baseMode, state.baseMode.moveId || null);
     // Сторона орбиты — направление от центра хозяина к курсору: перенос
     // поставит базу с этой стороны, создание появится тут же (mode.ang).
     if (hp) {

@@ -4,6 +4,11 @@
 // астероиды (Атон/Аполлон/Амур), троянцы Юпитера (L4/L5), кометы, пояс
 // Койпера и облако Оорта.
 //
+// Именованные тела семейств (крупнейшие тела пояса, ОЗА по классам, троянцы
+// L4/L5, кометы) группируются при отдалении общим механизмом scene.js
+// groupPlan: помещается visibleCount() тел семейства, хвост схлопывается в
+// тело-представителя с подписью в две строки (см. drawSmallBodies).
+//
 // Каждое тело — сущность со своим типом (kind) и id: в будущем появится
 // добыча/уничтожение астероидов, поэтому генерация выполняется при каждом
 // запуске и детерминирована (сидированный ПСЧ) — пояс стабилен между
@@ -17,6 +22,7 @@ import { state } from './state.js';
 import { makeRng, auToDist, keplerPos, periodFromA, orbitAngle, clamp } from './math.js';
 import { planets, beltNotables, neas, trojanNames, comets } from './data.js';
 import { STROKE } from './config.js';
+import { groupPlan, visibleCount } from './scene.js';
 
 // --- Главный пояс: закон Кеплера от якорей Марс → Юпитер ---------------------
 const MARS = planets.find(p => p.name === 'Mars');
@@ -89,6 +95,7 @@ export const notables = beltNotables.map(b => ({
     id: 'notable-' + b.n,
     kind: 'asteroid',
     name: b.ru + ' / ' + b.n,
+    ru: b.ru,
     note: b.type === 'dwarf' ? 'Карликовая планета' : 'Крупный астероид',
     a: b.a, e: b.e, peri: b.peri, m0: b.m0, dia: b.dia,
     T: periodFromA(b.a),
@@ -134,7 +141,7 @@ const NEA_SEED = 20261018;
 const neaRng = makeRng(NEA_SEED);
 
 export const neaBodies = neas.map(n =>
-    smallBody('nea-' + n.n, 'nea', n.ru + ' / ' + n.n, n, 1.6, { group: n.group }));
+    smallBody('nea-' + n.n, 'nea', n.ru + ' / ' + n.n, n, 1.6, { group: n.group, ru: n.ru }));
 
 for (let i = 0; i < 6; i++) {
     const group = ['amor', 'apollo', 'aten'][i % 3];
@@ -189,6 +196,7 @@ export const trojanBodies = trojanNames.map(t => ({
     id: 'trojan-' + t.n,
     kind: 'trojan',
     name: t.ru + ' / ' + t.n,
+    ru: t.ru,
     camp: t.camp, dAng: t.dAng, dR: t.dR,
     r: 2.2, x: 0, y: 0,
     orbit: { cx: 0, cy: 0, r: JUPITER.dist }
@@ -262,16 +270,30 @@ function drawDustRing(ctx, ring, zoom) {
 // пикселях: (26 + 46·pf)·tailK / zoom, где pf = q/r — близость к перигелию.
 export const cometBodies = comets.map(c =>
     smallBody('comet-' + c.n, 'comet', c.ru + ' / ' + c.n, c, 1.4,
-        { shower: c.shower, src: c.src, tailK: c.tailK }));
+        { shower: c.shower, src: c.src, tailK: c.tailK, ru: c.ru }));
 
 /**
  * Нарисовать малые тела в мировой системе координат (вызывается из render.js
- * после звёзд). Возвращает hoverTargets именованных тел.
- * @returns {Array} цели для hover/выбора
+ * после звёзд). Именованные тела семейств группируются при отдалении тем же
+ * механизмом, что луны планет (scene.js groupPlan, шкала visibleCount):
+ * показанные тела — точки и hover-цели, хвост семейства схлопывается в
+ * тело-представителя, и подпись группы уходит в groups — render.js рисует её
+ * общей drawGroupLabel. Безымянные досыпанные ОЗА — вне групп: их не выбирают.
+ * @returns {{targets: Array, groups: Array}} targets — hover-цели (как раньше);
+ *   groups — { x, y, group } подписи групп у тел-представителей
  */
 export function drawSmallBodies(ctx) {
     const { simDays, zoom } = state;
     const targets = [];
+    const groups = [];
+    const fit = visibleCount();
+
+    /** Хвост семейства (если не поместился) — подписью у тела-представителя. */
+    function pushGroup(plan) {
+        if (!plan.group) return;
+        const rep = plan.shown[plan.group.at].m;
+        groups.push({ x: rep.x, y: rep.y, group: plan.group });
+    }
 
     // Дальняя пыль фоном: пояс Койпера и облако Оорта (под всеми телами)
     drawDustRing(ctx, kuiperDust, zoom);
@@ -287,7 +309,8 @@ export function drawSmallBodies(ctx) {
     });
 
     // Крупнейшие тела пояса — заметные точки с обводкой, выбираются
-    notables.forEach(b => {
+    const notablePlan = groupPlan(notables, fit, { nameOf: m => m.ru });
+    notablePlan.shown.forEach(({ m: b }) => {
         const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
         b.x = pos.x;
         b.y = pos.y;
@@ -302,23 +325,39 @@ export function drawSmallBodies(ctx) {
 
         targets.push({ kind: 'asteroid', name: b.name, x: pos.x, y: pos.y, r: b.r, moons: [], small: b });
     });
+    pushGroup(notablePlan);
 
-    // ОЗА: именованные ярче и с обводкой; безымянные — тусклые точки
+    // ОЗА: сначала позиции всех тел, затем безымянные — тусклые точки всегда
+    // (в группы не входят, их не выбирают), именованные — по классам
+    // (amor/apollo/aten): у каждого класса своё число показанных и своя группа
     neaBodies.forEach(b => {
         const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
         b.x = pos.x;
         b.y = pos.y;
+    });
 
+    ctx.fillStyle = '#8a8a8a';
+    neaBodies.forEach(b => {
+        if (b.name) return;
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, b.r, 0, Math.PI * 2);
-        ctx.fillStyle = b.name ? '#d8d8d8' : '#8a8a8a';
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
         ctx.fill();
-        if (b.name) {
+    });
+
+    ['amor', 'apollo', 'aten'].forEach(g => {
+        const plan = groupPlan(neaBodies.filter(b => b.name && b.group === g), fit,
+            { nameOf: m => m.ru });
+        plan.shown.forEach(({ m: b }) => {
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+            ctx.fillStyle = '#d8d8d8';
+            ctx.fill();
             ctx.strokeStyle = '#f0f0f0';
             ctx.lineWidth = STROKE.moon / zoom;
             ctx.stroke();
-            targets.push({ kind: 'nea', name: b.name, x: pos.x, y: pos.y, r: b.r, moons: [], small: b });
-        }
+            targets.push({ kind: 'nea', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
+        });
+        pushGroup(plan);
     });
 
     // Троянцы: два облака точек, синхронных с Юпитером (плюс либрация)
@@ -335,26 +374,37 @@ export function drawSmallBodies(ctx) {
         });
     });
 
-    // Именованные троянцы — заметные точки с обводкой, выбираются
+    // Именованные троянцы — заметные точки с обводкой, выбираются; позиции
+    // всех, затем группировка по облакам (L4 и L5 — отдельные семейства)
     trojanBodies.forEach(b => {
         const ang = jupAng + b.camp * Math.PI / 3 + (b.dAng + trojanLib(simDays, b.camp)) * Math.PI / 180;
         const rr = JUPITER.dist + b.dR;
         b.x = Math.cos(ang) * rr;
         b.y = -Math.sin(ang) * rr;
-
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-        ctx.fillStyle = '#cfcfcf';
-        ctx.fill();
-        ctx.strokeStyle = '#efefef';
-        ctx.lineWidth = STROKE.moon / zoom;
-        ctx.stroke();
-
-        targets.push({ kind: 'trojan', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
     });
 
-    // Кометы: ядро, кома и хвост, направленный от Солнца
-    cometBodies.forEach(b => {
+    [4, 5].forEach(camp => {
+        const plan = groupPlan(trojanBodies.filter(b => b.camp === camp), fit,
+            { nameOf: m => m.ru });
+        plan.shown.forEach(({ m: b }) => {
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+            ctx.fillStyle = '#cfcfcf';
+            ctx.fill();
+            ctx.strokeStyle = '#efefef';
+            ctx.lineWidth = STROKE.moon / zoom;
+            ctx.stroke();
+
+            targets.push({ kind: 'trojan', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
+        });
+        pushGroup(plan);
+    });
+
+    // Кометы: ядро, кома и хвост, направленный от Солнца. Показанные — по
+    // общему плану; скрытые группой не рисуются, их имена уходят в подпись
+    // представителя (как и у остальных семейств)
+    const cometPlan = groupPlan(cometBodies, fit, { nameOf: m => m.ru });
+    cometPlan.shown.forEach(({ m: b }) => {
         const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
         b.x = pos.x;
         b.y = pos.y;
@@ -398,6 +448,7 @@ export function drawSmallBodies(ctx) {
 
         targets.push({ kind: 'comet', name: b.name, x: pos.x, y: pos.y, r: b.r, moons: [], small: b });
     });
+    pushGroup(cometPlan);
 
-    return targets;
+    return { targets, groups };
 }

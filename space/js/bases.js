@@ -19,7 +19,11 @@
 // зажат в коридор baseRadiusRange: от поверхности хозяина до ближайшей чужой
 // «полосы» — дисков Солнца и соседних планет (база у Меркурия не дотянется до
 // орбиты Венеры) и соседних тел (лун планеты или планеты и лун-соседей у базы
-// на луне); так орбита базы не пересекает ни тела, ни их орбиты. Период
+// на луне); так орбита базы не пересекает ни тела, ни их орбиты. Вдобавок
+// орбита разводится с другими базами того же хозяина (BASE_SAME_GAP): кольца
+// баз не сливаются (fitBaseRadius). Стартовая база LUNA-ORBIT, которую
+// render.js раньше рисовал жёстко у Луны Земли, при загрузке становится
+// обычной записью механизма. Период
 // обращения — как у Луны: одни сутки на радиусе
 // baseOrbitRadius, дальше по закону Кеплера.
 //
@@ -53,6 +57,11 @@ export const BASE_MAX_R = 300;
 
 // Запас между орбитой базы и поверхностью тел: хозяина и соседей (единицы мира).
 const BASE_CLEAR = 4;
+
+// Минимальный зазор между орбитами двух баз одного хозяина: кольца не
+// сливаются в одно. Если коридор уже забит и свободного места нет (у лун места
+// мало), база встаёт в точку с наибольшим зазором — см. fitRadius.
+const BASE_SAME_GAP = 3;
 
 // Сколько реального времени база «разбирается» после нажатия «Удалить базу».
 export const BASE_REMOVAL_MS = 4000;
@@ -153,18 +162,121 @@ function saveBases() {
 /** Записи баз + позиции x/y, обновляемые каждый кадр при отрисовке. */
 export const bases = loadBases();
 
+/** Ключ хоста: 'planet:Mars' или 'moon:Mars:Фобос / Phobos'. */
+export function hostKey(kind, planet, moon) {
+    return kind === 'planet' ? 'planet:' + planet : 'moon:' + planet + ':' + moon;
+}
+
 /**
- * Привести радиусы загруженных баз к коридору хозяина (baseRadiusRange):
- * базы, созданные до появления полос Солнца/планет/лун, могли пересекать
- * чужие орбиты. Период пересчитывается под новый радиус; надгробия
- * (`removed`) не трогаем — их место уже история. Если что-то поменялось,
- * хранилище сразу перезаписывается.
+ * Свободный радиус орбиты с учётом баз того же хозяина: из коридора
+ * baseRadiusRange исключаются «полосы» rb ± BASE_SAME_GAP вокруг орбит
+ * соседних баз, берётся ближайшая к желаемой свободная точка. Если коридор
+ * слишком узкий и свободного места нет (у лун места мало), выбирается точка с
+ * наибольшим зазором от чужих орбит — кольца баз не сливаются, пока это
+ * геометрически возможно.
+ * @param {number} r желаемый радиус
+ * @param {{kind: string, planet: string, moon: ?string}} host
+ * @param {Array<number>} blocked радиусы орбит других баз хозяина
+ * @returns {number} радиус, округлённый до десятых (как все орбиты баз)
+ */
+function fitRadius(r, host, blocked) {
+    const { min, max } = baseRadiusRange(host);
+    const want = Math.min(Math.max(r, min), max);
+    if (!blocked.length) return Math.round(want * 10) / 10;
+    const clampIn = x => Math.min(Math.max(x, min), max);
+    const free = x => blocked.every(b => Math.abs(x - b) >= BASE_SAME_GAP - 1e-6);
+    const cands = [min, max, want];
+    blocked.forEach(b => cands.push(b - BASE_SAME_GAP, b + BASE_SAME_GAP));
+    const ok = cands.map(clampIn).filter(free);
+    let best;
+    if (ok.length) {
+        best = ok[0];
+        ok.forEach(x => { if (Math.abs(x - want) < Math.abs(best - want)) best = x; });
+    } else {
+        // Свободного места нет: кандидаты «наименее тесно» — середины между
+        // полосами соседей и краями коридора; берём точку с максимальным
+        // зазором, при равенстве — ближайшую к желаемой.
+        const gapAt = x => Math.min(...blocked.map(b => Math.abs(x - b)));
+        const edges = [min, ...blocked.filter(b => b > min && b < max).sort((a, b) => a - b), max];
+        const mids = edges.slice(1).map((e, i) => (edges[i] + e) / 2);
+        best = want;
+        let bg = gapAt(want);
+        [...cands, ...mids].forEach(v => {
+            const x = clampIn(v), g = gapAt(x);
+            if (g > bg + 1e-6 ||
+                (Math.abs(g - bg) <= 1e-6 && Math.abs(x - want) < Math.abs(best - want))) {
+                best = x;
+                bg = g;
+            }
+        });
+    }
+    return Math.round(best * 10) / 10;
+}
+
+/** Радиусы орбит остальных баз того же хозяина (без exceptId). */
+function occupiedRadii(host, exceptId) {
+    const key = hostKey(host.kind, host.planet, host.moon || null);
+    return bases
+        .filter(b => b.status !== 'removed' && b.id !== exceptId &&
+            hostKey(b.hostKind, b.planet, b.moon || null) === key)
+        .map(b => b.orbitRadius);
+}
+
+/**
+ * Радиус орбиты базы при создании и переносе: коридор хозяина плюс разведение
+ * с другими базами того же хозяина (fitRadius). Переносимая база сама себя не
+ * стесняет — exceptId исключается.
+ */
+export function fitBaseRadius(r, host, exceptId) {
+    return fitRadius(r, host, occupiedRadii(host, exceptId || null));
+}
+
+/**
+ * Легаси-база «LUNA-ORBIT»: исторически рисовалась в render.js жёстко (маркер
+ * с подписью BASE на орбите у Луны Земли) и не подчинялась механизму. При
+ * первом запуске она становится обычной записью: участвует в разведении
+ * орбит, переносится и удаляется, а корабли из ангара (флаг fleet) — в её
+ * карточке. Если запись уже есть (в том числе надгробие после удаления) —
+ * ничего не создаём.
+ */
+(function migrateLegacyLunaOrbit() {
+    if (bases.some(b => b.id === 'base-luna-orbit')) return;
+    bases.push({
+        id: 'base-luna-orbit',
+        name: 'LUNA-ORBIT',
+        status: 'active',
+        hostKind: 'moon',
+        planet: 'Earth',
+        moon: 'Луна / Moon',
+        orbitRadius: baseOrbitRadius,
+        period: basePeriodAt(baseOrbitRadius),
+        phase0: 0,
+        created: new Date().toISOString(),
+        fleet: true
+    });
+    saveBases();
+})();
+
+/**
+ * Привести радиусы загруженных баз к коридору хозяина (baseRadiusRange) и
+ * развести орбиты баз одного хозяина (fitRadius): базы, созданные до
+ * появления полос и разведения, могли пересекать чужие орбиты или слипаться.
+ * Базы обрабатываются в порядке массива — каждая считается с уже принятыми,
+ * поэтому результат стабилен (повторная загрузка ничего не двигает), а период
+ * пересчитывается под новый радиус. Надгробия (`removed`) не трогаем — их
+ * место уже история. Если что-то поменялось, хранилище сразу перезаписывается.
  */
 (function normalizeBaseRadii() {
     let changed = false;
+    const accepted = new Map();   // hostKey -> радиусы уже принятых баз
     bases.forEach(b => {
         if (b.status === 'removed') return;
-        const r = radiusOf(b.orbitRadius, { kind: b.hostKind, planet: b.planet, moon: b.moon || null });
+        const host = { kind: b.hostKind, planet: b.planet, moon: b.moon || null };
+        const key = hostKey(host.kind, host.planet, host.moon);
+        let list = accepted.get(key);
+        if (!list) accepted.set(key, list = []);
+        const r = fitRadius(b.orbitRadius, host, list);
+        list.push(r);
         if (r === b.orbitRadius) return;
         b.orbitRadius = r;
         b.period = basePeriodAt(r);
@@ -172,11 +284,6 @@ export const bases = loadBases();
     });
     if (changed) saveBases();
 })();
-
-/** Ключ хоста: 'planet:Mars' или 'moon:Mars:Фобос / Phobos'. */
-export function hostKey(kind, planet, moon) {
-    return kind === 'planet' ? 'planet:' + planet : 'moon:' + planet + ':' + moon;
-}
 
 // --- Реестр имён баз (отдельный ключ localStorage) --------------------------
 // По индексу имени в BASE_NAMES: сколько раз оно выпадало (count — для
@@ -275,12 +382,6 @@ function updateBasePlace(rec) {
     });
 }
 
-/** Радиус орбиты: округлён до десятых и зажат в коридор хоста (baseRadiusRange). */
-function radiusOf(r, host) {
-    const { min, max } = baseRadiusRange(host);
-    return Math.round(Math.min(Math.max(r, min), max) * 10) / 10;
-}
-
 /**
  * Фаза базы (phase0) так, чтобы прямо сейчас (state.simDays) она стояла на
  * направлении ang от центра хоста: phase0 = ang − 2π·t/период. null — угол не
@@ -310,12 +411,13 @@ let baseSeq = 0;
  * localStorage. Имя выбирается случайно из BASE_NAMES (bases_name.js), повтор
  * получает суффикс « - 2». Карточку/список обновляет вызывающий код (input.js).
  * @param {{kind: string, planet: string, moon: ?string}} host
- * @param {number} r радиус орбиты, единицы мира (клампится в коридор хоста)
+ * @param {number} r радиус орбиты, единицы мира (коридор хоста + разведение
+ *   с другими его базами — fitBaseRadius)
  * @param {?number} ang угол от центра хоста к курсору (радианы): база появится
  *   с этой стороны; не задан — случайная точка орбиты
  */
 export function createBase(host, r, ang) {
-    const orbitRadius = radiusOf(r, host);
+    const orbitRadius = fitBaseRadius(r, host, null);
     const period = basePeriodAt(orbitRadius);
     const phase = phaseFor(ang, period);
     const { nameId, name, nameCount } = takeBaseName();
@@ -348,7 +450,8 @@ export function createBase(host, r, ang) {
  * карточку обновляет вызывающий код (input.js).
  * @param {Object} rec запись базы
  * @param {{kind: string, planet: string, moon: ?string}} host
- * @param {number} r радиус орбиты, единицы мира (клампится)
+ * @param {number} r радиус орбиты, единицы мира (коридор хоста + разведение
+ *   с другими его базами, сама переносимая база не мешает)
  * @param {?number} ang угол от центра хоста к курсору (радианы); не задан —
  *   сторона орбиты у базы сохраняется
  */
@@ -357,7 +460,7 @@ export function moveBase(rec, host, r, ang) {
     rec.hostKind = host.kind;
     rec.planet = host.planet;
     rec.moon = host.moon || null;
-    rec.orbitRadius = radiusOf(r, host);
+    rec.orbitRadius = fitBaseRadius(r, host, rec.id);
     rec.period = basePeriodAt(rec.orbitRadius);
     const phase = phaseFor(ang, rec.period);
     if (phase !== null) rec.phase0 = phase;

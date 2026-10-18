@@ -13,8 +13,8 @@
 import { state } from './state.js';
 import { formatSimDate, clamp } from './math.js';
 import { SUN_R, COLORS, MIN_ZOOM, MAX_ZOOM } from './config.js';
-import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, moonOrbitRadius, moonPeriod, baseOrbitRadius } from './data.js';
-import { bases, basesAt, baseRadiusRange, startBaseRemoval, removalProgress, BASE_REMOVAL_MS } from './bases.js';
+import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, moonOrbitRadius, moonPeriod } from './data.js';
+import { bases, basesAt, fitBaseRadius, startBaseRemoval, removalProgress, BASE_REMOVAL_MS } from './bases.js';
 
 // Русские названия и подписи классов для блока «ОБЪЕКТ».
 const RU = {
@@ -214,7 +214,8 @@ export function updateFlyTo() {
 function moonFromTree(planet, name) {
     const real = (moonsByPlanet[planet.name] || []).find(m => m.n === name);
     if (real) return real;
-    return { n: name, period: planet.hasBase ? 27.321661 : 0, r: 3 };
+    // Луна Земли — псевдо-луна: отдельный блок рисования в render.js
+    return { n: name, period: moonPeriod, r: 3 };
 }
 
 /**
@@ -268,7 +269,7 @@ function renderObjectInfo() {
     } else if (sel.kind === 'comet') {
         html = cometInfoHTML(sel.small);
     } else if (sel.kind === 'base') {
-        html = sel.local ? newBaseInfoHTML(sel.local) : baseInfoHTML();
+        html = sel.local ? newBaseInfoHTML(sel.local) : '';
     } else {
         const p = sel.p;
         const m = sel.m;
@@ -360,9 +361,6 @@ function asteroidInfoHTML(b) {
 /** Секция «Звёздные базы» в карточке планеты/луны: список + кнопка создания. */
 function basesSectionHTML(kind, planet, moon) {
     const rows = [];
-    if (kind === 'moon' && planet === 'Earth' && moon === 'Луна / Moon') {
-        rows.push(baseRowHTML('', 'LUNA-ORBIT', 'орбита ' + Math.round(baseOrbitRadius) + ' ед.', null)); // стартовая база
-    }
     basesAt(kind, planet, moon).forEach(b => rows.push(baseRowHTML(b.id, b.name,
         'орбита ' + Math.round(b.orbitRadius) + ' ед.', b)));
 
@@ -380,9 +378,9 @@ function basesSectionHTML(kind, planet, moon) {
 }
 
 /**
- * Строка базы в списке: имя и хвостик-подпись (id пустой — стартовая
- * LUNA-ORBIT). У удаляемой базы (rec.status 'removing') хвостик со временем
- * заменяется красной полоской прогресса под именем.
+ * Строка базы в списке: имя и хвостик-подпись. У удаляемой базы (rec.status
+ * 'removing') хвостик со временем заменяется красной полоской прогресса под
+ * именем.
  */
 function baseRowHTML(id, name, tail, rec) {
     const removing = rec && rec.status === 'removing' ? rec : null;
@@ -446,11 +444,6 @@ function wireObjectCard(box) {
     box.querySelectorAll('.base-row').forEach(el => {
         el.addEventListener('click', () => {
             const id = el.dataset.base;
-            if (!id) {   // стартовая база LUNA-ORBIT — её рисует render.js
-                const p = planets.find(x => x.name === 'Earth');
-                selectBody({ kind: 'base', name: 'База LUNA-ORBIT', p, m: null });
-                return;
-            }
             const rec = bases.find(b => b.id === id);
             if (!rec) return;
             const p = planets.find(x => x.name === rec.planet);
@@ -466,9 +459,9 @@ function wireObjectCard(box) {
         // Режим уже активен (хост мог переехать к ближайшему телу) — отменяем его,
         // иначе начинаем выбор орбиты у этой планеты/луны.
         state.baseMode = state.baseMode ? null : { kind, planet, moon };
-        // Стартовый радиус 60 — но в коридоре хоста (орбита не пересекает тела).
-        const rg = state.baseMode ? baseRadiusRange(state.baseMode) : null;
-        state.baseRadius = rg ? Math.min(rg.max, Math.max(rg.min, 60)) : 60;
+        // Стартовый радиус 60 — но по механизму баз: коридор хоста плюс
+        // разведение с другими его базами (fitBaseRadius).
+        state.baseRadius = state.baseMode ? fitBaseRadius(60, state.baseMode, null) : 60;
         renderObjectInfo();   // надпись кнопки: «Создать базу» <-> «Отмена»
     });
 
@@ -482,9 +475,9 @@ function wireObjectCard(box) {
             const rec = bases.find(b => b.id === mvBtn.dataset.moveId);
             if (!rec || rec.status !== 'active') return;   // удаляемую не переносим
             state.baseMode = { kind: rec.hostKind, planet: rec.planet, moon: rec.moon || null, moveId: rec.id };
-            // Стартуем с текущего радиуса базы, но в коридоре хоста.
-            const rg = baseRadiusRange(state.baseMode);
-            state.baseRadius = Math.min(rg.max, Math.max(rg.min, rec.orbitRadius));
+            // Стартуем с текущего радиуса базы — по механизму: коридор хоста и
+            // разведение с другими базами (сама переносимая не мешает).
+            state.baseRadius = fitBaseRadius(rec.orbitRadius, state.baseMode, rec.id);
         }
         renderObjectInfo();   // надпись кнопки: «Переместить базу» <-> «Отмена»
     });
@@ -602,6 +595,7 @@ function newBaseInfoHTML(b) {
         ? 'луна ' + b.moon
         : 'планета ' + (RU[b.planet] || b.planet);
     const removing = b.status === 'removing';   // идёт разбор: имя краснеет, под ним полоска прогресса, кнопки выключены
+    const fleet = !!b.fleet;    // стартовая LUNA-ORBIT: в карточке — купленные корабли
     return '<div class="obj-title' + (removing ? ' danger' : '') + '"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
             '<strong>База ' + b.name + '</strong></div>' +
         (removing ? removalBarHTML(b) : '') +
@@ -612,9 +606,10 @@ function newBaseInfoHTML(b) {
             row('Создана', (b.created || '').slice(0, 10)) +
             (removing ? row('Статус', 'удаляется') : '') +
         '</div>' +
-        '<div class="obj-note">' + (removing
-            ? 'База разбирается — перенос и повторное удаление недоступны'
-            : 'Новая база на орбите — корабли и постройки появятся позже') + '</div>' +
+        (removing
+            ? '<div class="obj-note">База разбирается — перенос и повторное удаление недоступны</div>'
+            : fleet ? '' : '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>') +
+        (fleet && !removing ? shipsSectionHTML() : '') +
         moveBaseButtonHTML(b) +
         deleteBaseButtonHTML(b);
 }
@@ -626,24 +621,14 @@ function row(k, v, cls) {
 /* ---------- База: купленные корабли из data/store.js ---------- */
 
 /**
- * Блок «Объект» для базы: параметры орбиты и список купленных кораблей
- * в формате списка «В продаже» из ангара (имя, масса, категория, цена).
- * Данные — общие с админкой и ангаром (window.Store, ключ galaxy_admin_db_v1).
+ * Секция «Купленные корабли» для карточки базы: список в формате «В продаже»
+ * из ангара (имя, масса, категория, цена). Данные — общие с админкой и ангаром
+ * (window.Store, ключ galaxy_admin_db_v1). Показывается у базы игрока (флаг
+ * fleet — стартовая LUNA-ORBIT).
  */
-function baseInfoHTML() {
+function shipsSectionHTML() {
     const ships = readUserShips();
-
-    let html =
-        '<div class="obj-title"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
-            '<strong>База LUNA-ORBIT</strong></div>' +
-        '<div class="obj-kind">Орбитальная база · Луна</div>' +
-        '<div class="obj-rows">' +
-            row('Луна', 'Луна / Moon') +
-            row('Радиус орбиты', baseOrbitRadius + ' <em>ед.</em>') +
-            (ships.length ? row('Куплено кораблей', ships.length) : '') +
-        '</div>';
-
-    html += '<div class="obj-sub-title"><span>Купленные корабли</span>' +
+    let html = '<div class="obj-sub-title"><span>Купленные корабли</span>' +
         (ships.length ? '<small>' + ships.length + ' ' + pluralRu(ships.length, ['позиция', 'позиции', 'позиций']) + '</small>' : '') +
         '</div>';
 

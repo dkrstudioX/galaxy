@@ -5,12 +5,11 @@
 // =============================================================================
 
 // Планеты. r и dist — условные единицы мира (не в масштабе, но порядок верный).
-// hasBase — вокруг этой планеты крутится Луна с игровой базой (Земля).
 // rings — рисовать кольца (Сатурн). type оставлен для совместимости.
 export const planets = [
     { name: 'Mercury', color: '#b5b5b5', r: 4,  dist: 70,  period: 87.969,   l0: 252.251, type: 'rocky' },
     { name: 'Venus',   color: '#e8cda0', r: 7,  dist: 110, period: 224.701,  l0: 181.980, type: 'rocky' },
-    { name: 'Earth',   color: '#4488ff', r: 8,  dist: 160, period: 365.256,  l0: 100.464, type: 'earth', hasBase: true },
+    { name: 'Earth',   color: '#4488ff', r: 8,  dist: 160, period: 365.256,  l0: 100.464, type: 'earth' },
     { name: 'Mars',    color: '#c1440e', r: 5,  dist: 220, period: 686.980,  l0: 355.453, type: 'rocky' },
     { name: 'Jupiter', color: '#c88b3a', r: 22, dist: 380, period: 4332.589, l0: 34.396,  type: 'gas' },
     { name: 'Saturn',  color: '#e8d191', r: 18, dist: 520, period: 10759.22, l0: 49.954,  type: 'gas', rings: true },
@@ -18,12 +17,15 @@ export const planets = [
     { name: 'Neptune', color: '#3f54ba', r: 12, dist: 780, period: 60189.0,  l0: 304.880, type: 'ice' }
 ];
 
-// Луна Земли: сидерический период 27.32 суток. База делает виток за условные 1 сутки.
+// Луна Земли: сидерический период 27.32 суток.
 export const moonDist = 22;          // радиус орбиты Луны от Земли
 export const moonPeriod = 27.321661; // суток
 export const moonL0 = 218.32;        // средняя долгота на J2000, градусы
-export const baseOrbitRadius = 10;   // радиус орбиты базы вокруг Луны
-export const basePeriod = 1;         // суток на виток
+// Базы игрока: на радиусе baseOrbitRadius виток занимает basePeriod суток,
+// дальше период растёт по закону Кеплера (bases.js); на этом же радиусе
+// рождается стартовая база LUNA-ORBIT.
+export const baseOrbitRadius = 10;
+export const basePeriod = 1;         // суток на виток (на радиусе baseOrbitRadius)
 
 /**
  * Радиус орбиты i-й луны планеты на карте (единицы мира): главная луна на
@@ -37,7 +39,7 @@ export function moonOrbitRadius(p, i) {
 
 // Главные луны других планет: период (сутки), радиус отрисовки r, цвет c,
 // стартовая фаза phase (градусы, произвольная). Порядок = порядок раскрытия
-// при зуме (см. scene.js visibleMoons): первыми показываются главные луны,
+// при зуме (см. scene.js visibleCount): первыми показываются главные луны,
 // при росте зума добавляются всё более мелкие/дальних.
 export const moonsByPlanet = {
     Mars: [

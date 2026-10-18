@@ -13,8 +13,8 @@
 import { state } from './state.js';
 import { orbitAngle } from './math.js';
 import { SUN_R, COLORS, STROKE } from './config.js';
-import { planets, moonsByPlanet, moonDist, moonPeriod, moonL0, baseOrbitRadius, basePeriod, moonOrbitRadius } from './data.js';
-import { stars, groupPlan, visibleMoons } from './scene.js';
+import { planets, moonsByPlanet, moonDist, moonPeriod, moonL0, moonOrbitRadius } from './data.js';
+import { stars, groupPlan, visibleCount } from './scene.js';
 import { drawSmallBodies } from './smallbodies.js';
 import { bases, drawBases } from './bases.js';
 import { drawSky } from './sky.js';
@@ -41,8 +41,12 @@ export function renderScene(ctx) {
     drawStars(ctx, time);
 
     // Малые тела (пояс, ОЗА, троянцы, кометы, дальние пояса) — отдельный слой
-    // smallbodies.js: частицы рисует сам, именованные тела отдаёт как hover-цели.
-    hoverTargets.push(...drawSmallBodies(ctx));
+    // smallbodies.js: точки показанных тел и частицы рисует сам, именованные
+    // тела отдаёт как hover-цели, а сгруппированные хвосты семейств — как
+    // подписи групп: рисуются общей drawGroupLabel, как у лун планет.
+    const small = drawSmallBodies(ctx);
+    hoverTargets.push(...small.targets);
+    small.groups.forEach(g => drawGroupLabel(ctx, g.x, g.y, g.group, zoom, null));
 
     // Солнце — первая hover-цель (проверяется последней, т.к. планеты поверх)
     drawSun(ctx);
@@ -64,26 +68,14 @@ export function renderScene(ctx) {
 
         const moonHits = drawPlanetMoons(ctx, x, y, p, hostPos, groupBaseIds);
 
-        // Луна Земли + орбитальная база — особый случай (hasBase у Земли)
-        let baseHit = null;
-        if (p.hasBase) {
-            const hit = drawEarthMoonAndBase(ctx, x, y);
-            if (hit) {
-                moonHits.push(hit.moon);
-                // База — отдельная цель выбора, как планета или луна.
-                baseHit = {
-                    kind: 'base',
-                    name: 'База LUNA-ORBIT',
-                    x: hit.base.bx, y: hit.base.by, r: hit.base.r,
-                    orbitCx: hit.moon.mx, orbitCy: hit.moon.my, orbitR: baseOrbitRadius,
-                    p, moons: []
-                };
-            }
+        // Луна Земли — особый случай: своя дистанция и радиус, не в moonsByPlanet.
+        // Базы на ней рисует общий слой баз (bases.js), как у остальных лун.
+        if (p.name === 'Earth') {
+            const hit = drawEarthMoon(ctx, x, y);
+            if (hit) moonHits.push(hit.moon);
         }
 
         hoverTargets.push({ kind: 'planet', p, x, y, moons: moonHits });
-        // база добавляется после планеты: рисуется поверх и проверяется первой
-        if (baseHit) hoverTargets.push(baseHit);
 
         // позиции хост-тел для звёздных баз: планета и её луны (скрытые
         // луны группы встают в маркер-представителя — см. drawPlanetMoons)
@@ -183,9 +175,9 @@ function drawMoonBody(ctx, x, y, r) {
  */
 function drawPlanetMoons(ctx, x, y, p, hostPos, groupBaseIds) {
     const { simDays, zoom } = state;
-    // Группировка лун: помещается visibleMoons() штук, базы игрока — те, что
+    // Группировка лун: помещается visibleCount() штук, базы игрока — те, что
     // стоят именно на луне (hostKind 'moon'); удалённые в подпись не берём.
-    const plan = groupPlan(moonsByPlanet[p.name] || [], visibleMoons(), {
+    const plan = groupPlan(moonsByPlanet[p.name] || [], visibleCount(), {
         baseOf: m => bases.filter(b => b.status !== 'removed'
             && b.hostKind === 'moon' && b.planet === p.name && b.moon === m.n)
     });
@@ -218,14 +210,14 @@ function drawPlanetMoons(ctx, x, y, p, hostPos, groupBaseIds) {
 
 /**
  * Подпись группы тел у маркера-представителя (plan.group из scene.js
- * groupPlan) — общая для лун, а дальше планет, систем и малых тел: две
- * строки, имена тел и базы на них. Стиль подсказки hover: тень 1 px, кегль
- * постоянный на экране (10 / zoom). Первая строка белая, вторая — цианом
- * (цвет баз). Базы группы складываются в quietIds: bases.js нарисует их
- * маркеры без имён — имена уже стоят в подписи.
+ * groupPlan) — общая для лун планет и семейств малых тел: две строки, имена
+ * тел и базы на них. Стиль подсказки hover: тень 1 px, кегль постоянный на
+ * экране (10 / zoom). Первая строка белая, вторая — цианом (цвет баз). Базы
+ * группы складываются в quietIds: bases.js нарисует их маркеры без имён —
+ * имена уже стоят в подписи (у малых тел баз пока нет, quietIds = null).
  */
 function drawGroupLabel(ctx, mx, my, group, zoom, quietIds) {
-    group.bases.forEach(b => quietIds.add(b.id));
+    if (quietIds) group.bases.forEach(b => quietIds.add(b.id));
     ctx.font = `${10 / zoom}px monospace`;
     const lx = mx + 6 / zoom, ly = my - 4 / zoom;
     groupLine(ctx, group.label, lx, ly, COLORS.tooltip, zoom);
@@ -242,13 +234,13 @@ function groupLine(ctx, text, x, y, color, zoom) {
 }
 
 /**
- * Луна Земли + орбитальная база игрока. База — циановый маркер с пульсом
- * и подписью BASE; её орбита вокруг Луны показывается всегда (это не орбиты
- * планет, которые скрыты до наведения).
- * @returns {{moon: {m, md, mx, my}, base: {bx, by, r}}} хиты Луны и базы
+ * Луна Земли — отдельный блок рисования: у неё своя дистанция и радиус
+ * (render.js), а не запись в moonsByPlanet. Базы на её орбите рисует общий
+ * слой баз (bases.js), как и у остальных лун.
+ * @returns {{moon: {m, md, mx, my}}} хит Луны для наведения и выбора
  */
-function drawEarthMoonAndBase(ctx, x, y) {
-    const { zoom: z, simDays, time } = state;
+function drawEarthMoon(ctx, x, y) {
+    const { simDays } = state;
 
     const mAng = orbitAngle(moonL0, moonPeriod, simDays);
     const mx = x + Math.cos(mAng) * moonDist;
@@ -256,48 +248,7 @@ function drawEarthMoonAndBase(ctx, x, y) {
 
     drawMoonBody(ctx, mx, my, 3);
 
-    // орбита базы вокруг Луны — мелкий пунктир
-    const bAng = orbitAngle(0, basePeriod, simDays);
-    const bx = mx + Math.cos(bAng) * baseOrbitRadius;
-    const by = my - Math.sin(bAng) * baseOrbitRadius;
-
-    ctx.strokeStyle = '#00ffff44';
-    ctx.lineWidth = 0.5 / z;
-    ctx.setLineDash([1 / z, 1 / z]);
-    circle(ctx, mx, my, baseOrbitRadius);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // маркер базы: свечение, квадрат, пульсирующее кольцо, подпись
-    const bs = 4 / z;
-
-    const baseGlow = ctx.createRadialGradient(bx, by, 0, bx, by, bs * 2);
-    baseGlow.addColorStop(0, 'rgba(0,255,255,0.6)');
-    baseGlow.addColorStop(1, 'rgba(0,255,255,0)');
-    ctx.fillStyle = baseGlow;
-    circle(ctx, bx, by, bs * 2);
-    ctx.fill();
-
-    ctx.fillStyle = COLORS.base;
-    ctx.fillRect(bx - bs / 2, by - bs / 2, bs, bs);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1 / z;
-    ctx.strokeRect(bx - bs / 2, by - bs / 2, bs, bs);
-
-    const pulse = (Math.sin(time * 4) + 1) * 0.5;
-    ctx.strokeStyle = `rgba(0,255,255,${0.5 - pulse * 0.5})`;
-    ctx.lineWidth = 1 / z;
-    circle(ctx, bx, by, bs + pulse * 4);
-    ctx.stroke();
-
-    ctx.fillStyle = COLORS.base;
-    ctx.font = `600 ${10 / z}px "Manrope", sans-serif`;
-    ctx.fillText('BASE', bx + bs + 3 / z, by - 3 / z);
-
-    return {
-        moon: { m: { n: 'Луна / Moon', r: 3, period: moonPeriod }, md: moonDist, mx, my },
-        base: { bx, by, r: bs }
-    };
+    return { moon: { m: { n: 'Луна / Moon', r: 3, period: moonPeriod }, md: moonDist, mx, my } };
 }
 
 /** Начать путь-окружность (без fill/stroke — их выбирает вызывающий). */

@@ -180,12 +180,11 @@ function keplerPos(a, e, peri, m0, T, t) {
 // =============================================================================
 
 // Планеты. r и dist — условные единицы мира (не в масштабе, но порядок верный).
-// hasBase — вокруг этой планеты крутится Луна с игровой базой (Земля).
 // rings — рисовать кольца (Сатурн). type оставлен для совместимости.
 const planets = [
     { name: 'Mercury', color: '#b5b5b5', r: 4,  dist: 70,  period: 87.969,   l0: 252.251, type: 'rocky' },
     { name: 'Venus',   color: '#e8cda0', r: 7,  dist: 110, period: 224.701,  l0: 181.980, type: 'rocky' },
-    { name: 'Earth',   color: '#4488ff', r: 8,  dist: 160, period: 365.256,  l0: 100.464, type: 'earth', hasBase: true },
+    { name: 'Earth',   color: '#4488ff', r: 8,  dist: 160, period: 365.256,  l0: 100.464, type: 'earth' },
     { name: 'Mars',    color: '#c1440e', r: 5,  dist: 220, period: 686.980,  l0: 355.453, type: 'rocky' },
     { name: 'Jupiter', color: '#c88b3a', r: 22, dist: 380, period: 4332.589, l0: 34.396,  type: 'gas' },
     { name: 'Saturn',  color: '#e8d191', r: 18, dist: 520, period: 10759.22, l0: 49.954,  type: 'gas', rings: true },
@@ -193,12 +192,15 @@ const planets = [
     { name: 'Neptune', color: '#3f54ba', r: 12, dist: 780, period: 60189.0,  l0: 304.880, type: 'ice' }
 ];
 
-// Луна Земли: сидерический период 27.32 суток. База делает виток за условные 1 сутки.
+// Луна Земли: сидерический период 27.32 суток.
 const moonDist = 22;          // радиус орбиты Луны от Земли
 const moonPeriod = 27.321661; // суток
 const moonL0 = 218.32;        // средняя долгота на J2000, градусы
-const baseOrbitRadius = 10;   // радиус орбиты базы вокруг Луны
-const basePeriod = 1;         // суток на виток
+// Базы игрока: на радиусе baseOrbitRadius виток занимает basePeriod суток,
+// дальше период растёт по закону Кеплера (bases.js); на этом же радиусе
+// рождается стартовая база LUNA-ORBIT.
+const baseOrbitRadius = 10;
+const basePeriod = 1;         // суток на виток (на радиусе baseOrbitRadius)
 
 /**
  * Радиус орбиты i-й луны планеты на карте (единицы мира): главная луна на
@@ -212,7 +214,7 @@ function moonOrbitRadius(p, i) {
 
 // Главные луны других планет: период (сутки), радиус отрисовки r, цвет c,
 // стартовая фаза phase (градусы, произвольная). Порядок = порядок раскрытия
-// при зуме (см. scene.js visibleMoons): первыми показываются главные луны,
+// при зуме (см. scene.js visibleCount): первыми показываются главные луны,
 // при росте зума добавляются всё более мелкие/дальних.
 const moonsByPlanet = {
     Mars: [
@@ -384,12 +386,12 @@ function resize(canvas) {
 // ===== scene.js =====
 // =============================================================================
 // scene.js — генерация фона сцены (звёзды) и правила показа тел при масштабе:
-// сколько лун помещается при текущем зуме (visibleMoons) и как не поместившиеся
-// тела схлопываются в маркер-представителя (groupPlan — общий механизм: луны
-// сейчас, планеты на масштабе системы, звёздные системы и малые тела — далее).
-// Малые тела (пояс астероидов, ОЗА, троянцы, кометы, дальние пояса) живут в
-// отдельном модуле smallbodies.js. Позиции тел здесь не считаются — это
-// делает render.js каждый кадр из simDays.
+// сколько тел семейства помещается при текущем зуме (visibleCount) и как не
+// поместившиеся схлопываются в маркер-представителя (groupPlan — общий
+// механизм: луны планет и семейства малых тел сейчас, планеты на масштабе
+// системы и звёздные системы — далее). Малые тела (пояс астероидов, ОЗА,
+// троянцы, кометы, дальние пояса) живут в отдельном модуле smallbodies.js.
+// Позиции тел здесь не считаются — это делает render.js каждый кадр из simDays.
 // =============================================================================
 
 
@@ -408,24 +410,25 @@ for (let i = 0; i < 400; i++) {
 }
 
 /**
- * Сколько лун планеты показывать при текущем зуме (Земля с Луной — отдельный
- * случай hasBase). Логарифмическая шкала: 1 луна при zoom=1, далее +1 за каждый
- * множитель MOON_ZOOM_STEP (~1.4). К MAX_ZOOM показываются все луны участка.
- * Вызывающий код дополнительно ограничивает количеством лун конкретной планеты.
- * Полностью луны не скрываются: ниже zoom=1 шкала даёт 0, но механизм
- * группировки (groupPlan) всё равно оставляет одну луну-представителя.
+ * Сколько тел семейства показывать при текущем зуме — общая шкала лун планет
+ * и семейств малых тел (крупнейшие тела пояса, ОЗА по классам, троянцы L4/L5,
+ * кометы). Логарифмическая: 1 тело при zoom=1, далее +1 за каждый множитель
+ * ZOOM_STEP (~1.4); к MAX_ZOOM показываются все тела списка. Вызывающий берёт
+ * из своего списка ровно столько. Полностью семейства не скрываются: ниже
+ * zoom=1 шкала даёт 0, но механизм группировки (groupPlan) всё равно оставляет
+ * тело-представителя.
  * @returns {number}
  */
-function visibleMoons() {
+function visibleCount() {
     if (state.zoom < 1.0) return 0;
-    const MOON_ZOOM_STEP = 1.4;
-    return 1 + Math.floor(Math.log(state.zoom) / Math.log(MOON_ZOOM_STEP));
+    const ZOOM_STEP = 1.4;
+    return 1 + Math.floor(Math.log(state.zoom) / Math.log(ZOOM_STEP));
 }
 
 /**
  * Универсальная группировка небесных тел при отдалении — один механизм для
- * лун (сейчас), а в дальнейшем — планет на масштабе системы, звёздных систем
- * и малых тел (астероиды, кометы).
+ * лун планет и семейств малых тел (сейчас), а в дальнейшем — планет на
+ * масштабе системы и звёздных систем.
  *
  * Точками рисуются первые fit тел списка, но не меньше одного: последнее
  * показанное тело остаётся представителем. Хвост списка — оно же плюс все
@@ -438,7 +441,8 @@ function visibleMoons() {
  *
  * Тела — любые записи в своём порядке показа; чем именно к телу привязаны
  * базы, знает вызывающий (baseOf): у лун — hostKind 'moon' и имя луны, у
- * планет — hostKind 'planet', у будущих систем и малых тел — своё правило.
+ * планет — hostKind 'planet'. У малых тел баз пока нет — baseOf им не
+ * передают, и вторая строка подписи не появляется.
  *
  * @param {Array}   items  тела в порядке показа (порядок и fit решает вызов)
  * @param {number}  fit    сколько тел помещается при текущем масштабе
@@ -492,6 +496,11 @@ function groupPlan(items, fit, opts = {}) {
 // астероиды (Атон/Аполлон/Амур), троянцы Юпитера (L4/L5), кометы, пояс
 // Койпера и облако Оорта.
 //
+// Именованные тела семейств (крупнейшие тела пояса, ОЗА по классам, троянцы
+// L4/L5, кометы) группируются при отдалении общим механизмом scene.js
+// groupPlan: помещается visibleCount() тел семейства, хвост схлопывается в
+// тело-представителя с подписью в две строки (см. drawSmallBodies).
+//
 // Каждое тело — сущность со своим типом (kind) и id: в будущем появится
 // добыча/уничтожение астероидов, поэтому генерация выполняется при каждом
 // запуске и детерминирована (сидированный ПСЧ) — пояс стабилен между
@@ -500,6 +509,7 @@ function groupPlan(items, fit, opts = {}) {
 // Позиции считаются каждый кадр из общего simDays — как у планет. Элементы
 // орбит реальные (a, e, долгота перигелия), карта — 2D-плоскость эклиптики.
 // =============================================================================
+
 
 
 
@@ -577,6 +587,7 @@ const notables = beltNotables.map(b => ({
     id: 'notable-' + b.n,
     kind: 'asteroid',
     name: b.ru + ' / ' + b.n,
+    ru: b.ru,
     note: b.type === 'dwarf' ? 'Карликовая планета' : 'Крупный астероид',
     a: b.a, e: b.e, peri: b.peri, m0: b.m0, dia: b.dia,
     T: periodFromA(b.a),
@@ -622,7 +633,7 @@ const NEA_SEED = 20261018;
 const neaRng = makeRng(NEA_SEED);
 
 const neaBodies = neas.map(n =>
-    smallBody('nea-' + n.n, 'nea', n.ru + ' / ' + n.n, n, 1.6, { group: n.group }));
+    smallBody('nea-' + n.n, 'nea', n.ru + ' / ' + n.n, n, 1.6, { group: n.group, ru: n.ru }));
 
 for (let i = 0; i < 6; i++) {
     const group = ['amor', 'apollo', 'aten'][i % 3];
@@ -677,6 +688,7 @@ const trojanBodies = trojanNames.map(t => ({
     id: 'trojan-' + t.n,
     kind: 'trojan',
     name: t.ru + ' / ' + t.n,
+    ru: t.ru,
     camp: t.camp, dAng: t.dAng, dR: t.dR,
     r: 2.2, x: 0, y: 0,
     orbit: { cx: 0, cy: 0, r: JUPITER.dist }
@@ -750,16 +762,30 @@ function drawDustRing(ctx, ring, zoom) {
 // пикселях: (26 + 46·pf)·tailK / zoom, где pf = q/r — близость к перигелию.
 const cometBodies = comets.map(c =>
     smallBody('comet-' + c.n, 'comet', c.ru + ' / ' + c.n, c, 1.4,
-        { shower: c.shower, src: c.src, tailK: c.tailK }));
+        { shower: c.shower, src: c.src, tailK: c.tailK, ru: c.ru }));
 
 /**
  * Нарисовать малые тела в мировой системе координат (вызывается из render.js
- * после звёзд). Возвращает hoverTargets именованных тел.
- * @returns {Array} цели для hover/выбора
+ * после звёзд). Именованные тела семейств группируются при отдалении тем же
+ * механизмом, что луны планет (scene.js groupPlan, шкала visibleCount):
+ * показанные тела — точки и hover-цели, хвост семейства схлопывается в
+ * тело-представителя, и подпись группы уходит в groups — render.js рисует её
+ * общей drawGroupLabel. Безымянные досыпанные ОЗА — вне групп: их не выбирают.
+ * @returns {{targets: Array, groups: Array}} targets — hover-цели (как раньше);
+ *   groups — { x, y, group } подписи групп у тел-представителей
  */
 function drawSmallBodies(ctx) {
     const { simDays, zoom } = state;
     const targets = [];
+    const groups = [];
+    const fit = visibleCount();
+
+    /** Хвост семейства (если не поместился) — подписью у тела-представителя. */
+    function pushGroup(plan) {
+        if (!plan.group) return;
+        const rep = plan.shown[plan.group.at].m;
+        groups.push({ x: rep.x, y: rep.y, group: plan.group });
+    }
 
     // Дальняя пыль фоном: пояс Койпера и облако Оорта (под всеми телами)
     drawDustRing(ctx, kuiperDust, zoom);
@@ -775,7 +801,8 @@ function drawSmallBodies(ctx) {
     });
 
     // Крупнейшие тела пояса — заметные точки с обводкой, выбираются
-    notables.forEach(b => {
+    const notablePlan = groupPlan(notables, fit, { nameOf: m => m.ru });
+    notablePlan.shown.forEach(({ m: b }) => {
         const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
         b.x = pos.x;
         b.y = pos.y;
@@ -790,23 +817,39 @@ function drawSmallBodies(ctx) {
 
         targets.push({ kind: 'asteroid', name: b.name, x: pos.x, y: pos.y, r: b.r, moons: [], small: b });
     });
+    pushGroup(notablePlan);
 
-    // ОЗА: именованные ярче и с обводкой; безымянные — тусклые точки
+    // ОЗА: сначала позиции всех тел, затем безымянные — тусклые точки всегда
+    // (в группы не входят, их не выбирают), именованные — по классам
+    // (amor/apollo/aten): у каждого класса своё число показанных и своя группа
     neaBodies.forEach(b => {
         const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
         b.x = pos.x;
         b.y = pos.y;
+    });
 
+    ctx.fillStyle = '#8a8a8a';
+    neaBodies.forEach(b => {
+        if (b.name) return;
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, b.r, 0, Math.PI * 2);
-        ctx.fillStyle = b.name ? '#d8d8d8' : '#8a8a8a';
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
         ctx.fill();
-        if (b.name) {
+    });
+
+    ['amor', 'apollo', 'aten'].forEach(g => {
+        const plan = groupPlan(neaBodies.filter(b => b.name && b.group === g), fit,
+            { nameOf: m => m.ru });
+        plan.shown.forEach(({ m: b }) => {
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+            ctx.fillStyle = '#d8d8d8';
+            ctx.fill();
             ctx.strokeStyle = '#f0f0f0';
             ctx.lineWidth = STROKE.moon / zoom;
             ctx.stroke();
-            targets.push({ kind: 'nea', name: b.name, x: pos.x, y: pos.y, r: b.r, moons: [], small: b });
-        }
+            targets.push({ kind: 'nea', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
+        });
+        pushGroup(plan);
     });
 
     // Троянцы: два облака точек, синхронных с Юпитером (плюс либрация)
@@ -823,26 +866,37 @@ function drawSmallBodies(ctx) {
         });
     });
 
-    // Именованные троянцы — заметные точки с обводкой, выбираются
+    // Именованные троянцы — заметные точки с обводкой, выбираются; позиции
+    // всех, затем группировка по облакам (L4 и L5 — отдельные семейства)
     trojanBodies.forEach(b => {
         const ang = jupAng + b.camp * Math.PI / 3 + (b.dAng + trojanLib(simDays, b.camp)) * Math.PI / 180;
         const rr = JUPITER.dist + b.dR;
         b.x = Math.cos(ang) * rr;
         b.y = -Math.sin(ang) * rr;
-
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-        ctx.fillStyle = '#cfcfcf';
-        ctx.fill();
-        ctx.strokeStyle = '#efefef';
-        ctx.lineWidth = STROKE.moon / zoom;
-        ctx.stroke();
-
-        targets.push({ kind: 'trojan', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
     });
 
-    // Кометы: ядро, кома и хвост, направленный от Солнца
-    cometBodies.forEach(b => {
+    [4, 5].forEach(camp => {
+        const plan = groupPlan(trojanBodies.filter(b => b.camp === camp), fit,
+            { nameOf: m => m.ru });
+        plan.shown.forEach(({ m: b }) => {
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+            ctx.fillStyle = '#cfcfcf';
+            ctx.fill();
+            ctx.strokeStyle = '#efefef';
+            ctx.lineWidth = STROKE.moon / zoom;
+            ctx.stroke();
+
+            targets.push({ kind: 'trojan', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
+        });
+        pushGroup(plan);
+    });
+
+    // Кометы: ядро, кома и хвост, направленный от Солнца. Показанные — по
+    // общему плану; скрытые группой не рисуются, их имена уходят в подпись
+    // представителя (как и у остальных семейств)
+    const cometPlan = groupPlan(cometBodies, fit, { nameOf: m => m.ru });
+    cometPlan.shown.forEach(({ m: b }) => {
         const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
         b.x = pos.x;
         b.y = pos.y;
@@ -886,8 +940,9 @@ function drawSmallBodies(ctx) {
 
         targets.push({ kind: 'comet', name: b.name, x: pos.x, y: pos.y, r: b.r, moons: [], small: b });
     });
+    pushGroup(cometPlan);
 
-    return targets;
+    return { targets, groups };
 }
 
 // ===== bases_name.js =====
@@ -1077,7 +1132,11 @@ function archiveBase(rec) {
 // зажат в коридор baseRadiusRange: от поверхности хозяина до ближайшей чужой
 // «полосы» — дисков Солнца и соседних планет (база у Меркурия не дотянется до
 // орбиты Венеры) и соседних тел (лун планеты или планеты и лун-соседей у базы
-// на луне); так орбита базы не пересекает ни тела, ни их орбиты. Период
+// на луне); так орбита базы не пересекает ни тела, ни их орбиты. Вдобавок
+// орбита разводится с другими базами того же хозяина (BASE_SAME_GAP): кольца
+// баз не сливаются (fitBaseRadius). Стартовая база LUNA-ORBIT, которую
+// render.js раньше рисовал жёстко у Луны Земли, при загрузке становится
+// обычной записью механизма. Период
 // обращения — как у Луны: одни сутки на радиусе
 // baseOrbitRadius, дальше по закону Кеплера.
 //
@@ -1111,6 +1170,11 @@ const BASE_MAX_R = 300;
 
 // Запас между орбитой базы и поверхностью тел: хозяина и соседей (единицы мира).
 const BASE_CLEAR = 4;
+
+// Минимальный зазор между орбитами двух баз одного хозяина: кольца не
+// сливаются в одно. Если коридор уже забит и свободного места нет (у лун места
+// мало), база встаёт в точку с наибольшим зазором — см. fitRadius.
+const BASE_SAME_GAP = 3;
 
 // Сколько реального времени база «разбирается» после нажатия «Удалить базу».
 const BASE_REMOVAL_MS = 4000;
@@ -1211,18 +1275,121 @@ function saveBases() {
 /** Записи баз + позиции x/y, обновляемые каждый кадр при отрисовке. */
 const bases = loadBases();
 
+/** Ключ хоста: 'planet:Mars' или 'moon:Mars:Фобос / Phobos'. */
+function hostKey(kind, planet, moon) {
+    return kind === 'planet' ? 'planet:' + planet : 'moon:' + planet + ':' + moon;
+}
+
 /**
- * Привести радиусы загруженных баз к коридору хозяина (baseRadiusRange):
- * базы, созданные до появления полос Солнца/планет/лун, могли пересекать
- * чужие орбиты. Период пересчитывается под новый радиус; надгробия
- * (`removed`) не трогаем — их место уже история. Если что-то поменялось,
- * хранилище сразу перезаписывается.
+ * Свободный радиус орбиты с учётом баз того же хозяина: из коридора
+ * baseRadiusRange исключаются «полосы» rb ± BASE_SAME_GAP вокруг орбит
+ * соседних баз, берётся ближайшая к желаемой свободная точка. Если коридор
+ * слишком узкий и свободного места нет (у лун места мало), выбирается точка с
+ * наибольшим зазором от чужих орбит — кольца баз не сливаются, пока это
+ * геометрически возможно.
+ * @param {number} r желаемый радиус
+ * @param {{kind: string, planet: string, moon: ?string}} host
+ * @param {Array<number>} blocked радиусы орбит других баз хозяина
+ * @returns {number} радиус, округлённый до десятых (как все орбиты баз)
+ */
+function fitRadius(r, host, blocked) {
+    const { min, max } = baseRadiusRange(host);
+    const want = Math.min(Math.max(r, min), max);
+    if (!blocked.length) return Math.round(want * 10) / 10;
+    const clampIn = x => Math.min(Math.max(x, min), max);
+    const free = x => blocked.every(b => Math.abs(x - b) >= BASE_SAME_GAP - 1e-6);
+    const cands = [min, max, want];
+    blocked.forEach(b => cands.push(b - BASE_SAME_GAP, b + BASE_SAME_GAP));
+    const ok = cands.map(clampIn).filter(free);
+    let best;
+    if (ok.length) {
+        best = ok[0];
+        ok.forEach(x => { if (Math.abs(x - want) < Math.abs(best - want)) best = x; });
+    } else {
+        // Свободного места нет: кандидаты «наименее тесно» — середины между
+        // полосами соседей и краями коридора; берём точку с максимальным
+        // зазором, при равенстве — ближайшую к желаемой.
+        const gapAt = x => Math.min(...blocked.map(b => Math.abs(x - b)));
+        const edges = [min, ...blocked.filter(b => b > min && b < max).sort((a, b) => a - b), max];
+        const mids = edges.slice(1).map((e, i) => (edges[i] + e) / 2);
+        best = want;
+        let bg = gapAt(want);
+        [...cands, ...mids].forEach(v => {
+            const x = clampIn(v), g = gapAt(x);
+            if (g > bg + 1e-6 ||
+                (Math.abs(g - bg) <= 1e-6 && Math.abs(x - want) < Math.abs(best - want))) {
+                best = x;
+                bg = g;
+            }
+        });
+    }
+    return Math.round(best * 10) / 10;
+}
+
+/** Радиусы орбит остальных баз того же хозяина (без exceptId). */
+function occupiedRadii(host, exceptId) {
+    const key = hostKey(host.kind, host.planet, host.moon || null);
+    return bases
+        .filter(b => b.status !== 'removed' && b.id !== exceptId &&
+            hostKey(b.hostKind, b.planet, b.moon || null) === key)
+        .map(b => b.orbitRadius);
+}
+
+/**
+ * Радиус орбиты базы при создании и переносе: коридор хозяина плюс разведение
+ * с другими базами того же хозяина (fitRadius). Переносимая база сама себя не
+ * стесняет — exceptId исключается.
+ */
+function fitBaseRadius(r, host, exceptId) {
+    return fitRadius(r, host, occupiedRadii(host, exceptId || null));
+}
+
+/**
+ * Легаси-база «LUNA-ORBIT»: исторически рисовалась в render.js жёстко (маркер
+ * с подписью BASE на орбите у Луны Земли) и не подчинялась механизму. При
+ * первом запуске она становится обычной записью: участвует в разведении
+ * орбит, переносится и удаляется, а корабли из ангара (флаг fleet) — в её
+ * карточке. Если запись уже есть (в том числе надгробие после удаления) —
+ * ничего не создаём.
+ */
+(function migrateLegacyLunaOrbit() {
+    if (bases.some(b => b.id === 'base-luna-orbit')) return;
+    bases.push({
+        id: 'base-luna-orbit',
+        name: 'LUNA-ORBIT',
+        status: 'active',
+        hostKind: 'moon',
+        planet: 'Earth',
+        moon: 'Луна / Moon',
+        orbitRadius: baseOrbitRadius,
+        period: basePeriodAt(baseOrbitRadius),
+        phase0: 0,
+        created: new Date().toISOString(),
+        fleet: true
+    });
+    saveBases();
+})();
+
+/**
+ * Привести радиусы загруженных баз к коридору хозяина (baseRadiusRange) и
+ * развести орбиты баз одного хозяина (fitRadius): базы, созданные до
+ * появления полос и разведения, могли пересекать чужие орбиты или слипаться.
+ * Базы обрабатываются в порядке массива — каждая считается с уже принятыми,
+ * поэтому результат стабилен (повторная загрузка ничего не двигает), а период
+ * пересчитывается под новый радиус. Надгробия (`removed`) не трогаем — их
+ * место уже история. Если что-то поменялось, хранилище сразу перезаписывается.
  */
 (function normalizeBaseRadii() {
     let changed = false;
+    const accepted = new Map();   // hostKey -> радиусы уже принятых баз
     bases.forEach(b => {
         if (b.status === 'removed') return;
-        const r = radiusOf(b.orbitRadius, { kind: b.hostKind, planet: b.planet, moon: b.moon || null });
+        const host = { kind: b.hostKind, planet: b.planet, moon: b.moon || null };
+        const key = hostKey(host.kind, host.planet, host.moon);
+        let list = accepted.get(key);
+        if (!list) accepted.set(key, list = []);
+        const r = fitRadius(b.orbitRadius, host, list);
+        list.push(r);
         if (r === b.orbitRadius) return;
         b.orbitRadius = r;
         b.period = basePeriodAt(r);
@@ -1230,11 +1397,6 @@ const bases = loadBases();
     });
     if (changed) saveBases();
 })();
-
-/** Ключ хоста: 'planet:Mars' или 'moon:Mars:Фобос / Phobos'. */
-function hostKey(kind, planet, moon) {
-    return kind === 'planet' ? 'planet:' + planet : 'moon:' + planet + ':' + moon;
-}
 
 // --- Реестр имён баз (отдельный ключ localStorage) --------------------------
 // По индексу имени в BASE_NAMES: сколько раз оно выпадало (count — для
@@ -1333,12 +1495,6 @@ function updateBasePlace(rec) {
     });
 }
 
-/** Радиус орбиты: округлён до десятых и зажат в коридор хоста (baseRadiusRange). */
-function radiusOf(r, host) {
-    const { min, max } = baseRadiusRange(host);
-    return Math.round(Math.min(Math.max(r, min), max) * 10) / 10;
-}
-
 /**
  * Фаза базы (phase0) так, чтобы прямо сейчас (state.simDays) она стояла на
  * направлении ang от центра хоста: phase0 = ang − 2π·t/период. null — угол не
@@ -1368,12 +1524,13 @@ let baseSeq = 0;
  * localStorage. Имя выбирается случайно из BASE_NAMES (bases_name.js), повтор
  * получает суффикс « - 2». Карточку/список обновляет вызывающий код (input.js).
  * @param {{kind: string, planet: string, moon: ?string}} host
- * @param {number} r радиус орбиты, единицы мира (клампится в коридор хоста)
+ * @param {number} r радиус орбиты, единицы мира (коридор хоста + разведение
+ *   с другими его базами — fitBaseRadius)
  * @param {?number} ang угол от центра хоста к курсору (радианы): база появится
  *   с этой стороны; не задан — случайная точка орбиты
  */
 function createBase(host, r, ang) {
-    const orbitRadius = radiusOf(r, host);
+    const orbitRadius = fitBaseRadius(r, host, null);
     const period = basePeriodAt(orbitRadius);
     const phase = phaseFor(ang, period);
     const { nameId, name, nameCount } = takeBaseName();
@@ -1406,7 +1563,8 @@ function createBase(host, r, ang) {
  * карточку обновляет вызывающий код (input.js).
  * @param {Object} rec запись базы
  * @param {{kind: string, planet: string, moon: ?string}} host
- * @param {number} r радиус орбиты, единицы мира (клампится)
+ * @param {number} r радиус орбиты, единицы мира (коридор хоста + разведение
+ *   с другими его базами, сама переносимая база не мешает)
  * @param {?number} ang угол от центра хоста к курсору (радианы); не задан —
  *   сторона орбиты у базы сохраняется
  */
@@ -1415,7 +1573,7 @@ function moveBase(rec, host, r, ang) {
     rec.hostKind = host.kind;
     rec.planet = host.planet;
     rec.moon = host.moon || null;
-    rec.orbitRadius = radiusOf(r, host);
+    rec.orbitRadius = fitBaseRadius(r, host, rec.id);
     rec.period = basePeriodAt(rec.orbitRadius);
     const phase = phaseFor(ang, rec.period);
     if (phase !== null) rec.phase0 = phase;
@@ -2044,8 +2202,12 @@ function renderScene(ctx) {
     drawStars(ctx, time);
 
     // Малые тела (пояс, ОЗА, троянцы, кометы, дальние пояса) — отдельный слой
-    // smallbodies.js: частицы рисует сам, именованные тела отдаёт как hover-цели.
-    hoverTargets.push(...drawSmallBodies(ctx));
+    // smallbodies.js: точки показанных тел и частицы рисует сам, именованные
+    // тела отдаёт как hover-цели, а сгруппированные хвосты семейств — как
+    // подписи групп: рисуются общей drawGroupLabel, как у лун планет.
+    const small = drawSmallBodies(ctx);
+    hoverTargets.push(...small.targets);
+    small.groups.forEach(g => drawGroupLabel(ctx, g.x, g.y, g.group, zoom, null));
 
     // Солнце — первая hover-цель (проверяется последней, т.к. планеты поверх)
     drawSun(ctx);
@@ -2067,26 +2229,14 @@ function renderScene(ctx) {
 
         const moonHits = drawPlanetMoons(ctx, x, y, p, hostPos, groupBaseIds);
 
-        // Луна Земли + орбитальная база — особый случай (hasBase у Земли)
-        let baseHit = null;
-        if (p.hasBase) {
-            const hit = drawEarthMoonAndBase(ctx, x, y);
-            if (hit) {
-                moonHits.push(hit.moon);
-                // База — отдельная цель выбора, как планета или луна.
-                baseHit = {
-                    kind: 'base',
-                    name: 'База LUNA-ORBIT',
-                    x: hit.base.bx, y: hit.base.by, r: hit.base.r,
-                    orbitCx: hit.moon.mx, orbitCy: hit.moon.my, orbitR: baseOrbitRadius,
-                    p, moons: []
-                };
-            }
+        // Луна Земли — особый случай: своя дистанция и радиус, не в moonsByPlanet.
+        // Базы на ней рисует общий слой баз (bases.js), как у остальных лун.
+        if (p.name === 'Earth') {
+            const hit = drawEarthMoon(ctx, x, y);
+            if (hit) moonHits.push(hit.moon);
         }
 
         hoverTargets.push({ kind: 'planet', p, x, y, moons: moonHits });
-        // база добавляется после планеты: рисуется поверх и проверяется первой
-        if (baseHit) hoverTargets.push(baseHit);
 
         // позиции хост-тел для звёздных баз: планета и её луны (скрытые
         // луны группы встают в маркер-представителя — см. drawPlanetMoons)
@@ -2186,9 +2336,9 @@ function drawMoonBody(ctx, x, y, r) {
  */
 function drawPlanetMoons(ctx, x, y, p, hostPos, groupBaseIds) {
     const { simDays, zoom } = state;
-    // Группировка лун: помещается visibleMoons() штук, базы игрока — те, что
+    // Группировка лун: помещается visibleCount() штук, базы игрока — те, что
     // стоят именно на луне (hostKind 'moon'); удалённые в подпись не берём.
-    const plan = groupPlan(moonsByPlanet[p.name] || [], visibleMoons(), {
+    const plan = groupPlan(moonsByPlanet[p.name] || [], visibleCount(), {
         baseOf: m => bases.filter(b => b.status !== 'removed'
             && b.hostKind === 'moon' && b.planet === p.name && b.moon === m.n)
     });
@@ -2221,14 +2371,14 @@ function drawPlanetMoons(ctx, x, y, p, hostPos, groupBaseIds) {
 
 /**
  * Подпись группы тел у маркера-представителя (plan.group из scene.js
- * groupPlan) — общая для лун, а дальше планет, систем и малых тел: две
- * строки, имена тел и базы на них. Стиль подсказки hover: тень 1 px, кегль
- * постоянный на экране (10 / zoom). Первая строка белая, вторая — цианом
- * (цвет баз). Базы группы складываются в quietIds: bases.js нарисует их
- * маркеры без имён — имена уже стоят в подписи.
+ * groupPlan) — общая для лун планет и семейств малых тел: две строки, имена
+ * тел и базы на них. Стиль подсказки hover: тень 1 px, кегль постоянный на
+ * экране (10 / zoom). Первая строка белая, вторая — цианом (цвет баз). Базы
+ * группы складываются в quietIds: bases.js нарисует их маркеры без имён —
+ * имена уже стоят в подписи (у малых тел баз пока нет, quietIds = null).
  */
 function drawGroupLabel(ctx, mx, my, group, zoom, quietIds) {
-    group.bases.forEach(b => quietIds.add(b.id));
+    if (quietIds) group.bases.forEach(b => quietIds.add(b.id));
     ctx.font = `${10 / zoom}px monospace`;
     const lx = mx + 6 / zoom, ly = my - 4 / zoom;
     groupLine(ctx, group.label, lx, ly, COLORS.tooltip, zoom);
@@ -2245,13 +2395,13 @@ function groupLine(ctx, text, x, y, color, zoom) {
 }
 
 /**
- * Луна Земли + орбитальная база игрока. База — циановый маркер с пульсом
- * и подписью BASE; её орбита вокруг Луны показывается всегда (это не орбиты
- * планет, которые скрыты до наведения).
- * @returns {{moon: {m, md, mx, my}, base: {bx, by, r}}} хиты Луны и базы
+ * Луна Земли — отдельный блок рисования: у неё своя дистанция и радиус
+ * (render.js), а не запись в moonsByPlanet. Базы на её орбите рисует общий
+ * слой баз (bases.js), как и у остальных лун.
+ * @returns {{moon: {m, md, mx, my}}} хит Луны для наведения и выбора
  */
-function drawEarthMoonAndBase(ctx, x, y) {
-    const { zoom: z, simDays, time } = state;
+function drawEarthMoon(ctx, x, y) {
+    const { simDays } = state;
 
     const mAng = orbitAngle(moonL0, moonPeriod, simDays);
     const mx = x + Math.cos(mAng) * moonDist;
@@ -2259,48 +2409,7 @@ function drawEarthMoonAndBase(ctx, x, y) {
 
     drawMoonBody(ctx, mx, my, 3);
 
-    // орбита базы вокруг Луны — мелкий пунктир
-    const bAng = orbitAngle(0, basePeriod, simDays);
-    const bx = mx + Math.cos(bAng) * baseOrbitRadius;
-    const by = my - Math.sin(bAng) * baseOrbitRadius;
-
-    ctx.strokeStyle = '#00ffff44';
-    ctx.lineWidth = 0.5 / z;
-    ctx.setLineDash([1 / z, 1 / z]);
-    circle(ctx, mx, my, baseOrbitRadius);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // маркер базы: свечение, квадрат, пульсирующее кольцо, подпись
-    const bs = 4 / z;
-
-    const baseGlow = ctx.createRadialGradient(bx, by, 0, bx, by, bs * 2);
-    baseGlow.addColorStop(0, 'rgba(0,255,255,0.6)');
-    baseGlow.addColorStop(1, 'rgba(0,255,255,0)');
-    ctx.fillStyle = baseGlow;
-    circle(ctx, bx, by, bs * 2);
-    ctx.fill();
-
-    ctx.fillStyle = COLORS.base;
-    ctx.fillRect(bx - bs / 2, by - bs / 2, bs, bs);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1 / z;
-    ctx.strokeRect(bx - bs / 2, by - bs / 2, bs, bs);
-
-    const pulse = (Math.sin(time * 4) + 1) * 0.5;
-    ctx.strokeStyle = `rgba(0,255,255,${0.5 - pulse * 0.5})`;
-    ctx.lineWidth = 1 / z;
-    circle(ctx, bx, by, bs + pulse * 4);
-    ctx.stroke();
-
-    ctx.fillStyle = COLORS.base;
-    ctx.font = `600 ${10 / z}px "Manrope", sans-serif`;
-    ctx.fillText('BASE', bx + bs + 3 / z, by - 3 / z);
-
-    return {
-        moon: { m: { n: 'Луна / Moon', r: 3, period: moonPeriod }, md: moonDist, mx, my },
-        base: { bx, by, r: bs }
-    };
+    return { moon: { m: { n: 'Луна / Moon', r: 3, period: moonPeriod }, md: moonDist, mx, my } };
 }
 
 /** Начать путь-окружность (без fill/stroke — их выбирает вызывающий). */
@@ -2686,7 +2795,9 @@ function baseHosts() {
 }
 
 /**
- * Радиус выбираемой орбиты: расстояние от курсора до ближайшего тела, с клампом.
+ * Радиус выбираемой орбиты: расстояние от курсора до ближайшего тела, затем
+ * механизм баз — кламп в коридор хозяина и разведение с другими его базами
+ * (fitBaseRadius): превью показывает ту же орбиту, на которую база встанет.
  * Правило ближайшего тела: как только точка орбиты уходит дальше половины пути
  * до другого тела (курсор ближе к нему, чем к исходному), орбита переезжает к
  * этому телу — база на Венере, уведённая к Земле, окажется у Земли.
@@ -2709,9 +2820,10 @@ function updateBaseRadius(x, y) {
         state.baseMode = { ...mode, kind: best.kind, planet: best.planet, moon: best.moon };
     }
     const hp = hostPosOf(state.baseMode);   // радиус — от живого положения хоста
-    const rg = baseRadiusRange(state.baseMode);   // коридор: не пересекать тела
-    state.baseRadius = Math.min(rg.max, Math.max(rg.min,
-        hp ? Math.hypot(w.x - hp.x, w.y - hp.y) : bd));
+    // Механизм баз: коридор «не пересекать тела» + разведение с другими базами
+    // этого хозяина; переносимая база себе не мешает (moveId исключается).
+    const d = hp ? Math.hypot(w.x - hp.x, w.y - hp.y) : bd;
+    state.baseRadius = fitBaseRadius(d, state.baseMode, state.baseMode.moveId || null);
     // Сторона орбиты — направление от центра хозяина к курсору: перенос
     // поставит базу с этой стороны, создание появится тут же (mode.ang).
     if (hp) {
@@ -2962,7 +3074,8 @@ function updateFlyTo() {
 function moonFromTree(planet, name) {
     const real = (moonsByPlanet[planet.name] || []).find(m => m.n === name);
     if (real) return real;
-    return { n: name, period: planet.hasBase ? 27.321661 : 0, r: 3 };
+    // Луна Земли — псевдо-луна: отдельный блок рисования в render.js
+    return { n: name, period: moonPeriod, r: 3 };
 }
 
 /**
@@ -3016,7 +3129,7 @@ function renderObjectInfo() {
     } else if (sel.kind === 'comet') {
         html = cometInfoHTML(sel.small);
     } else if (sel.kind === 'base') {
-        html = sel.local ? newBaseInfoHTML(sel.local) : baseInfoHTML();
+        html = sel.local ? newBaseInfoHTML(sel.local) : '';
     } else {
         const p = sel.p;
         const m = sel.m;
@@ -3108,9 +3221,6 @@ function asteroidInfoHTML(b) {
 /** Секция «Звёздные базы» в карточке планеты/луны: список + кнопка создания. */
 function basesSectionHTML(kind, planet, moon) {
     const rows = [];
-    if (kind === 'moon' && planet === 'Earth' && moon === 'Луна / Moon') {
-        rows.push(baseRowHTML('', 'LUNA-ORBIT', 'орбита ' + Math.round(baseOrbitRadius) + ' ед.', null)); // стартовая база
-    }
     basesAt(kind, planet, moon).forEach(b => rows.push(baseRowHTML(b.id, b.name,
         'орбита ' + Math.round(b.orbitRadius) + ' ед.', b)));
 
@@ -3128,9 +3238,9 @@ function basesSectionHTML(kind, planet, moon) {
 }
 
 /**
- * Строка базы в списке: имя и хвостик-подпись (id пустой — стартовая
- * LUNA-ORBIT). У удаляемой базы (rec.status 'removing') хвостик со временем
- * заменяется красной полоской прогресса под именем.
+ * Строка базы в списке: имя и хвостик-подпись. У удаляемой базы (rec.status
+ * 'removing') хвостик со временем заменяется красной полоской прогресса под
+ * именем.
  */
 function baseRowHTML(id, name, tail, rec) {
     const removing = rec && rec.status === 'removing' ? rec : null;
@@ -3194,11 +3304,6 @@ function wireObjectCard(box) {
     box.querySelectorAll('.base-row').forEach(el => {
         el.addEventListener('click', () => {
             const id = el.dataset.base;
-            if (!id) {   // стартовая база LUNA-ORBIT — её рисует render.js
-                const p = planets.find(x => x.name === 'Earth');
-                selectBody({ kind: 'base', name: 'База LUNA-ORBIT', p, m: null });
-                return;
-            }
             const rec = bases.find(b => b.id === id);
             if (!rec) return;
             const p = planets.find(x => x.name === rec.planet);
@@ -3214,9 +3319,9 @@ function wireObjectCard(box) {
         // Режим уже активен (хост мог переехать к ближайшему телу) — отменяем его,
         // иначе начинаем выбор орбиты у этой планеты/луны.
         state.baseMode = state.baseMode ? null : { kind, planet, moon };
-        // Стартовый радиус 60 — но в коридоре хоста (орбита не пересекает тела).
-        const rg = state.baseMode ? baseRadiusRange(state.baseMode) : null;
-        state.baseRadius = rg ? Math.min(rg.max, Math.max(rg.min, 60)) : 60;
+        // Стартовый радиус 60 — но по механизму баз: коридор хоста плюс
+        // разведение с другими его базами (fitBaseRadius).
+        state.baseRadius = state.baseMode ? fitBaseRadius(60, state.baseMode, null) : 60;
         renderObjectInfo();   // надпись кнопки: «Создать базу» <-> «Отмена»
     });
 
@@ -3230,9 +3335,9 @@ function wireObjectCard(box) {
             const rec = bases.find(b => b.id === mvBtn.dataset.moveId);
             if (!rec || rec.status !== 'active') return;   // удаляемую не переносим
             state.baseMode = { kind: rec.hostKind, planet: rec.planet, moon: rec.moon || null, moveId: rec.id };
-            // Стартуем с текущего радиуса базы, но в коридоре хоста.
-            const rg = baseRadiusRange(state.baseMode);
-            state.baseRadius = Math.min(rg.max, Math.max(rg.min, rec.orbitRadius));
+            // Стартуем с текущего радиуса базы — по механизму: коридор хоста и
+            // разведение с другими базами (сама переносимая не мешает).
+            state.baseRadius = fitBaseRadius(rec.orbitRadius, state.baseMode, rec.id);
         }
         renderObjectInfo();   // надпись кнопки: «Переместить базу» <-> «Отмена»
     });
@@ -3350,6 +3455,7 @@ function newBaseInfoHTML(b) {
         ? 'луна ' + b.moon
         : 'планета ' + (RU[b.planet] || b.planet);
     const removing = b.status === 'removing';   // идёт разбор: имя краснеет, под ним полоска прогресса, кнопки выключены
+    const fleet = !!b.fleet;    // стартовая LUNA-ORBIT: в карточке — купленные корабли
     return '<div class="obj-title' + (removing ? ' danger' : '') + '"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
             '<strong>База ' + b.name + '</strong></div>' +
         (removing ? removalBarHTML(b) : '') +
@@ -3360,9 +3466,10 @@ function newBaseInfoHTML(b) {
             row('Создана', (b.created || '').slice(0, 10)) +
             (removing ? row('Статус', 'удаляется') : '') +
         '</div>' +
-        '<div class="obj-note">' + (removing
-            ? 'База разбирается — перенос и повторное удаление недоступны'
-            : 'Новая база на орбите — корабли и постройки появятся позже') + '</div>' +
+        (removing
+            ? '<div class="obj-note">База разбирается — перенос и повторное удаление недоступны</div>'
+            : fleet ? '' : '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>') +
+        (fleet && !removing ? shipsSectionHTML() : '') +
         moveBaseButtonHTML(b) +
         deleteBaseButtonHTML(b);
 }
@@ -3374,24 +3481,14 @@ function row(k, v, cls) {
 /* ---------- База: купленные корабли из data/store.js ---------- */
 
 /**
- * Блок «Объект» для базы: параметры орбиты и список купленных кораблей
- * в формате списка «В продаже» из ангара (имя, масса, категория, цена).
- * Данные — общие с админкой и ангаром (window.Store, ключ galaxy_admin_db_v1).
+ * Секция «Купленные корабли» для карточки базы: список в формате «В продаже»
+ * из ангара (имя, масса, категория, цена). Данные — общие с админкой и ангаром
+ * (window.Store, ключ galaxy_admin_db_v1). Показывается у базы игрока (флаг
+ * fleet — стартовая LUNA-ORBIT).
  */
-function baseInfoHTML() {
+function shipsSectionHTML() {
     const ships = readUserShips();
-
-    let html =
-        '<div class="obj-title"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
-            '<strong>База LUNA-ORBIT</strong></div>' +
-        '<div class="obj-kind">Орбитальная база · Луна</div>' +
-        '<div class="obj-rows">' +
-            row('Луна', 'Луна / Moon') +
-            row('Радиус орбиты', baseOrbitRadius + ' <em>ед.</em>') +
-            (ships.length ? row('Куплено кораблей', ships.length) : '') +
-        '</div>';
-
-    html += '<div class="obj-sub-title"><span>Купленные корабли</span>' +
+    let html = '<div class="obj-sub-title"><span>Купленные корабли</span>' +
         (ships.length ? '<small>' + ships.length + ' ' + pluralRu(ships.length, ['позиция', 'позиции', 'позиций']) + '</small>' : '') +
         '</div>';
 
