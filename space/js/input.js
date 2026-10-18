@@ -131,8 +131,9 @@ export function initInput(canvas, ui) {
             state.camY = camStartMY + (e.clientY - mouseStartY) / state.zoom;
             return;
         }
-        // режим выбора орбиты базы: радиус следит за курсором
-        if (state.baseMode) updateBaseRadius(e.clientX, e.clientY);
+        // режим выбора орбиты базы: радиус следит за курсором (только над картой,
+        // чтобы курсор над панелью не утаскивал орбиту к случайному телу)
+        if (state.baseMode && e.target === canvas) updateBaseRadius(e.clientX, e.clientY);
         updateCursor(e.clientX, e.clientY);
     });
 
@@ -195,13 +196,38 @@ function hostPosOf(host) {
     return mh ? { x: mh.mx, y: mh.my } : null;
 }
 
-/** Радиус выбираемой орбиты: расстояние от курсора до хоста, с клампом. */
+/** Все возможные хозяева базы в кадре: планеты и их нарисованные луны. */
+function baseHosts() {
+    const out = [];
+    (state.hoverTargets || []).forEach(t => {
+        if (t.kind !== 'planet') return;
+        out.push({ kind: 'planet', planet: t.p.name, moon: null, x: t.x, y: t.y });
+        t.moons.forEach(mh =>
+            out.push({ kind: 'moon', planet: t.p.name, moon: mh.m.n, x: mh.mx, y: mh.my }));
+    });
+    return out;
+}
+
+/**
+ * Радиус выбираемой орбиты: расстояние от курсора до ближайшего тела, с клампом.
+ * Правило ближайшего тела: как только точка орбиты уходит дальше половины пути
+ * до другого тела (курсор ближе к нему, чем к исходному), орбита переезжает к
+ * этому телу — база на Венере, уведённая к Земле, окажется у Земли.
+ */
 function updateBaseRadius(x, y) {
-    const hp = hostPosOf(state.baseMode);
-    if (!hp) return;
+    const mode = state.baseMode;
+    if (!mode) return;
     const w = screenToWorld(x, y, state);
-    const d = Math.hypot(w.x - hp.x, w.y - hp.y);
-    state.baseRadius = Math.min(BASE_MAX_R, Math.max(BASE_MIN_R, d));
+    let best = null, bd = Infinity;
+    for (const h of baseHosts()) {
+        const d = Math.hypot(w.x - h.x, w.y - h.y);
+        if (d < bd) { bd = d; best = h; }
+    }
+    if (!best) return;
+    if (best.kind !== mode.kind || best.planet !== mode.planet || (best.moon || null) !== (mode.moon || null)) {
+        state.baseMode = { kind: best.kind, planet: best.planet, moon: best.moon };
+    }
+    state.baseRadius = Math.min(BASE_MAX_R, Math.max(BASE_MIN_R, bd));
 }
 
 /** Клик в режиме выбора орбиты: создать базу у хоста и сразу выбрать её. */

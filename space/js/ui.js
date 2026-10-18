@@ -305,9 +305,9 @@ function wireObjectCard(box) {
         const kind = btn.dataset.hostKind;
         const planet = btn.dataset.hostPlanet;
         const moon = btn.dataset.hostMoon || null;
-        const active = state.baseMode && state.baseMode.kind === kind &&
-            state.baseMode.planet === planet && (state.baseMode.moon || null) === moon;
-        state.baseMode = active ? null : { kind, planet, moon };
+        // Режим уже активен (хост мог переехать к ближайшему телу) — отменяем его,
+        // иначе начинаем выбор орбиты у этой планеты/луны.
+        state.baseMode = state.baseMode ? null : { kind, planet, moon };
         state.baseRadius = 60;
         renderObjectInfo();   // надпись кнопки: «Создать базу» <-> «Отмена»
     });
