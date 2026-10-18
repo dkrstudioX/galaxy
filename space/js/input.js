@@ -1,8 +1,9 @@
 // =============================================================================
 // input.js — всё пользовательское управление: тач (перетаскивание, pinch),
 // колесо мыши (зум к точке под курсором), панорамирование правой кнопкой,
-// позиция курсора для hover, кнопки скорости времени.
-// Только меняет state, ничего не рисует.
+// позиция курсора для hover (над выбираемыми объектами — курсор-указатель),
+// кнопки скорости времени.
+// Только меняет state и курсор канваса, ничего не рисует.
 // =============================================================================
 
 import { state } from './state.js';
@@ -110,24 +111,34 @@ export function initInput(canvas, ui) {
         canvas.style.cursor = 'grabbing';
     });
 
+    // Курсор-указатель над выбираемыми объектами — те же цели, что выбираются
+    // кликом (hoverTargets из render.js): солнце, планеты, луны, база.
+    const updateCursor = (x, y) => {
+        canvas.style.cursor = (state.hoverTargets && findBodyAt(state.hoverTargets, x, y)) ? 'pointer' : '';
+    };
+
     window.addEventListener('mousemove', e => {
         // позиция курсора нужна и без зажатой кнопки — для hover-подсказок
         state.mouseX = e.clientX;
         state.mouseY = e.clientY;
-        if (!mouseDragging) return;
-        state.camX = camStartMX + (e.clientX - mouseStartX) / state.zoom;
-        state.camY = camStartMY + (e.clientY - mouseStartY) / state.zoom;
+        if (mouseDragging) {     // тянем карту — курсор остаётся «grabbing»
+            state.camX = camStartMX + (e.clientX - mouseStartX) / state.zoom;
+            state.camY = camStartMY + (e.clientY - mouseStartY) / state.zoom;
+            return;
+        }
+        updateCursor(e.clientX, e.clientY);
     });
 
     canvas.addEventListener('mouseleave', () => {
         state.mouseX = -1;
         state.mouseY = -1;
+        if (!mouseDragging) canvas.style.cursor = '';
     });
 
     window.addEventListener('mouseup', e => {
         if (e.button !== 2) return;
         mouseDragging = false;
-        canvas.style.cursor = '';
+        updateCursor(e.clientX, e.clientY);
     });
 
     // отключаем системное контекстное меню, чтобы правая кнопка работала как панорамирование
