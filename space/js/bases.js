@@ -53,7 +53,7 @@ export const BASE_MAX_R = 300;
 const BASE_CLEAR = 4;
 
 // Сколько реального времени база «разбирается» после нажатия «Удалить базу».
-export const BASE_REMOVAL_MS = 30000;
+export const BASE_REMOVAL_MS = 4000;
 
 /** Период обращения базы на радиусе r: как у Луны, дальше — по Кеплеру. */
 export function basePeriodAt(r) {

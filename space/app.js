@@ -1041,7 +1041,7 @@ const BASE_MAX_R = 300;
 const BASE_CLEAR = 4;
 
 // Сколько реального времени база «разбирается» после нажатия «Удалить базу».
-const BASE_REMOVAL_MS = 30000;
+const BASE_REMOVAL_MS = 4000;
 
 /** Период обращения базы на радиусе r: как у Луны, дальше — по Кеплеру. */
 function basePeriodAt(r) {
@@ -2531,6 +2531,14 @@ function fmtPeriod(days) {
         : d + ' сут';
 }
 
+/** «4 секунды», «1 секунда», «5 секунд» — для текста диалога удаления. */
+function fmtSecondsWord(n) {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return n + ' секунда';
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return n + ' секунды';
+    return n + ' секунд';
+}
+
 /** Собрать ссылки на элементы HUD. Вызывается один раз в main.js. */
 function getHudElements() {
     return {
@@ -2970,7 +2978,7 @@ function wireObjectCard(box) {
             eyebrow: 'Звёздная база',
             title: 'Удалить базу?',
             text: 'База <b>«' + rec.name + '»</b> будет разбираться ' +
-                Math.round(BASE_REMOVAL_MS / 1000) + ' секунд: ей нельзя будет пользоваться, ' +
+                fmtSecondsWord(Math.round(BASE_REMOVAL_MS / 1000)) + ': ей нельзя будет пользоваться, ' +
                 'затем она исчезнет с орбиты, а запись переедет в архив.',
             okLabel: 'Удалить',
             onOk: () => {
