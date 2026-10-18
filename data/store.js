@@ -17,7 +17,7 @@
   var db = null;
 
   function blank() {
-    return { credits: DEFAULT_CREDITS, props: [], slots: [], categories: [], objects: [] };
+    return { credits: DEFAULT_CREDITS, props: [], slots: [], categories: [], objects: [], users_ships: [] };
   }
 
   function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
@@ -94,6 +94,18 @@
       .concat(collect(data.resources))
       .concat(collect(data.equipments))
       .filter(function (o) { return o.name; });
+
+    /* Купленные корабли — записи пользователя, независимые от каталога. */
+    out.users_ships = arr(data.users_ships).filter(isObj).map(function (u) {
+      return {
+        id: str(u.id) || uid(),
+        shipId: str(u.shipId),
+        name: str(u.name).trim(),
+        categoryId: str(u.categoryId),
+        price: str(u.price).trim(),
+        boughtAt: str(u.boughtAt)
+      };
+    }).filter(function (u) { return u.shipId || u.name; });
 
     pruneRefs(out);
     return out;
@@ -435,6 +447,30 @@
     d.credits = Math.max(0, d.credits + add);
     persist();
     return d.credits;
+  }
+
+  /* ---------- Купленные корабли ---------- */
+
+  function userShips() { return all('users_ships'); }
+
+  /* Купить корабль: списывает цену покупки и пишет запись в users_ships. */
+  function buyShip(objectId) {
+    var ship = byId('objects', objectId);
+    if (!ship) return { ok: false, error: 'Объект не найден' };
+    if (!categoryIsShip(ship.categoryId)) return { ok: false, error: 'Это не корабль' };
+    var price = Store.priceBuy(ship);
+    if (!price) return { ok: false, error: 'Цена не задана' };
+    if (price > credits()) return { ok: false, error: 'Недостаточно кредитов', price: price, credits: credits() };
+
+    addCredits(-price);
+    var record = insert('users_ships', {
+      shipId: ship.id,
+      name: ship.name,
+      categoryId: ship.categoryId,
+      price: String(price),
+      boughtAt: new Date().toISOString()
+    });
+    return { ok: true, record: record, price: price, credits: credits() };
   }
 
   /* ---------- Демонстрационный набор ---------- */
@@ -828,6 +864,8 @@
     clearAll: clearAll,
     credits: credits,
     addCredits: addCredits,
+    userShips: userShips,
+    buyShip: buyShip,
     loadDemo: function () { db = demoData(); persist(); },
     counts: counts
   };

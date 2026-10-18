@@ -62,6 +62,7 @@
         mass: Store.massOf(o),
         price: Store.priceBuy(o),
         sale: Store.priceSale(o),
+        isShip: Store.categoryIsShip(o.categoryId),
         props: props
       };
     });
@@ -281,12 +282,13 @@
       ? '<span class="trade-preview-price">' + fmt(item.price) + ' ¤<small> / шт.</small></span>' +
         (item.sale ? '<span class="trade-preview-stats">продажа: ' + fmt(item.sale) + ' ¤</span>' : '')
       : '<span class="trade-preview-stats">Цена не задана</span>';
+    if (item.isShip) lines += '<span class="trade-preview-stats">корабль · покупка попадёт в ангар</span>';
     return '<div class="trade-preview">' +
       '<span class="trade-preview-icon">' + iconMarkup(item.icon, 27) + '</span>' +
       '<strong>' + item.name + '</strong>' +
       lines + price +
       '</div>' +
-      '<button class="trade-button buy" data-action="buy">Купить' + icon('arrowRight') + '</button>';
+      '<button class="trade-button buy" data-action="buy">' + (item.isShip ? 'Купить корабль' : 'Купить') + icon('arrowRight') + '</button>';
   }
 
   /* Центр: груз на корабле — прежний вид с ценой и продажей. */
@@ -314,6 +316,13 @@
 
   function renderShop() {
     var filtered = filteredItems();
+    var selected = currentShop();
+    /* У выбранного корабля правый список «На корабле» скрывается. */
+    var hideCargo = !!(selected && selected.isShip);
+    var cargoPanel = document.getElementById('cargoPanel');
+    var marketGrid = document.querySelector('.market-grid');
+    if (cargoPanel) cargoPanel.hidden = hideCargo;
+    if (marketGrid) marketGrid.classList.toggle('no-cargo', hideCargo);
     document.getElementById('shopCount').textContent = filtered.length + ' ' + plural(filtered.length, ['позиция', 'позиции', 'позиций']);
     document.getElementById('categoryTabs').innerHTML = categoryTabsHTML();
     renderSubcategories();
@@ -545,7 +554,16 @@
     }
     else if (action === 'buy') {
       var buyItem = currentShop();
-      state.notice = buyItem ? 'Покупка «' + buyItem.name + '» появится позже' : 'Покупка пока не настроена';
+      if (buyItem && buyItem.isShip) {
+        var res = Store.buyShip(buyItem.id);
+        state.notice = res.ok
+          ? 'Корабль «' + buyItem.name + '» куплен за ' + fmt(res.price) + ' ¤'
+          : (res.error === 'Недостаточно кредитов'
+            ? 'Не хватает кредитов: нужно ' + fmt(res.price) + ' ¤'
+            : 'Не удалось купить: ' + res.error);
+      } else {
+        state.notice = buyItem ? 'Покупка «' + buyItem.name + '» появится позже' : 'Покупка пока не настроена';
+      }
     }
     else if (action === 'transact') transact();
     else if (action === 'select-resource') {

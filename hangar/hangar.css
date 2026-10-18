@@ -271,6 +271,9 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 }
 
 .market-grid { display: grid; grid-template-columns: minmax(310px, 1fr) 154px minmax(310px, 1fr); grid-template-rows: minmax(0, 1fr); flex: 1; min-height: 0; gap: 12px; }
+/* У выбранного корабля правый список скрыт — консоль занимает его место */
+.market-grid.no-cargo { grid-template-columns: minmax(310px, 1fr) minmax(320px, 1fr); }
+.market-grid.no-cargo .trade-console { padding-inline: clamp(18px, 4vw, 64px); }
 .hangar-grid { grid-template-columns: minmax(290px, 1fr) 230px minmax(290px, 1fr); }
 .inventory-panel, .trade-console {
   position: relative;
