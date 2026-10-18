@@ -65,6 +65,13 @@
       </svg>
       Информация о базе
     </button>
+    <button data-action="tab" data-tab="ship">
+      <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
+        <path d="m12 3 5 7-1 8-4-2-4 2-1-8 5-7Z"></path>
+        <path d="M10 12h4M12 3v7"></path>
+      </svg>
+      Информация о корабле
+    </button>
     <button data-action="tab" data-tab="shop">
       <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
         <path d="M4 9h16l-1-5H5L4 9Z"></path>
@@ -170,36 +177,25 @@
         <div class="terminal-status"><span></span> Стыковка завершена</div>
       </div>
 
-      <div class="info-tabs" id="infoTabs">
-        <button data-action="info-section" data-sec="properties">
-          <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
-            <path d="m12 3 5 7-1 8-4-2-4 2-1-8 5-7Z"></path>
-            <path d="M10 12h4M12 3v7"></path>
-          </svg>
-          Свойства корабля
-        </button>
-        <button data-action="info-section" data-sec="equipment">
-          <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
-            <path d="m5 19 4-4m2-2 8-8v5l-8 8H6v-5l8-8h5"></path>
-            <path d="m14 10 3 3"></path>
-          </svg>
-          Купленное оборудование
-        </button>
-        <button data-action="info-section" data-sec="resources">
-          <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
-            <path d="m12 3 7 4v10l-7 4-7-4V7l7-4Z"></path>
-            <path d="m5 7 7 4 7-4M12 11v10"></path>
-          </svg>
-          Ресурсы
-        </button>
-      </div>
-
       <div id="infoContent"></div>
+    </section>
+
+    <section class="info-view" id="view-ship" hidden>
+      <div class="section-title">
+        <div>
+          <span class="eyebrow">АНГАР // ЛИЧНЫЙ КОРАБЛЬ</span>
+          <h1 id="shipViewTitle">Корабль</h1>
+        </div>
+        <div class="terminal-status"><span></span> Готов к вылету</div>
+      </div>
+      <div id="shipViewContent"></div>
     </section>
 
     <div id="shipDock"></div>
   </div>
 </main>
+<div class="slot-tip" id="slotTip" hidden></div>
+<div class="slot-modal" id="slotModal" hidden></div>
 <script src="../data/store.js?v=20261017"></script>
 <script src="../data/icons.js?v=20261017"></script>
 <script src="hangar.js?v=20261017"></script>
