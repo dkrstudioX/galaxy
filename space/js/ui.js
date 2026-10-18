@@ -279,6 +279,14 @@ function baseRowHTML(id, name, radius) {
         '<small>орбита ' + Math.round(radius) + ' ед.</small></div>';
 }
 
+/** Кнопка «Переместить базу» у созданной базы — в том же месте, что «Создать базу». */
+function moveBaseButtonHTML(b) {
+    const active = state.baseMode && state.baseMode.moveId === b.id;
+    return '<button class="base-create' + (active ? ' active' : '') + '" id="baseMoveBtn"' +
+        ' data-move-id="' + b.id + '">' +
+        (active ? 'Отмена — выберите орбиту' : 'Переместить базу') + '</button>';
+}
+
 /**
  * Оживить карточку после innerHTML: клики по строкам баз (выбор) и кнопка
  * «Создать базу» — включает режим выбора орбиты на карте (подтверждает клик,
@@ -311,6 +319,21 @@ function wireObjectCard(box) {
         state.baseRadius = 60;
         renderObjectInfo();   // надпись кнопки: «Создать базу» <-> «Отмена»
     });
+
+    const mvBtn = box.querySelector('#baseMoveBtn');
+    if (mvBtn) mvBtn.addEventListener('click', () => {
+        // Тот же режим выбора орбиты, но запись не создаётся, а переносится:
+        // клик по карте сменит хост (по правилу ближайшего тела) и радиус базы.
+        if (state.baseMode) {
+            state.baseMode = null;
+        } else {
+            const rec = bases.find(b => b.id === mvBtn.dataset.moveId);
+            if (!rec) return;
+            state.baseMode = { kind: rec.hostKind, planet: rec.planet, moon: rec.moon || null, moveId: rec.id };
+            state.baseRadius = rec.orbitRadius;
+        }
+        renderObjectInfo();   // надпись кнопки: «Переместить базу» <-> «Отмена»
+    });
 }
 
 /** Перерисовать карточку выбранного объекта (зовёт input.js при отмене режима). */
@@ -331,7 +354,8 @@ function newBaseInfoHTML(b) {
             row('Период обращения', fmtPeriod(b.period)) +
             row('Создана', (b.created || '').slice(0, 10)) +
         '</div>' +
-        '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>';
+        '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>' +
+        moveBaseButtonHTML(b);
 }
 
 function row(k, v) {

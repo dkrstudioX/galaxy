@@ -350,8 +350,13 @@ const state = {
     selected: null,     // выбранный объект: {kind:'sun'|'planet'|'moon', p, m}
 
     // --- Звёздные базы ------------------------------------------------------------
-    baseMode: null,     // режим выбора орбиты: {kind:'planet'|'moon', planet, moon}
+    // Режим выбора орбиты: {kind:'planet'|'moon', planet, moon, snap, moveId?};
+    // snap — снимок соседей на старте режима, moveId — переносимая база.
+    baseMode: null,
     baseRadius: 60,     // текущий радиус выбираемой орбиты, единицы мира
+
+    // --- Полёт камеры ------------------------------------------------------------
+    fly: null,          // твин полёта к строке блока «Малые тела» (ui.js)
 
     // --- Канвас ---------------------------------------------------------------
     W: 0,           // размеры канваса в пикселях (обновляет resize())
@@ -812,8 +817,11 @@ function drawSmallBodies(ctx) {
 // База прикреплена к планете или луне и летает по круговой орбите вокруг неё.
 // Новые базы создаются прямо на карте: кнопка «Создать базу» в карточке
 // планеты/луны включает режим выбора орбиты — радиус берётся от курсора,
-// клик подтверждает (input.js). Период обращения — как у Луны: одни сутки на
-// радиусе baseOrbitRadius, дальше по закону Кеплера.
+// клик подтверждает (input.js). У созданной базы в карточке есть кнопка
+// «Переместить базу» — тот же режим; клик переносит запись на выбранную
+// орбиту (хост при этом выбирается по правилу ближайшего тела). Период
+// обращения — как у Луны: одни сутки на радиусе baseOrbitRadius, дальше по
+// закону Кеплера.
 //
 // Хранение — ОТДЕЛЬНЫЙ ключ localStorage («galaxy_space_bases_v1»): данные
 // админки/ангара (window.Store) не задействованы. Пока это только создание
@@ -878,6 +886,11 @@ function nextName() {
     return 'BASE-' + (max + 1);
 }
 
+/** Радиус орбиты: округлён до десятых и зажат в пределы [BASE_MIN_R, BASE_MAX_R]. */
+function radiusOf(r) {
+    return Math.round(Math.min(BASE_MAX_R, Math.max(BASE_MIN_R, r)) * 10) / 10;
+}
+
 /**
  * Создать базу на орбите радиуса r у планеты/луны; запись сразу пишется в
  * localStorage. Карточку/список обновляет вызывающий код (input.js).
@@ -885,7 +898,7 @@ function nextName() {
  * @param {number} r радиус орбиты, единицы мира (клампится)
  */
 function createBase(host, r) {
-    const orbitRadius = Math.round(Math.min(BASE_MAX_R, Math.max(BASE_MIN_R, r)) * 10) / 10;
+    const orbitRadius = radiusOf(r);
     const rec = {
         id: 'base-' + Date.now().toString(36),
         name: nextName(),
@@ -898,6 +911,24 @@ function createBase(host, r) {
         created: new Date().toISOString()
     };
     bases.push(rec);
+    saveBases();
+    return rec;
+}
+
+/**
+ * Переместить созданную базу на орбиту радиуса r у планеты/луны (хост выбирает
+ * режим на карте, в том числе по правилу ближайшего тела). Период пересчитывается,
+ * запись сразу пишется в localStorage; карточку обновляет вызывающий код (input.js).
+ * @param {Object} rec запись базы
+ * @param {{kind: string, planet: string, moon: ?string}} host
+ * @param {number} r радиус орбиты, единицы мира (клампится)
+ */
+function moveBase(rec, host, r) {
+    rec.hostKind = host.kind;
+    rec.planet = host.planet;
+    rec.moon = host.moon || null;
+    rec.orbitRadius = radiusOf(r);
+    rec.period = basePeriodAt(rec.orbitRadius);
     saveBases();
     return rec;
 }
@@ -918,16 +949,24 @@ function drawBases(ctx, hostPos) {
     const targets = [];
 
     bases.forEach(b => {
-        const hp = hostPos[hostKey(b.hostKind, b.planet, b.moon)];
+        const mode = state.baseMode;
+        // База в режиме переноса рисуется сразу по превью: хост режима и
+        // текущий радиус выбора (до подтверждения запись не меняется).
+        const moving = mode && mode.moveId === b.id;
+        const hk = moving ? hostKey(mode.kind, mode.planet, mode.moon)
+                          : hostKey(b.hostKind, b.planet, b.moon);
+        const hp = hostPos[hk];
         if (!hp) return;   // хост не в кадре (например, луна скрыта зумом)
-        const ang = b.phase0 + 2 * Math.PI * simDays / b.period;
-        b.x = hp.x + Math.cos(ang) * b.orbitRadius;
-        b.y = hp.y - Math.sin(ang) * b.orbitRadius;
+        const orbitR = moving ? state.baseRadius : b.orbitRadius;
+        const period = moving ? basePeriodAt(orbitR) : b.period;
+        const ang = b.phase0 + 2 * Math.PI * simDays / period;
+        b.x = hp.x + Math.cos(ang) * orbitR;
+        b.y = hp.y - Math.sin(ang) * orbitR;
 
-        drawBaseMarker(ctx, hp, b, zoom, time);
+        drawBaseMarker(ctx, hp, b, zoom, time, orbitR);
         targets.push({
             kind: 'base', name: b.name, x: b.x, y: b.y, r: 4 / zoom,
-            orbitCx: hp.x, orbitCy: hp.y, orbitR: b.orbitRadius,
+            orbitCx: hp.x, orbitCy: hp.y, orbitR,
             local: b, moons: []
         });
     });
@@ -937,12 +976,12 @@ function drawBases(ctx, hostPos) {
 }
 
 /** Маркер базы: орбита вокруг хоста, свечение, квадрат, пульс и подпись. */
-function drawBaseMarker(ctx, hp, b, zoom, time) {
+function drawBaseMarker(ctx, hp, b, zoom, time, orbitR) {
     ctx.strokeStyle = 'rgba(0,255,255,0.27)';
     ctx.lineWidth = 0.5 / zoom;
     ctx.setLineDash([1 / zoom, 1 / zoom]);
     ctx.beginPath();
-    ctx.arc(hp.x, hp.y, b.orbitRadius, 0, Math.PI * 2);
+    ctx.arc(hp.x, hp.y, orbitR, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
 
@@ -1003,7 +1042,7 @@ function drawBasePreview(ctx, hostPos) {
     ctx.stroke();
 
     const l1 = 'Орбита: ' + Math.round(r) + ' ед.';
-    const l2 = 'клик — создать · Esc — отмена';
+    const l2 = (mode.moveId ? 'клик — переместить базу' : 'клик — создать') + ' · Esc — отмена';
     ctx.font = `${11 / zoom}px monospace`;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillText(l1, w.x + 15 / zoom, w.y - 19 / zoom);
@@ -1984,20 +2023,29 @@ function updateBaseRadius(x, y) {
     }
     if (!best) return;
     if (best.kind !== mode.kind || best.planet !== mode.planet || (best.moon || null) !== (mode.moon || null)) {
-        state.baseMode = { kind: best.kind, planet: best.planet, moon: best.moon, snap: mode.snap };
+        // {...mode} сохраняет snap и moveId (перенос базы) при переезде хоста
+        state.baseMode = { ...mode, kind: best.kind, planet: best.planet, moon: best.moon };
     }
     const hp = hostPosOf(state.baseMode);   // радиус — от живого положения хоста
     state.baseRadius = Math.min(BASE_MAX_R, Math.max(BASE_MIN_R,
         hp ? Math.hypot(w.x - hp.x, w.y - hp.y) : bd));
 }
 
-/** Клик в режиме выбора орбиты: создать базу у хоста и сразу выбрать её. */
+/** Клик в режиме выбора орбиты: создать базу или перенести существующую. */
 function confirmBase(x, y) {
     if (!hostPosOf(state.baseMode)) return;   // хост не в кадре (луна скрыта зумом) — клик мимо
     updateBaseRadius(x, y);
     const mode = state.baseMode;   // хост мог только что переехать к ближайшему телу
-    const rec = createBase(mode, state.baseRadius);
     state.baseMode = null;
+    if (mode.moveId) {             // перенос: та же запись на новой орбите
+        const rec = bases.find(b => b.id === mode.moveId);
+        if (!rec) { refreshObjectCard(); return; }
+        moveBase(rec, mode, state.baseRadius);
+        const p = planets.find(q => q.name === rec.planet);
+        selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
+        return;
+    }
+    const rec = createBase(mode, state.baseRadius);
     const p = planets.find(q => q.name === rec.planet);
     selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
 }
@@ -2290,6 +2338,14 @@ function baseRowHTML(id, name, radius) {
         '<small>орбита ' + Math.round(radius) + ' ед.</small></div>';
 }
 
+/** Кнопка «Переместить базу» у созданной базы — в том же месте, что «Создать базу». */
+function moveBaseButtonHTML(b) {
+    const active = state.baseMode && state.baseMode.moveId === b.id;
+    return '<button class="base-create' + (active ? ' active' : '') + '" id="baseMoveBtn"' +
+        ' data-move-id="' + b.id + '">' +
+        (active ? 'Отмена — выберите орбиту' : 'Переместить базу') + '</button>';
+}
+
 /**
  * Оживить карточку после innerHTML: клики по строкам баз (выбор) и кнопка
  * «Создать базу» — включает режим выбора орбиты на карте (подтверждает клик,
@@ -2322,6 +2378,21 @@ function wireObjectCard(box) {
         state.baseRadius = 60;
         renderObjectInfo();   // надпись кнопки: «Создать базу» <-> «Отмена»
     });
+
+    const mvBtn = box.querySelector('#baseMoveBtn');
+    if (mvBtn) mvBtn.addEventListener('click', () => {
+        // Тот же режим выбора орбиты, но запись не создаётся, а переносится:
+        // клик по карте сменит хост (по правилу ближайшего тела) и радиус базы.
+        if (state.baseMode) {
+            state.baseMode = null;
+        } else {
+            const rec = bases.find(b => b.id === mvBtn.dataset.moveId);
+            if (!rec) return;
+            state.baseMode = { kind: rec.hostKind, planet: rec.planet, moon: rec.moon || null, moveId: rec.id };
+            state.baseRadius = rec.orbitRadius;
+        }
+        renderObjectInfo();   // надпись кнопки: «Переместить базу» <-> «Отмена»
+    });
 }
 
 /** Перерисовать карточку выбранного объекта (зовёт input.js при отмене режима). */
@@ -2342,7 +2413,8 @@ function newBaseInfoHTML(b) {
             row('Период обращения', fmtPeriod(b.period)) +
             row('Создана', (b.created || '').slice(0, 10)) +
         '</div>' +
-        '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>';
+        '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>' +
+        moveBaseButtonHTML(b);
 }
 
 function row(k, v) {

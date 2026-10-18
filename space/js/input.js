@@ -12,7 +12,7 @@ import { MIN_ZOOM, MAX_ZOOM, MIN_SPEED, MAX_SPEED } from './config.js';
 import { planets } from './data.js';
 import { findBodyAt } from './hover.js';
 import { selectBody, refreshObjectCard } from './ui.js';
-import { createBase, BASE_MIN_R, BASE_MAX_R } from './bases.js';
+import { createBase, moveBase, bases, BASE_MIN_R, BASE_MAX_R } from './bases.js';
 
 /**
  * Зум к точке экрана: мировая точка под (ax, ay) остаётся под ней после
@@ -228,20 +228,29 @@ function updateBaseRadius(x, y) {
     }
     if (!best) return;
     if (best.kind !== mode.kind || best.planet !== mode.planet || (best.moon || null) !== (mode.moon || null)) {
-        state.baseMode = { kind: best.kind, planet: best.planet, moon: best.moon, snap: mode.snap };
+        // {...mode} сохраняет snap и moveId (перенос базы) при переезде хоста
+        state.baseMode = { ...mode, kind: best.kind, planet: best.planet, moon: best.moon };
     }
     const hp = hostPosOf(state.baseMode);   // радиус — от живого положения хоста
     state.baseRadius = Math.min(BASE_MAX_R, Math.max(BASE_MIN_R,
         hp ? Math.hypot(w.x - hp.x, w.y - hp.y) : bd));
 }
 
-/** Клик в режиме выбора орбиты: создать базу у хоста и сразу выбрать её. */
+/** Клик в режиме выбора орбиты: создать базу или перенести существующую. */
 function confirmBase(x, y) {
     if (!hostPosOf(state.baseMode)) return;   // хост не в кадре (луна скрыта зумом) — клик мимо
     updateBaseRadius(x, y);
     const mode = state.baseMode;   // хост мог только что переехать к ближайшему телу
-    const rec = createBase(mode, state.baseRadius);
     state.baseMode = null;
+    if (mode.moveId) {             // перенос: та же запись на новой орбите
+        const rec = bases.find(b => b.id === mode.moveId);
+        if (!rec) { refreshObjectCard(); return; }
+        moveBase(rec, mode, state.baseRadius);
+        const p = planets.find(q => q.name === rec.planet);
+        selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
+        return;
+    }
+    const rec = createBase(mode, state.baseRadius);
     const p = planets.find(q => q.name === rec.planet);
     selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
 }
