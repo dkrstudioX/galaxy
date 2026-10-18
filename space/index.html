@@ -285,6 +285,8 @@ c.addEventListener('wheel', e => {
 // === ПАНОРАМИРОВАНИЕ ПРАВОЙ КНОПОЙ МЫШИ ===
 // Удерживайте правую кнопку — карта следует за курсором (удобно на большом зуме).
 let mouseDragging = false, mouseStartX = 0, mouseStartY = 0, camStartMX = 0, camStartMY = 0;
+// Позиция мыши для hover-подсказок (координаты на канвасе)
+let mouseX = -1, mouseY = -1;
 
 c.addEventListener('mousedown', e => {
     if(e.button !== 2) return;
@@ -297,9 +299,16 @@ c.addEventListener('mousedown', e => {
 });
 
 window.addEventListener('mousemove', e => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
     if(!mouseDragging) return;
     camX = camStartMX + (e.clientX - mouseStartX) / zoom;
     camY = camStartMY + (e.clientY - mouseStartY) / zoom;
+});
+
+c.addEventListener('mouseleave', () => {
+    mouseX = -1;
+    mouseY = -1;
 });
 
 window.addEventListener('mouseup', e => {
@@ -359,6 +368,13 @@ function drawPlanet(x, y, r, color, type, sunX, sunY) {
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI*2);
     ctx.fill();
+
+    // тонкая видимая обводка планеты (тоньше, чем у солнца, толще, чем у лун)
+    ctx.strokeStyle = lighten(color, 55);
+    ctx.lineWidth = 1.2/zoom;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI*2);
+    ctx.stroke();
 
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.beginPath();
@@ -481,16 +497,8 @@ function draw() {
         ctx.fill();
     });
 
-    // Орбиты
-    planets.forEach(p => {
-        ctx.strokeStyle = '#333355';
-        ctx.lineWidth = 1/zoom;
-        ctx.setLineDash([3/zoom, 3/zoom]);
-        ctx.beginPath();
-        ctx.arc(0, 0, p.dist, 0, Math.PI*2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-    });
+    // Орбиты скрыты; показываются при наведении на тело (см. hover-блок после restore)
+    const hoverTargets = [];
 
     // === СОЛНЦЕ ===
     const sunPulse = 1 + 0.02*Math.sin(time*3);
@@ -520,6 +528,13 @@ function draw() {
     ctx.beginPath();
     ctx.arc(0, 0, 22, 0, Math.PI*2);
     ctx.fill();
+
+    // обводка солнца — самая толстая
+    ctx.strokeStyle = 'rgba(255,244,200,0.9)';
+    ctx.lineWidth = 2.5/zoom;
+    ctx.beginPath();
+    ctx.arc(0, 0, 22, 0, Math.PI*2);
+    ctx.stroke();
 
     ctx.strokeStyle = 'rgba(255,200,50,0.3)';
     ctx.lineWidth = 2/zoom;
@@ -562,13 +577,10 @@ function draw() {
 
         drawPlanet(x, y, p.r, p.color, p.type, 0, 0);
 
-        ctx.fillStyle = '#fff';
-        ctx.font = `${Math.max(10, 11/zoom)}px monospace`;
-        ctx.fillText(p.name, x + p.r + 4/zoom, y + 4/zoom);
-
         // === ЛУНЫ ПЛАНЕТЫ (количество растёт с зумом) ===
         const pmoons = moonsByPlanet[p.name] || [];
         const shown = Math.min(visibleMoons(), pmoons.length);
+        const moonHits = [];
         for(let i = 0; i < shown; i++) {
             const m = pmoons[i];
             const md = p.r + 12 + i * 7;
@@ -576,16 +588,7 @@ function draw() {
             const mx = x + Math.cos(mAng) * md;
             const my = y - Math.sin(mAng) * md;
 
-            // орбита луны — пунктиром, при достаточном приближении
-            if(zoom >= 1.4) {
-                ctx.strokeStyle = '#3a3a55';
-                ctx.lineWidth = 0.5/zoom;
-                ctx.setLineDash([2/zoom, 2/zoom]);
-                ctx.beginPath();
-                ctx.arc(x, y, md, 0, Math.PI*2);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
+            moonHits.push({ m, md, mx, my });
 
             const mg = ctx.createRadialGradient(mx-1, my-1, 0, mx, my, m.r);
             mg.addColorStop(0, lighten(m.c, 45));
@@ -595,31 +598,26 @@ function draw() {
             ctx.arc(mx, my, m.r, 0, Math.PI*2);
             ctx.fill();
 
+            // самая тонкая обводка — у лун
+            ctx.strokeStyle = lighten(m.c, 50);
+            ctx.lineWidth = 0.7/zoom;
+            ctx.beginPath();
+            ctx.arc(mx, my, m.r, 0, Math.PI*2);
+            ctx.stroke();
+
             ctx.fillStyle = 'rgba(0,0,0,0.4)';
             ctx.beginPath();
             ctx.arc(mx, my, m.r, Math.PI/2, Math.PI*1.5);
             ctx.fill();
-
-            if(zoom >= 1.7) {
-                ctx.fillStyle = '#9aa3b5';
-                ctx.font = `${Math.max(8, 8/zoom)}px monospace`;
-                ctx.fillText(m.n, mx + m.r + 3/zoom, my + 3/zoom);
-            }
         }
+
+        hoverTargets.push({ kind: 'planet', p, x, y, moons: moonHits });
 
         // === ЛУНА И БАЗА ===
         if(p.hasBase) {
             const mAng = orbitAngle(moonL0, moonPeriod, simDays);
             const mx = x + Math.cos(mAng) * moonDist;
             const my = y - Math.sin(mAng) * moonDist;
-
-            ctx.strokeStyle = '#444466';
-            ctx.lineWidth = 0.5/zoom;
-            ctx.setLineDash([2/zoom, 2/zoom]);
-            ctx.beginPath();
-            ctx.arc(x, y, moonDist, 0, Math.PI*2);
-            ctx.stroke();
-            ctx.setLineDash([]);
 
             const moonGrad = ctx.createRadialGradient(mx-1, my-1, 0, mx, my, 3);
             moonGrad.addColorStop(0, '#dddddd');
@@ -628,6 +626,14 @@ function draw() {
             ctx.beginPath();
             ctx.arc(mx, my, 3, 0, Math.PI*2);
             ctx.fill();
+
+            ctx.strokeStyle = '#e8e8e8';
+            ctx.lineWidth = 0.7/zoom;
+            ctx.beginPath();
+            ctx.arc(mx, my, 3, 0, Math.PI*2);
+            ctx.stroke();
+
+            hoverTargets[hoverTargets.length - 1].moons.push({ m: { n: 'Луна / Moon', r: 3, c: '#cccccc' }, md: moonDist, mx, my });
 
             ctx.fillStyle = 'rgba(0,0,0,0.4)';
             ctx.beginPath();
@@ -676,6 +682,60 @@ function draw() {
     });
 
     ctx.restore();
+
+    // === HOVER: орбита + подсказка с названием ===
+    let hoverInfo = null;
+    if(mouseX >= 0) {
+        const wx = camX + (mouseX - W/2) / zoom;
+        const wy = camY + (mouseY - H/2) / zoom;
+        // сначала луны (мельче и поверх), потом планеты
+        for(let i = hoverTargets.length - 1; i >= 0 && !hoverInfo; i--) {
+            const t = hoverTargets[i];
+            for(let j = t.moons.length - 1; j >= 0; j--) {
+                const mh = t.moons[j];
+                const hitR = Math.max(mh.m.r, 6/zoom);
+                if((wx-mh.mx)**2 + (wy-mh.my)**2 <= hitR*hitR) {
+                    hoverInfo = { kind: 'moon', name: mh.m.n, orbit: { cx: t.x, cy: t.y, r: mh.md } };
+                    break;
+                }
+            }
+            if(!hoverInfo) {
+                const hitR = Math.max(t.p.r, 8/zoom);
+                if((wx-t.x)**2 + (wy-t.y)**2 <= hitR*hitR) {
+                    hoverInfo = { kind: 'planet', name: t.p.name, orbit: { cx: 0, cy: 0, r: t.p.dist } };
+                }
+            }
+        }
+    }
+
+    if(hoverInfo) {
+        // орбита наведённого тела
+        ctx.save();
+        ctx.translate(W/2, H/2);
+        ctx.scale(zoom, zoom);
+        ctx.translate(-camX, -camY);
+        ctx.strokeStyle = hoverInfo.kind === 'planet' ? 'rgba(120,140,200,0.6)' : 'rgba(150,160,180,0.6)';
+        ctx.lineWidth = 1/zoom;
+        ctx.setLineDash([4/zoom, 4/zoom]);
+        ctx.beginPath();
+        ctx.arc(hoverInfo.orbit.cx, hoverInfo.orbit.cy, hoverInfo.orbit.r, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // текстовая подсказка у курсора (в экранных координатах)
+        ctx.font = '12px monospace';
+        const tw = ctx.measureText(hoverInfo.name).width;
+        const tx = Math.min(mouseX + 14, W - tw - 20);
+        const ty = Math.max(mouseY - 24, 8);
+        ctx.fillStyle = 'rgba(8,10,18,0.85)';
+        ctx.fillRect(tx - 6, ty - 4, tw + 12, 20);
+        ctx.strokeStyle = 'rgba(120,140,200,0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(tx - 6, ty - 4, tw + 12, 20);
+        ctx.fillStyle = '#dfe6f5';
+        ctx.fillText(hoverInfo.name, tx, ty + 10);
+    }
 
     // Счётчик дней привязан к орбитальному движению: тот же simDays,
     // что задаёт углы планет. Показывает прошедшее время с загрузки страницы.
