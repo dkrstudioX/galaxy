@@ -241,7 +241,7 @@ function renderObjectInfo() {
     let html = '';
     if (sel.kind === 'sun') {
         html =
-            '<div class="obj-title"><span class="dot" style="background:#eeeeee"></span>' +
+            '<div class="obj-title"><span class="dot" style="background:' + COLORS.sun + '"></span>' +
                 '<strong>' + RU.Sun + ' / Sun</strong></div>' +
             '<div class="obj-kind">Звезда · G2V</div>' +
             row('Радиус отрисовки', SUN_R + ' <em>ед.</em>');
