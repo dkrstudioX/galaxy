@@ -382,11 +382,14 @@ function resize(canvas) {
 
 // ===== scene.js =====
 // =============================================================================
-// scene.js — генерация фона сцены (звёзды) и правило раскрытия лун.
+// scene.js — генерация фона сцены (звёзды) и правила показа лун: сколько лун
+// помещается при текущем зуме (visibleMoons) и как скрытые луны схлопываются
+// в маркер-представителя вместе с базами игрока (moonGroupPlan).
 // Малые тела (пояс астероидов, ОЗА, троянцы, кометы, дальние пояса) живут в
 // отдельном модуле smallbodies.js. Позиции тел здесь не считаются — это
 // делает render.js каждый кадр из simDays.
 // =============================================================================
+
 
 
 
@@ -408,12 +411,67 @@ for (let i = 0; i < 400; i++) {
  * случай hasBase). Логарифмическая шкала: 1 луна при zoom=1, далее +1 за каждый
  * множитель MOON_ZOOM_STEP (~1.4). К MAX_ZOOM показываются все луны участка.
  * Вызывающий код дополнительно ограничивает количеством лун конкретной планеты.
+ * Полностью луны не скрываются: ниже zoom=1 шкала даёт 0, но механизм
+ * группировки (moonGroupPlan) всё равно оставляет одну луну-представителя.
  * @returns {number}
  */
 function visibleMoons() {
     if (state.zoom < 1.0) return 0;
     const MOON_ZOOM_STEP = 1.4;
     return 1 + Math.floor(Math.log(state.zoom) / Math.log(MOON_ZOOM_STEP));
+}
+
+/**
+ * План показа лун планеты при текущем зуме — механизм «группировки лун».
+ *
+ * При отдалении карты лун видно всё меньше (visibleMoons), но не до нуля:
+ * одна луна-представитель остаётся всегда. Не поместившиеся луны — хвост
+ * списка moonsByPlanet после последней показанной — схлопываются в группу
+ * при представителе:
+ *
+ *   • у маркера-представителя появляется подпись — имена всех лун группы
+ *     через запятую (при полном отдалении это полный список лун планеты);
+ *   • базы игрока на скрытых лунах не исчезают с карты: render.js кладёт им
+ *     хост-позицию маркера группы, и bases.js рисует базы вокруг группы.
+ *     Когда у группы есть базы, подпись-список лун заменяется списком баз:
+ *     вместо имён лун у группы видны маркеры баз со своими именами.
+ *
+ * @param {Object} p           планета; её луны — moonsByPlanet[p.name]
+ * @param {Array}  [baseList]  записи баз (массив bases из bases.js)
+ * @returns {{shown: Array, group: ?Object}}
+ *   shown — луны, рисуемые отдельными точками: { m — луна, i — её индекс };
+ *   group — null, если видны все луны; иначе:
+ *     at    — индекс представителя в shown (последняя показанная луна);
+ *     moons — луны группы: представитель первым, затем скрытые;
+ *     bases — базы игрока на этих лунах (кроме удалённых);
+ *     label — подпись у представителя (имена лун) или null, когда подпись
+ *             заменяют базы группы (bases).
+ */
+function moonGroupPlan(p, baseList = []) {
+    const list = moonsByPlanet[p.name] || [];
+    const total = list.length;
+    if (total === 0) return { shown: [], group: null };
+
+    // Точками рисуем первые fit лун: обычная шкала зума, но не меньше одной —
+    // последняя показанная луна остаётся представителем группы.
+    const fit = Math.max(1, Math.min(visibleMoons(), total));
+    const shown = list.slice(0, fit).map((m, i) => ({ m, i }));
+    if (fit >= total) return { shown, group: null };
+
+    const moons = list.slice(fit - 1);        // группа: представитель + скрытые
+    const groupBases = baseList.filter(b =>
+        b.status !== 'removed' && b.hostKind === 'moon' && b.planet === p.name
+        && moons.some(m => m.n === b.moon));
+
+    return {
+        shown,
+        group: {
+            at: fit - 1,
+            moons,
+            bases: groupBases,
+            label: groupBases.length ? null : moons.map(m => m.n).join(', ')
+        }
+    };
 }
 
 // ===== smallbodies.js =====
@@ -1858,7 +1916,8 @@ function buildSky() {
 // ===== render.js =====
 // =============================================================================
 // render.js — отрисовка сцены на канвас: фон, малые тела (smallbodies.js),
-// солнце, планеты, луны, база.
+// солнце, планеты, луны (скрытые зумом — группой, scene.js moonGroupPlan),
+// звёздные базы.
 // Монохромный стиль: все тела — плоские круги, различаются яркостью заливки
 // и толщиной обводки (солнце > планеты > луны). Орбит на карте нет — их рисует
 // hover.js только при наведении. Дальний фон (небо) — отдельный слой sky.js.
@@ -1917,7 +1976,7 @@ function renderScene(ctx) {
 
         drawPlanetBody(ctx, x, y, p.r);
 
-        const moonHits = drawPlanetMoons(ctx, x, y, p);
+        const moonHits = drawPlanetMoons(ctx, x, y, p, hostPos);
 
         // Луна Земли + орбитальная база — особый случай (hasBase у Земли)
         let baseHit = null;
@@ -1940,7 +1999,8 @@ function renderScene(ctx) {
         // база добавляется после планеты: рисуется поверх и проверяется первой
         if (baseHit) hoverTargets.push(baseHit);
 
-        // позиции хост-тел для звёздных баз: планета и её нарисованные луны
+        // позиции хост-тел для звёздных баз: планета и её луны (скрытые
+        // луны группы встают в маркер-представителя — см. drawPlanetMoons)
         hostPos['planet:' + p.name] = { x, y };
         moonHits.forEach(h => { hostPos['moon:' + p.name + ':' + h.m.n] = { x: h.mx, y: h.my }; });
     });
@@ -2029,18 +2089,20 @@ function drawMoonBody(ctx, x, y, r) {
 }
 
 /**
- * Луны планеты из moonsByPlanet. Количество растёт с зумом (visibleMoons),
- * радиус орбиты каждой следующей луны дальше от планеты.
+ * Луны планеты — по плану группировки scene.js moonGroupPlan. Показанные луны
+ * рисуются точками и становятся hover-целями. Скрытые луны группы «встают»
+ * в маркер-представитель: их хост-позиция для баз — позиция представителя
+ * (bases.js рисует базы у группы), а у самого маркера — подпись со списком
+ * лун группы. Если у группы есть базы, подпись-список лун не рисуется: её
+ * заменяют сами базы у группы со своими именами.
  * @returns {Array} хиты для hover: { m, md, mx, my }
  */
-function drawPlanetMoons(ctx, x, y, p) {
-    const { simDays } = state;
-    const pmoons = moonsByPlanet[p.name] || [];
-    const shown = Math.min(visibleMoons(), pmoons.length);
+function drawPlanetMoons(ctx, x, y, p, hostPos) {
+    const { simDays, zoom } = state;
+    const plan = moonGroupPlan(p, bases);
     const hits = [];
 
-    for (let i = 0; i < shown; i++) {
-        const m = pmoons[i];
+    plan.shown.forEach(({ m, i }) => {
         const md = moonOrbitRadius(p, i); // радиус орбиты луны от планеты
         const mAng = orbitAngle(m.phase, m.period, simDays);
         const mx = x + Math.cos(mAng) * md;
@@ -2048,6 +2110,24 @@ function drawPlanetMoons(ctx, x, y, p) {
 
         drawMoonBody(ctx, mx, my, m.r);
         hits.push({ m, md, mx, my });
+    });
+
+    if (plan.group) {
+        const rep = hits[plan.group.at];   // маркер-представитель группы
+        // Скрытые луны группы считаются стоящими в маркере: базы на них
+        // рисуются у группы (bases.js по hostPos), а не пропадают из кадра.
+        plan.group.moons.forEach(m => {
+            hostPos['moon:' + p.name + ':' + m.n] = { x: rep.mx, y: rep.my };
+        });
+        if (plan.group.label) {
+            // Подпись группы — как подсказка hover: белый текст с тенью
+            // (кегль держим постоянным на экране: 10 / zoom мировых пикселей).
+            ctx.font = `${10 / zoom}px monospace`;
+            ctx.fillStyle = COLORS.tooltipShadow;
+            ctx.fillText(plan.group.label, rep.mx + 6 / zoom + 1 / zoom, rep.my - 4 / zoom + 1 / zoom);
+            ctx.fillStyle = COLORS.tooltip;
+            ctx.fillText(plan.group.label, rep.mx + 6 / zoom, rep.my - 4 / zoom);
+        }
     }
     return hits;
 }
