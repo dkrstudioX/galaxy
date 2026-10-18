@@ -50,6 +50,7 @@ export function renderScene(ctx) {
 
     // === ПЛАНЕТЫ ===
     const hostPos = {};   // мировые позиции хост-тел для звёздных баз (ключи bases.js)
+    const groupBaseIds = new Set();   // базы лунных групп: имена — в подписи группы
     planets.forEach(p => {
         // Угол строго из simDays: движение по орбите и счётчик дней — один таймер.
         // y с минусом: против часовой, как видно с севера эклиптики.
@@ -61,7 +62,7 @@ export function renderScene(ctx) {
 
         drawPlanetBody(ctx, x, y, p.r);
 
-        const moonHits = drawPlanetMoons(ctx, x, y, p, hostPos);
+        const moonHits = drawPlanetMoons(ctx, x, y, p, hostPos, groupBaseIds);
 
         // Луна Земли + орбитальная база — особый случай (hasBase у Земли)
         let baseHit = null;
@@ -90,8 +91,9 @@ export function renderScene(ctx) {
         moonHits.forEach(h => { hostPos['moon:' + p.name + ':' + h.m.n] = { x: h.mx, y: h.my }; });
     });
 
-    // Звёздные базы (bases.js): маркеры, орбиты и превью выбора орбиты
-    drawBases(ctx, hostPos).forEach(t => {
+    // Звёздные базы (bases.js): маркеры, орбиты и превью выбора орбиты;
+    // базы лунных групп (groupBaseIds) — без имён: они в подписи группы
+    drawBases(ctx, hostPos, groupBaseIds).forEach(t => {
         t.p = planets.find(x => x.name === t.local.planet);
         hoverTargets.push(t);
     });
@@ -173,12 +175,13 @@ function drawMoonBody(ctx, x, y, r) {
  * Луны планеты — по плану группировки scene.js moonGroupPlan. Показанные луны
  * рисуются точками и становятся hover-целями. Скрытые луны группы «встают»
  * в маркер-представитель: их хост-позиция для баз — позиция представителя
- * (bases.js рисует базы у группы), а у самого маркера — подпись со списком
- * лун группы. Если у группы есть базы, подпись-список лун не рисуется: её
- * заменяют сами базы у группы со своими именами.
+ * (bases.js рисует базы у группы), а у самого маркера — подпись в две строки:
+ * луны группы, затем базы игрока на них. Имена баз группы у маркеров не
+ * рисуются — их id собираются в groupBaseIds (drawBases гасит их подписи).
+ * @param {Set} groupBaseIds  сюда складываются id баз групп (для bases.js)
  * @returns {Array} хиты для hover: { m, md, mx, my }
  */
-function drawPlanetMoons(ctx, x, y, p, hostPos) {
+function drawPlanetMoons(ctx, x, y, p, hostPos, groupBaseIds) {
     const { simDays, zoom } = state;
     const plan = moonGroupPlan(p, bases);
     const hits = [];
@@ -200,17 +203,28 @@ function drawPlanetMoons(ctx, x, y, p, hostPos) {
         plan.group.moons.forEach(m => {
             hostPos['moon:' + p.name + ':' + m.n] = { x: rep.mx, y: rep.my };
         });
-        if (plan.group.label) {
-            // Подпись группы — как подсказка hover: белый текст с тенью
-            // (кегль держим постоянным на экране: 10 / zoom мировых пикселей).
-            ctx.font = `${10 / zoom}px monospace`;
-            ctx.fillStyle = COLORS.tooltipShadow;
-            ctx.fillText(plan.group.label, rep.mx + 6 / zoom + 1 / zoom, rep.my - 4 / zoom + 1 / zoom);
-            ctx.fillStyle = COLORS.tooltip;
-            ctx.fillText(plan.group.label, rep.mx + 6 / zoom, rep.my - 4 / zoom);
-        }
+        // Имена баз группы у маркеров не подписываем: они стоят второй
+        // строкой подписи группы (drawBases получит id через groupBaseIds).
+        plan.group.bases.forEach(b => groupBaseIds.add(b.id));
+
+        // Подпись группы — как подсказка hover: текст с тенью, кегль
+        // постоянный на экране (10 / zoom мировых пикселей). Первая строка —
+        // луны группы, вторая (цианом, цветом баз) — базы на них.
+        ctx.font = `${10 / zoom}px monospace`;
+        const lx = rep.mx + 6 / zoom, ly = rep.my - 4 / zoom;
+        groupLine(ctx, plan.group.label, lx, ly, COLORS.tooltip, zoom);
+        if (plan.group.baseLabel)
+            groupLine(ctx, plan.group.baseLabel, lx, ly + 12 / zoom, COLORS.base, zoom);
     }
     return hits;
+}
+
+/** Строка подписи группы лун: тень со сдвигом в 1 px, затем текст в цвете. */
+function groupLine(ctx, text, x, y, color, zoom) {
+    ctx.fillStyle = COLORS.tooltipShadow;
+    ctx.fillText(text, x + 1 / zoom, y + 1 / zoom);
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
 }
 
 /**

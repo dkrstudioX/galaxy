@@ -430,23 +430,25 @@ function visibleMoons() {
  * списка moonsByPlanet после последней показанной — схлопываются в группу
  * при представителе:
  *
- *   • у маркера-представителя появляется подпись — имена всех лун группы
- *     через запятую (при полном отдалении это полный список лун планеты);
+ *   • у маркера-представителя появляется подпись в две строки: первая —
+ *     имена всех лун группы через запятую (при полном отдалении это полный
+ *     список лун планеты), вторая (цианом, цветом баз) — базы игрока на
+ *     лунах группы, тоже через запятую — тем же правилом, что и луны;
  *   • базы игрока на скрытых лунах не исчезают с карты: render.js кладёт им
- *     хост-позицию маркера группы, и bases.js рисует базы вокруг группы.
- *     Когда у группы есть базы, подпись-список лун заменяется списком баз:
- *     вместо имён лун у группы видны маркеры баз со своими именами.
+ *     хост-позицию маркера группы, и bases.js рисует базы вокруг группы —
+ *     маркеры без имён: имена баз группы уже стоят второй строкой подписи.
  *
  * @param {Object} p           планета; её луны — moonsByPlanet[p.name]
  * @param {Array}  [baseList]  записи баз (массив bases из bases.js)
  * @returns {{shown: Array, group: ?Object}}
  *   shown — луны, рисуемые отдельными точками: { m — луна, i — её индекс };
  *   group — null, если видны все луны; иначе:
- *     at    — индекс представителя в shown (последняя показанная луна);
- *     moons — луны группы: представитель первым, затем скрытые;
- *     bases — базы игрока на этих лунах (кроме удалённых);
- *     label — подпись у представителя (имена лун) или null, когда подпись
- *             заменяют базы группы (bases).
+ *     at        — индекс представителя в shown (последняя показанная луна);
+ *     moons     — луны группы: представитель первым, затем скрытые;
+ *     bases     — базы игрока на этих лунах (кроме удалённых);
+ *     label     — первая строка подписи: имена лун через запятую;
+ *     baseLabel — вторая строка подписи: имена баз группы через запятую
+ *                 (null, если баз у группы нет).
  */
 function moonGroupPlan(p, baseList = []) {
     const list = moonsByPlanet[p.name] || [];
@@ -470,7 +472,8 @@ function moonGroupPlan(p, baseList = []) {
             at: fit - 1,
             moons,
             bases: groupBases,
-            label: groupBases.length ? null : moons.map(m => m.n).join(', ')
+            label: moons.map(m => m.n).join(', '),
+            baseLabel: groupBases.length ? groupBases.map(b => b.name).join(', ') : null
         }
     };
 }
@@ -1471,10 +1474,12 @@ function basesAt(kind, planet, moon) {
 /**
  * Отрисовать все базы (орбита-пунктир, свечение, квадрат, пульс, подпись) и
  * превью выбираемой орбиты, если включён режим создания.
- * @param {Object} hostPos 'planet:Mars' / 'moon:Earth:Луна / Moon' -> {x, y}
+ * @param {Object} hostPos   'planet:Mars' / 'moon:Earth:Луна / Moon' -> {x, y}
+ * @param {Set}   [quietIds] базы лунных групп (render.js): им рисуется только
+ *                           маркер — имена стоят в подписи группы
  * @returns {Array} hoverTargets баз
  */
-function drawBases(ctx, hostPos) {
+function drawBases(ctx, hostPos, quietIds) {
     const { simDays, zoom, time } = state;
     const targets = [];
 
@@ -1497,7 +1502,7 @@ function drawBases(ctx, hostPos) {
         b.x = hp.x + Math.cos(ang) * orbitR;
         b.y = hp.y - Math.sin(ang) * orbitR;
 
-        drawBaseMarker(ctx, hp, b, zoom, time, orbitR);
+        drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quietIds && quietIds.has(b.id));
         targets.push({
             kind: 'base', name: b.name, x: b.x, y: b.y, r: 4 / zoom,
             orbitCx: hp.x, orbitCy: hp.y, orbitR,
@@ -1509,8 +1514,9 @@ function drawBases(ctx, hostPos) {
     return targets;
 }
 
-/** Маркер базы: орбита вокруг хоста, свечение, квадрат, пульс и подпись. */
-function drawBaseMarker(ctx, hp, b, zoom, time, orbitR) {
+/** Маркер базы: орбита вокруг хоста, свечение, квадрат, пульс и подпись.
+ *  quiet — имя не рисуется: база лунной группы, её имя — в подписи группы. */
+function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet) {
     ctx.strokeStyle = 'rgba(0,255,255,0.27)';
     ctx.lineWidth = 0.5 / zoom;
     ctx.setLineDash([1 / zoom, 1 / zoom]);
@@ -1556,30 +1562,36 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR) {
     const removing = b.status === 'removing';
     ctx.fillStyle = removing ? COLORS.danger : COLORS.base;
 
-    const tw = ctx.measureText(b.name).width;
-    const overflow = tw > pw;
-    const scrolling = overflow && labelHovered(b, lx, ly, pw, bs);
-    const nowMs = performance.now();
-    if (scrolling) {
-        if (!labelScrollFrom.has(b.id)) labelScrollFrom.set(b.id, nowMs);
-    } else {
+    if (quiet) {
+        // База лунной группы: имя не подписываем — оно стоит второй строкой
+        // подписи группы (scene.js moonGroupPlan.baseLabel).
         labelScrollFrom.delete(b.id);
-    }
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(lx, ly - fontPx * 1.25, pw, fontPx * 1.6);
-    ctx.clip();
-    if (scrolling) {
-        // бегущая строка: имя уходит влево, следом въезжает его же копия
-        const gap = 40 / zoom, cycle = tw + gap;
-        const off = ((nowMs - labelScrollFrom.get(b.id)) / 1000) * 28 / zoom % cycle;
-        ctx.fillText(b.name, lx - off, ly);
-        ctx.fillText(b.name, lx - off + cycle, ly);
     } else {
-        ctx.fillText(overflow ? cutForPanel(ctx, b.name, pw) : b.name, lx, ly);
+        const tw = ctx.measureText(b.name).width;
+        const overflow = tw > pw;
+        const scrolling = overflow && labelHovered(b, lx, ly, pw, bs);
+        const nowMs = performance.now();
+        if (scrolling) {
+            if (!labelScrollFrom.has(b.id)) labelScrollFrom.set(b.id, nowMs);
+        } else {
+            labelScrollFrom.delete(b.id);
+        }
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(lx, ly - fontPx * 1.25, pw, fontPx * 1.6);
+        ctx.clip();
+        if (scrolling) {
+            // бегущая строка: имя уходит влево, следом въезжает его же копия
+            const gap = 40 / zoom, cycle = tw + gap;
+            const off = ((nowMs - labelScrollFrom.get(b.id)) / 1000) * 28 / zoom % cycle;
+            ctx.fillText(b.name, lx - off, ly);
+            ctx.fillText(b.name, lx - off + cycle, ly);
+        } else {
+            ctx.fillText(overflow ? cutForPanel(ctx, b.name, pw) : b.name, lx, ly);
+        }
+        ctx.restore();
     }
-    ctx.restore();
 
     if (removing) {
         // полоска разбора — во всю панель, заполняется справа налево
@@ -2034,6 +2046,7 @@ function renderScene(ctx) {
 
     // === ПЛАНЕТЫ ===
     const hostPos = {};   // мировые позиции хост-тел для звёздных баз (ключи bases.js)
+    const groupBaseIds = new Set();   // базы лунных групп: имена — в подписи группы
     planets.forEach(p => {
         // Угол строго из simDays: движение по орбите и счётчик дней — один таймер.
         // y с минусом: против часовой, как видно с севера эклиптики.
@@ -2045,7 +2058,7 @@ function renderScene(ctx) {
 
         drawPlanetBody(ctx, x, y, p.r);
 
-        const moonHits = drawPlanetMoons(ctx, x, y, p, hostPos);
+        const moonHits = drawPlanetMoons(ctx, x, y, p, hostPos, groupBaseIds);
 
         // Луна Земли + орбитальная база — особый случай (hasBase у Земли)
         let baseHit = null;
@@ -2074,8 +2087,9 @@ function renderScene(ctx) {
         moonHits.forEach(h => { hostPos['moon:' + p.name + ':' + h.m.n] = { x: h.mx, y: h.my }; });
     });
 
-    // Звёздные базы (bases.js): маркеры, орбиты и превью выбора орбиты
-    drawBases(ctx, hostPos).forEach(t => {
+    // Звёздные базы (bases.js): маркеры, орбиты и превью выбора орбиты;
+    // базы лунных групп (groupBaseIds) — без имён: они в подписи группы
+    drawBases(ctx, hostPos, groupBaseIds).forEach(t => {
         t.p = planets.find(x => x.name === t.local.planet);
         hoverTargets.push(t);
     });
@@ -2157,12 +2171,13 @@ function drawMoonBody(ctx, x, y, r) {
  * Луны планеты — по плану группировки scene.js moonGroupPlan. Показанные луны
  * рисуются точками и становятся hover-целями. Скрытые луны группы «встают»
  * в маркер-представитель: их хост-позиция для баз — позиция представителя
- * (bases.js рисует базы у группы), а у самого маркера — подпись со списком
- * лун группы. Если у группы есть базы, подпись-список лун не рисуется: её
- * заменяют сами базы у группы со своими именами.
+ * (bases.js рисует базы у группы), а у самого маркера — подпись в две строки:
+ * луны группы, затем базы игрока на них. Имена баз группы у маркеров не
+ * рисуются — их id собираются в groupBaseIds (drawBases гасит их подписи).
+ * @param {Set} groupBaseIds  сюда складываются id баз групп (для bases.js)
  * @returns {Array} хиты для hover: { m, md, mx, my }
  */
-function drawPlanetMoons(ctx, x, y, p, hostPos) {
+function drawPlanetMoons(ctx, x, y, p, hostPos, groupBaseIds) {
     const { simDays, zoom } = state;
     const plan = moonGroupPlan(p, bases);
     const hits = [];
@@ -2184,17 +2199,28 @@ function drawPlanetMoons(ctx, x, y, p, hostPos) {
         plan.group.moons.forEach(m => {
             hostPos['moon:' + p.name + ':' + m.n] = { x: rep.mx, y: rep.my };
         });
-        if (plan.group.label) {
-            // Подпись группы — как подсказка hover: белый текст с тенью
-            // (кегль держим постоянным на экране: 10 / zoom мировых пикселей).
-            ctx.font = `${10 / zoom}px monospace`;
-            ctx.fillStyle = COLORS.tooltipShadow;
-            ctx.fillText(plan.group.label, rep.mx + 6 / zoom + 1 / zoom, rep.my - 4 / zoom + 1 / zoom);
-            ctx.fillStyle = COLORS.tooltip;
-            ctx.fillText(plan.group.label, rep.mx + 6 / zoom, rep.my - 4 / zoom);
-        }
+        // Имена баз группы у маркеров не подписываем: они стоят второй
+        // строкой подписи группы (drawBases получит id через groupBaseIds).
+        plan.group.bases.forEach(b => groupBaseIds.add(b.id));
+
+        // Подпись группы — как подсказка hover: текст с тенью, кегль
+        // постоянный на экране (10 / zoom мировых пикселей). Первая строка —
+        // луны группы, вторая (цианом, цветом баз) — базы на них.
+        ctx.font = `${10 / zoom}px monospace`;
+        const lx = rep.mx + 6 / zoom, ly = rep.my - 4 / zoom;
+        groupLine(ctx, plan.group.label, lx, ly, COLORS.tooltip, zoom);
+        if (plan.group.baseLabel)
+            groupLine(ctx, plan.group.baseLabel, lx, ly + 12 / zoom, COLORS.base, zoom);
     }
     return hits;
+}
+
+/** Строка подписи группы лун: тень со сдвигом в 1 px, затем текст в цвете. */
+function groupLine(ctx, text, x, y, color, zoom) {
+    ctx.fillStyle = COLORS.tooltipShadow;
+    ctx.fillText(text, x + 1 / zoom, y + 1 / zoom);
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
 }
 
 /**

@@ -423,10 +423,12 @@ export function basesAt(kind, planet, moon) {
 /**
  * Отрисовать все базы (орбита-пунктир, свечение, квадрат, пульс, подпись) и
  * превью выбираемой орбиты, если включён режим создания.
- * @param {Object} hostPos 'planet:Mars' / 'moon:Earth:Луна / Moon' -> {x, y}
+ * @param {Object} hostPos   'planet:Mars' / 'moon:Earth:Луна / Moon' -> {x, y}
+ * @param {Set}   [quietIds] базы лунных групп (render.js): им рисуется только
+ *                           маркер — имена стоят в подписи группы
  * @returns {Array} hoverTargets баз
  */
-export function drawBases(ctx, hostPos) {
+export function drawBases(ctx, hostPos, quietIds) {
     const { simDays, zoom, time } = state;
     const targets = [];
 
@@ -449,7 +451,7 @@ export function drawBases(ctx, hostPos) {
         b.x = hp.x + Math.cos(ang) * orbitR;
         b.y = hp.y - Math.sin(ang) * orbitR;
 
-        drawBaseMarker(ctx, hp, b, zoom, time, orbitR);
+        drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quietIds && quietIds.has(b.id));
         targets.push({
             kind: 'base', name: b.name, x: b.x, y: b.y, r: 4 / zoom,
             orbitCx: hp.x, orbitCy: hp.y, orbitR,
@@ -461,8 +463,9 @@ export function drawBases(ctx, hostPos) {
     return targets;
 }
 
-/** Маркер базы: орбита вокруг хоста, свечение, квадрат, пульс и подпись. */
-function drawBaseMarker(ctx, hp, b, zoom, time, orbitR) {
+/** Маркер базы: орбита вокруг хоста, свечение, квадрат, пульс и подпись.
+ *  quiet — имя не рисуется: база лунной группы, её имя — в подписи группы. */
+function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet) {
     ctx.strokeStyle = 'rgba(0,255,255,0.27)';
     ctx.lineWidth = 0.5 / zoom;
     ctx.setLineDash([1 / zoom, 1 / zoom]);
@@ -508,30 +511,36 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR) {
     const removing = b.status === 'removing';
     ctx.fillStyle = removing ? COLORS.danger : COLORS.base;
 
-    const tw = ctx.measureText(b.name).width;
-    const overflow = tw > pw;
-    const scrolling = overflow && labelHovered(b, lx, ly, pw, bs);
-    const nowMs = performance.now();
-    if (scrolling) {
-        if (!labelScrollFrom.has(b.id)) labelScrollFrom.set(b.id, nowMs);
-    } else {
+    if (quiet) {
+        // База лунной группы: имя не подписываем — оно стоит второй строкой
+        // подписи группы (scene.js moonGroupPlan.baseLabel).
         labelScrollFrom.delete(b.id);
-    }
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(lx, ly - fontPx * 1.25, pw, fontPx * 1.6);
-    ctx.clip();
-    if (scrolling) {
-        // бегущая строка: имя уходит влево, следом въезжает его же копия
-        const gap = 40 / zoom, cycle = tw + gap;
-        const off = ((nowMs - labelScrollFrom.get(b.id)) / 1000) * 28 / zoom % cycle;
-        ctx.fillText(b.name, lx - off, ly);
-        ctx.fillText(b.name, lx - off + cycle, ly);
     } else {
-        ctx.fillText(overflow ? cutForPanel(ctx, b.name, pw) : b.name, lx, ly);
+        const tw = ctx.measureText(b.name).width;
+        const overflow = tw > pw;
+        const scrolling = overflow && labelHovered(b, lx, ly, pw, bs);
+        const nowMs = performance.now();
+        if (scrolling) {
+            if (!labelScrollFrom.has(b.id)) labelScrollFrom.set(b.id, nowMs);
+        } else {
+            labelScrollFrom.delete(b.id);
+        }
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(lx, ly - fontPx * 1.25, pw, fontPx * 1.6);
+        ctx.clip();
+        if (scrolling) {
+            // бегущая строка: имя уходит влево, следом въезжает его же копия
+            const gap = 40 / zoom, cycle = tw + gap;
+            const off = ((nowMs - labelScrollFrom.get(b.id)) / 1000) * 28 / zoom % cycle;
+            ctx.fillText(b.name, lx - off, ly);
+            ctx.fillText(b.name, lx - off + cycle, ly);
+        } else {
+            ctx.fillText(overflow ? cutForPanel(ctx, b.name, pw) : b.name, lx, ly);
+        }
+        ctx.restore();
     }
-    ctx.restore();
 
     if (removing) {
         // полоска разбора — во всю панель, заполняется справа налево
