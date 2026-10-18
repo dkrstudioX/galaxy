@@ -347,6 +347,10 @@ const state = {
     hoverTargets: null, // тела текущего кадра (заполняет main.js), для клика
     selected: null,     // выбранный объект: {kind:'sun'|'planet'|'moon', p, m}
 
+    // --- Звёздные базы ------------------------------------------------------------
+    baseMode: null,     // режим выбора орбиты: {kind:'planet'|'moon', planet, moon}
+    baseRadius: 60,     // текущий радиус выбираемой орбиты, единицы мира
+
     // --- Канвас ---------------------------------------------------------------
     W: 0,           // размеры канваса в пикселях (обновляет resize())
     H: 0
@@ -530,6 +534,215 @@ function drawSmallBodies(ctx) {
     });
 
     return targets;
+}
+
+// ===== bases.js =====
+// =============================================================================
+// bases.js — звёздные базы игрока: хранилище, создание и отрисовка.
+//
+// База прикреплена к планете или луне и летает по круговой орбите вокруг неё.
+// Новые базы создаются прямо на карте: кнопка «Создать базу» в карточке
+// планеты/луны включает режим выбора орбиты — радиус берётся от курсора,
+// клик подтверждает (input.js). Период обращения — как у Луны: одни сутки на
+// радиусе baseOrbitRadius, дальше по закону Кеплера.
+//
+// Хранение — ОТДЕЛЬНЫЙ ключ localStorage («galaxy_space_bases_v1»): данные
+// админки/ангара (window.Store) не задействованы. Пока это только создание
+// и отображение; корабли и экономика — позже.
+//
+// Рисуется из render.js в мировой системе координат; позиции хост-тел
+// (планет/лун) передаются картой hostPos после их отрисовки.
+// =============================================================================
+
+
+
+
+
+
+const STORAGE_KEY = 'galaxy_space_bases_v1';
+
+// Пределы радиуса орбиты новой базы (единицы мира): ближе нельзя — налезет
+// на само тело, дальше — теряется на фоне системы.
+const BASE_MIN_R = 14;
+const BASE_MAX_R = 300;
+
+/** Период обращения базы на радиусе r: как у Луны, дальше — по Кеплеру. */
+function basePeriodAt(r) {
+    return basePeriod * Math.pow(r / baseOrbitRadius, 1.5);
+}
+
+/** Прочитать базы из localStorage; битые данные не роняют карту. */
+function loadBases() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr)
+            ? arr.filter(b => b && b.id && b.planet && b.orbitRadius > 0)
+            : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+/** Записать базы в localStorage (ключ отдельный от данных проекта). */
+function saveBases() {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(bases));
+    } catch (e) { /* нет доступа/переполнено — базы просто не сохранятся */ }
+}
+
+/** Записи баз + позиции x/y, обновляемые каждый кадр при отрисовке. */
+const bases = loadBases();
+
+/** Ключ хоста: 'planet:Mars' или 'moon:Mars:Фобос / Phobos'. */
+function hostKey(kind, planet, moon) {
+    return kind === 'planet' ? 'planet:' + planet : 'moon:' + planet + ':' + moon;
+}
+
+/** Имя следующей базы: BASE-2, BASE-3… (BASE-1 — стартовая LUNA-ORBIT). */
+function nextName() {
+    let max = 1;
+    bases.forEach(b => {
+        const m = /^BASE-(\d+)$/.exec(b.name || '');
+        if (m && +m[1] > max) max = +m[1];
+    });
+    return 'BASE-' + (max + 1);
+}
+
+/**
+ * Создать базу на орбите радиуса r у планеты/луны; запись сразу пишется в
+ * localStorage. Карточку/список обновляет вызывающий код (input.js).
+ * @param {{kind: string, planet: string, moon: ?string}} host
+ * @param {number} r радиус орбиты, единицы мира (клампится)
+ */
+function createBase(host, r) {
+    const orbitRadius = Math.round(Math.min(BASE_MAX_R, Math.max(BASE_MIN_R, r)) * 10) / 10;
+    const rec = {
+        id: 'base-' + Date.now().toString(36),
+        name: nextName(),
+        hostKind: host.kind,
+        planet: host.planet,
+        moon: host.moon || null,
+        orbitRadius,
+        period: basePeriodAt(orbitRadius),
+        phase0: Math.random() * Math.PI * 2,
+        created: new Date().toISOString()
+    };
+    bases.push(rec);
+    saveBases();
+    return rec;
+}
+
+/** Базы на данном хосте — для списка в карточке планеты/луны. */
+function basesAt(kind, planet, moon) {
+    return bases.filter(b => b.hostKind === kind && b.planet === planet && (b.moon || null) === (moon || null));
+}
+
+/**
+ * Отрисовать все базы (орбита-пунктир, свечение, квадрат, пульс, подпись) и
+ * превью выбираемой орбиты, если включён режим создания.
+ * @param {Object} hostPos 'planet:Mars' / 'moon:Earth:Луна / Moon' -> {x, y}
+ * @returns {Array} hoverTargets баз
+ */
+function drawBases(ctx, hostPos) {
+    const { simDays, zoom, time } = state;
+    const targets = [];
+
+    bases.forEach(b => {
+        const hp = hostPos[hostKey(b.hostKind, b.planet, b.moon)];
+        if (!hp) return;   // хост не в кадре (например, луна скрыта зумом)
+        const ang = b.phase0 + 2 * Math.PI * simDays / b.period;
+        b.x = hp.x + Math.cos(ang) * b.orbitRadius;
+        b.y = hp.y - Math.sin(ang) * b.orbitRadius;
+
+        drawBaseMarker(ctx, hp, b, zoom, time);
+        targets.push({
+            kind: 'base', name: b.name, x: b.x, y: b.y, r: 4 / zoom,
+            orbitCx: hp.x, orbitCy: hp.y, orbitR: b.orbitRadius,
+            local: b, moons: []
+        });
+    });
+
+    if (state.baseMode) drawBasePreview(ctx, hostPos);
+    return targets;
+}
+
+/** Маркер базы: орбита вокруг хоста, свечение, квадрат, пульс и подпись. */
+function drawBaseMarker(ctx, hp, b, zoom, time) {
+    ctx.strokeStyle = 'rgba(0,255,255,0.27)';
+    ctx.lineWidth = 0.5 / zoom;
+    ctx.setLineDash([1 / zoom, 1 / zoom]);
+    ctx.beginPath();
+    ctx.arc(hp.x, hp.y, b.orbitRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const bs = 4 / zoom;
+
+    const glow = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, bs * 2);
+    glow.addColorStop(0, 'rgba(0,255,255,0.6)');
+    glow.addColorStop(1, 'rgba(0,255,255,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, bs * 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = COLORS.base;
+    ctx.fillRect(b.x - bs / 2, b.y - bs / 2, bs, bs);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1 / zoom;
+    ctx.strokeRect(b.x - bs / 2, b.y - bs / 2, bs, bs);
+
+    const pulse = (Math.sin(time * 4) + 1) * 0.5;
+    ctx.strokeStyle = `rgba(0,255,255,${0.5 - pulse * 0.5})`;
+    ctx.lineWidth = 1 / zoom;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, bs + pulse * 4, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = COLORS.base;
+    ctx.font = `bold ${Math.max(9, 10 / zoom)}px monospace`;
+    ctx.fillText(b.name, b.x + bs + 3 / zoom, b.y - 3 / zoom);
+}
+
+/** Превью режима «выбрать орбиту»: окружность радиуса, лучик и подсказка. */
+function drawBasePreview(ctx, hostPos) {
+    const mode = state.baseMode;
+    const hp = hostPos[hostKey(mode.kind, mode.planet, mode.moon)];
+    if (!hp || state.mouseX < 0) return;
+
+    const { zoom } = state;
+    const r = state.baseRadius;
+
+    ctx.strokeStyle = 'rgba(0,255,255,0.55)';
+    ctx.lineWidth = 1 / zoom;
+    ctx.setLineDash([4 / zoom, 4 / zoom]);
+    ctx.beginPath();
+    ctx.arc(hp.x, hp.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const w = screenToWorld(state.mouseX, state.mouseY, state);
+    const dx = w.x - hp.x, dy = w.y - hp.y;
+    const d = Math.hypot(dx, dy) || 1;
+
+    ctx.strokeStyle = 'rgba(0,255,255,0.25)';
+    ctx.lineWidth = 0.5 / zoom;
+    ctx.beginPath();
+    ctx.moveTo(hp.x, hp.y);
+    ctx.lineTo(hp.x + dx / d * r, hp.y + dy / d * r);
+    ctx.stroke();
+
+    const l1 = 'Орбита: ' + Math.round(r) + ' ед.';
+    const l2 = 'клик — создать · Esc — отмена';
+    ctx.font = `${11 / zoom}px monospace`;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillText(l1, w.x + 15 / zoom, w.y - 19 / zoom);
+    ctx.fillText(l2, w.x + 15 / zoom, w.y - 4 / zoom);
+    ctx.fillStyle = '#bffcfc';
+    ctx.fillText(l1, w.x + 14 / zoom, w.y - 20 / zoom);
+    ctx.fillStyle = 'rgba(191,252,252,0.75)';
+    ctx.fillText(l2, w.x + 14 / zoom, w.y - 5 / zoom);
 }
 
 // ===== sky.js =====
@@ -867,6 +1080,7 @@ function buildSky() {
 
 
 
+
 /**
  * Нарисовать один кадр мира в мировой системе координат (save/restore внутри).
  * @param {CanvasRenderingContext2D} ctx
@@ -897,6 +1111,7 @@ function renderScene(ctx) {
     hoverTargets.push({ kind: 'sun', name: 'Солнце / Sun', x: 0, y: 0, r: SUN_R, moons: [] });
 
     // === ПЛАНЕТЫ ===
+    const hostPos = {};   // мировые позиции хост-тел для звёздных баз (ключи bases.js)
     planets.forEach(p => {
         // Угол строго из simDays: движение по орбите и счётчик дней — один таймер.
         // y с минусом: против часовой, как видно с севера эклиптики.
@@ -930,6 +1145,16 @@ function renderScene(ctx) {
         hoverTargets.push({ kind: 'planet', p, x, y, moons: moonHits });
         // база добавляется после планеты: рисуется поверх и проверяется первой
         if (baseHit) hoverTargets.push(baseHit);
+
+        // позиции хост-тел для звёздных баз: планета и её нарисованные луны
+        hostPos['planet:' + p.name] = { x, y };
+        moonHits.forEach(h => { hostPos['moon:' + p.name + ':' + h.m.n] = { x: h.mx, y: h.my }; });
+    });
+
+    // Звёздные базы (bases.js): маркеры, орбиты и превью выбора орбиты
+    drawBases(ctx, hostPos).forEach(t => {
+        t.p = planets.find(x => x.name === t.local.planet);
+        hoverTargets.push(t);
     });
 
     ctx.restore();
@@ -1145,7 +1370,7 @@ function drawSelection(ctx, sel, hoverTargets) {
 
     const target = hoverTargets.find(t =>
         sel.kind === 'sun' ? t.kind === 'sun' :
-        sel.kind === 'base' ? t.kind === 'base' :
+        sel.kind === 'base' ? (t.kind === 'base' && (sel.local ? t.local === sel.local : !t.local)) :
         sel.small ? t.small === sel.small : t.p === sel.p);
     if (!target) return; // тело ещё не в кадре (луна скрыта зумом и т.п.)
 
@@ -1194,7 +1419,7 @@ function findBodyAt(hoverTargets, mouseX, mouseY) {
         if (t.kind === 'base') {
             const hitR = Math.max(t.r, MIN_HIT_MOON_PX / state.zoom);
             if ((w.x - t.x) ** 2 + (w.y - t.y) ** 2 <= hitR * hitR) {
-                return { kind: 'base', name: t.name, orbit: { cx: t.orbitCx, cy: t.orbitCy, r: t.orbitR }, p: t.p, m: null };
+                return { kind: 'base', name: t.name, orbit: { cx: t.orbitCx, cy: t.orbitCy, r: t.orbitR }, p: t.p, m: null, local: t.local || null };
             }
             continue;
         }
@@ -1262,6 +1487,8 @@ function drawTooltip(ctx, name, mouseX, mouseY) {
 // кнопки скорости времени.
 // Только меняет state и курсор канваса, ничего не рисует.
 // =============================================================================
+
+
 
 
 
@@ -1355,11 +1582,13 @@ function initInput(canvas, ui) {
         if (e.button !== 0) return;
         const moved = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY);
         if (moved > 5 || !state.hoverTargets) return; // это было перетаскивание
+        if (state.baseMode) { confirmBase(e.clientX, e.clientY); return; } // выбираем орбиту базы
         selectBody(findBodyAt(state.hoverTargets, e.clientX, e.clientY));
     });
 
     canvas.addEventListener('mousedown', e => {
         if (e.button !== 2) return;
+        if (state.baseMode) cancelBaseMode();   // правая кнопка отменяет выбор орбиты
         mouseDragging = true;
         mouseStartX = e.clientX;
         mouseStartY = e.clientY;
@@ -1371,6 +1600,7 @@ function initInput(canvas, ui) {
     // Курсор-указатель над выбираемыми объектами — те же цели, что выбираются
     // кликом (hoverTargets из render.js): солнце, планеты, луны, база.
     const updateCursor = (x, y) => {
+        if (state.baseMode) { canvas.style.cursor = 'crosshair'; return; } // выбираем орбиту
         canvas.style.cursor = (state.hoverTargets && findBodyAt(state.hoverTargets, x, y)) ? 'pointer' : '';
     };
 
@@ -1383,6 +1613,8 @@ function initInput(canvas, ui) {
             state.camY = camStartMY + (e.clientY - mouseStartY) / state.zoom;
             return;
         }
+        // режим выбора орбиты базы: радиус следит за курсором
+        if (state.baseMode) updateBaseRadius(e.clientX, e.clientY);
         updateCursor(e.clientX, e.clientY);
     });
 
@@ -1400,6 +1632,11 @@ function initInput(canvas, ui) {
 
     // отключаем системное контекстное меню, чтобы правая кнопка работала как панорамирование
     canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Esc отменяет выбор орбиты базы
+    window.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && state.baseMode) cancelBaseMode();
+    });
 
     // === КНОПКИ СКОРОСТИ ВРЕМЕНИ ===
     // «Быстрее» удваивает скорость, «Медленнее» делит пополам, «Нормально» = реальное время.
@@ -1428,6 +1665,44 @@ function updateSpeedUI(ui) {
     speedEl.textContent = (Math.round(state.timeScale * 10000) / 10000) + 'x';
 }
 
+/* ---------- Звёздные базы: режим выбора орбиты (кнопка в карточке) ---------- */
+
+/** Позиция хост-тела (планеты/луны) в мировых координатах из целей кадра. */
+function hostPosOf(host) {
+    const tg = state.hoverTargets || [];
+    const t = tg.find(t => t.kind === 'planet' && t.p.name === host.planet);
+    if (!t) return null;
+    if (host.kind === 'planet') return { x: t.x, y: t.y };
+    const mh = t.moons.find(m => m.m.n === host.moon);
+    return mh ? { x: mh.mx, y: mh.my } : null;
+}
+
+/** Радиус выбираемой орбиты: расстояние от курсора до хоста, с клампом. */
+function updateBaseRadius(x, y) {
+    const hp = hostPosOf(state.baseMode);
+    if (!hp) return;
+    const w = screenToWorld(x, y, state);
+    const d = Math.hypot(w.x - hp.x, w.y - hp.y);
+    state.baseRadius = Math.min(BASE_MAX_R, Math.max(BASE_MIN_R, d));
+}
+
+/** Клик в режиме выбора орбиты: создать базу у хоста и сразу выбрать её. */
+function confirmBase(x, y) {
+    const mode = state.baseMode;
+    if (!hostPosOf(mode)) return;   // хост не в кадре (луна скрыта зумом) — клик мимо
+    updateBaseRadius(x, y);
+    const rec = createBase(mode, state.baseRadius);
+    state.baseMode = null;
+    const p = planets.find(q => q.name === rec.planet);
+    selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
+}
+
+/** Выйти из режима выбора орбиты (Esc или правая кнопка). */
+function cancelBaseMode() {
+    state.baseMode = null;
+    refreshObjectCard();   // вернуть кнопке надпись «Создать базу»
+}
+
 // ===== ui.js =====
 // =============================================================================
 // ui.js — DOM-интерфейс: HUD-показатели (зум/скорость/дата), боковые блоки
@@ -1436,6 +1711,7 @@ function updateSpeedUI(ui) {
 // элементу дерева. Шапка каждого блока сворачивает его — отдельных кнопок
 // «скрыть/показать» нет. Работает с DOM, не с канвасом.
 // =============================================================================
+
 
 
 
@@ -1582,11 +1858,12 @@ function renderObjectInfo() {
             row('Период обращения', fmtPeriod(p.period)) +
             row('Радиус орбиты', orbitR + ' <em>ед.</em>') +
             row('Известных лун', moonTotals[p.name]) +
-            row('На карте (крупные)', mapMoons.length);
+            row('На карте (крупные)', mapMoons.length) +
+            basesSectionHTML('planet', p.name, null);
     } else if (sel.kind === 'asteroid') {
         html = asteroidInfoHTML(sel.small);
     } else if (sel.kind === 'base') {
-        html = baseInfoHTML();
+        html = sel.local ? newBaseInfoHTML(sel.local) : baseInfoHTML();
     } else {
         const p = sel.p;
         const m = sel.m;
@@ -1599,9 +1876,10 @@ function renderObjectInfo() {
             row('Планета', (RU[p.name] || p.name) + ' / ' + p.name) +
             (m.period ? row('Период обращения', fmtPeriod(m.period)) : '') +
             row('Радиус орбиты', Math.round(md * 10) / 10 + ' <em>ед.</em>') +
-            (p.hasBase && m.n.indexOf('Луна') === 0 ? row('На орбите', 'База LUNA-ORBIT') : '');
+            basesSectionHTML('moon', p.name, m.n);
     }
     box.innerHTML = html;
+    wireObjectCard(box);
 }
 
 /** Блок «Объект» для малого тела главного пояса (Церера, Веста, Паллада, Гигея). */
@@ -1615,6 +1893,91 @@ function asteroidInfoHTML(b) {
         row('Перигелий / афелий', (b.a * (1 - b.e)).toFixed(2) + ' / ' + (b.a * (1 + b.e)).toFixed(2) + ' <em>а.е.</em>') +
         row('Диаметр', fmtRu(b.dia) + ' <em>км</em>') +
         '<div class="obj-note">Главный пояс — главный источник метеоритов Земли</div>';
+}
+
+/* ---------- Звёздные базы: секция в карточке, кнопка создания ---------- */
+
+/** Секция «Звёздные базы» в карточке планеты/луны: список + кнопка создания. */
+function basesSectionHTML(kind, planet, moon) {
+    const rows = [];
+    if (kind === 'moon' && planet === 'Earth' && moon === 'Луна / Moon') {
+        rows.push(baseRowHTML('', 'LUNA-ORBIT', baseOrbitRadius)); // стартовая база
+    }
+    basesAt(kind, planet, moon).forEach(b => rows.push(baseRowHTML(b.id, b.name, b.orbitRadius)));
+
+    const active = state.baseMode && state.baseMode.kind === kind &&
+        state.baseMode.planet === planet && (state.baseMode.moon || null) === (moon || null);
+
+    return '<div class="obj-sub-title"><span>Звёздные базы</span>' +
+            (rows.length ? '<small>' + rows.length + '</small>' : '') + '</div>' +
+        (rows.length
+            ? '<div class="base-list">' + rows.join('') + '</div>'
+            : '<div class="obj-note">Баз пока нет — создайте первую на орбите</div>') +
+        '<button class="base-create' + (active ? ' active' : '') + '" id="baseCreateBtn"' +
+            ' data-host-kind="' + kind + '" data-host-planet="' + planet + '" data-host-moon="' + (moon || '') + '">' +
+            (active ? 'Отмена — выберите орбиту' : 'Создать базу') + '</button>';
+}
+
+/** Строка базы в списке: имя и радиус орбиты (id пустой — стартовая LUNA-ORBIT). */
+function baseRowHTML(id, name, radius) {
+    return '<div class="base-row" data-base="' + id + '"><span class="b-dot"></span>' +
+        '<span class="b-name">' + name + '</span>' +
+        '<small>орбита ' + Math.round(radius) + ' ед.</small></div>';
+}
+
+/**
+ * Оживить карточку после innerHTML: клики по строкам баз (выбор) и кнопка
+ * «Создать базу» — включает режим выбора орбиты на карте (подтверждает клик,
+ * отменяют Esc и правая кнопка; обработка — в input.js).
+ */
+function wireObjectCard(box) {
+    box.querySelectorAll('.base-row').forEach(el => {
+        el.addEventListener('click', () => {
+            const id = el.dataset.base;
+            if (!id) {   // стартовая база LUNA-ORBIT — её рисует render.js
+                const p = planets.find(x => x.name === 'Earth');
+                selectBody({ kind: 'base', name: 'База LUNA-ORBIT', p, m: null });
+                return;
+            }
+            const rec = bases.find(b => b.id === id);
+            if (!rec) return;
+            const p = planets.find(x => x.name === rec.planet);
+            selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
+        });
+    });
+
+    const btn = box.querySelector('#baseCreateBtn');
+    if (btn) btn.addEventListener('click', () => {
+        const kind = btn.dataset.hostKind;
+        const planet = btn.dataset.hostPlanet;
+        const moon = btn.dataset.hostMoon || null;
+        const active = state.baseMode && state.baseMode.kind === kind &&
+            state.baseMode.planet === planet && (state.baseMode.moon || null) === moon;
+        state.baseMode = active ? null : { kind, planet, moon };
+        state.baseRadius = 60;
+        renderObjectInfo();   // надпись кнопки: «Создать базу» <-> «Отмена»
+    });
+}
+
+/** Перерисовать карточку выбранного объекта (зовёт input.js при отмене режима). */
+function refreshObjectCard() {
+    renderObjectInfo();
+}
+
+/** Блок «Объект» для звездной базы, созданной игроком на карте. */
+function newBaseInfoHTML(b) {
+    const host = b.hostKind === 'moon'
+        ? 'луна ' + b.moon
+        : 'планета ' + (RU[b.planet] || b.planet);
+    return '<div class="obj-title"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
+            '<strong>База ' + b.name + '</strong></div>' +
+        '<div class="obj-kind">Звёздная база · ' + host + '</div>' +
+        '<div class="obj-rows">' +
+            row('Радиус орбиты', b.orbitRadius + ' <em>ед.</em>') +
+            row('Период обращения', fmtPeriod(b.period)) +
+            row('Создана', (b.created || '').slice(0, 10)) +
+        '</div>' +
+        '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>';
 }
 
 function row(k, v) {

@@ -10,6 +10,7 @@ import { state } from './state.js';
 import { formatSimDate } from './math.js';
 import { SUN_R, COLORS } from './config.js';
 import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, baseOrbitRadius } from './data.js';
+import { bases, basesAt } from './bases.js';
 
 // Русские названия и подписи классов для блока «ОБЪЕКТ».
 const RU = {
@@ -151,11 +152,12 @@ function renderObjectInfo() {
             row('Период обращения', fmtPeriod(p.period)) +
             row('Радиус орбиты', orbitR + ' <em>ед.</em>') +
             row('Известных лун', moonTotals[p.name]) +
-            row('На карте (крупные)', mapMoons.length);
+            row('На карте (крупные)', mapMoons.length) +
+            basesSectionHTML('planet', p.name, null);
     } else if (sel.kind === 'asteroid') {
         html = asteroidInfoHTML(sel.small);
     } else if (sel.kind === 'base') {
-        html = baseInfoHTML();
+        html = sel.local ? newBaseInfoHTML(sel.local) : baseInfoHTML();
     } else {
         const p = sel.p;
         const m = sel.m;
@@ -168,9 +170,10 @@ function renderObjectInfo() {
             row('Планета', (RU[p.name] || p.name) + ' / ' + p.name) +
             (m.period ? row('Период обращения', fmtPeriod(m.period)) : '') +
             row('Радиус орбиты', Math.round(md * 10) / 10 + ' <em>ед.</em>') +
-            (p.hasBase && m.n.indexOf('Луна') === 0 ? row('На орбите', 'База LUNA-ORBIT') : '');
+            basesSectionHTML('moon', p.name, m.n);
     }
     box.innerHTML = html;
+    wireObjectCard(box);
 }
 
 /** Блок «Объект» для малого тела главного пояса (Церера, Веста, Паллада, Гигея). */
@@ -184,6 +187,91 @@ function asteroidInfoHTML(b) {
         row('Перигелий / афелий', (b.a * (1 - b.e)).toFixed(2) + ' / ' + (b.a * (1 + b.e)).toFixed(2) + ' <em>а.е.</em>') +
         row('Диаметр', fmtRu(b.dia) + ' <em>км</em>') +
         '<div class="obj-note">Главный пояс — главный источник метеоритов Земли</div>';
+}
+
+/* ---------- Звёздные базы: секция в карточке, кнопка создания ---------- */
+
+/** Секция «Звёздные базы» в карточке планеты/луны: список + кнопка создания. */
+function basesSectionHTML(kind, planet, moon) {
+    const rows = [];
+    if (kind === 'moon' && planet === 'Earth' && moon === 'Луна / Moon') {
+        rows.push(baseRowHTML('', 'LUNA-ORBIT', baseOrbitRadius)); // стартовая база
+    }
+    basesAt(kind, planet, moon).forEach(b => rows.push(baseRowHTML(b.id, b.name, b.orbitRadius)));
+
+    const active = state.baseMode && state.baseMode.kind === kind &&
+        state.baseMode.planet === planet && (state.baseMode.moon || null) === (moon || null);
+
+    return '<div class="obj-sub-title"><span>Звёздные базы</span>' +
+            (rows.length ? '<small>' + rows.length + '</small>' : '') + '</div>' +
+        (rows.length
+            ? '<div class="base-list">' + rows.join('') + '</div>'
+            : '<div class="obj-note">Баз пока нет — создайте первую на орбите</div>') +
+        '<button class="base-create' + (active ? ' active' : '') + '" id="baseCreateBtn"' +
+            ' data-host-kind="' + kind + '" data-host-planet="' + planet + '" data-host-moon="' + (moon || '') + '">' +
+            (active ? 'Отмена — выберите орбиту' : 'Создать базу') + '</button>';
+}
+
+/** Строка базы в списке: имя и радиус орбиты (id пустой — стартовая LUNA-ORBIT). */
+function baseRowHTML(id, name, radius) {
+    return '<div class="base-row" data-base="' + id + '"><span class="b-dot"></span>' +
+        '<span class="b-name">' + name + '</span>' +
+        '<small>орбита ' + Math.round(radius) + ' ед.</small></div>';
+}
+
+/**
+ * Оживить карточку после innerHTML: клики по строкам баз (выбор) и кнопка
+ * «Создать базу» — включает режим выбора орбиты на карте (подтверждает клик,
+ * отменяют Esc и правая кнопка; обработка — в input.js).
+ */
+function wireObjectCard(box) {
+    box.querySelectorAll('.base-row').forEach(el => {
+        el.addEventListener('click', () => {
+            const id = el.dataset.base;
+            if (!id) {   // стартовая база LUNA-ORBIT — её рисует render.js
+                const p = planets.find(x => x.name === 'Earth');
+                selectBody({ kind: 'base', name: 'База LUNA-ORBIT', p, m: null });
+                return;
+            }
+            const rec = bases.find(b => b.id === id);
+            if (!rec) return;
+            const p = planets.find(x => x.name === rec.planet);
+            selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
+        });
+    });
+
+    const btn = box.querySelector('#baseCreateBtn');
+    if (btn) btn.addEventListener('click', () => {
+        const kind = btn.dataset.hostKind;
+        const planet = btn.dataset.hostPlanet;
+        const moon = btn.dataset.hostMoon || null;
+        const active = state.baseMode && state.baseMode.kind === kind &&
+            state.baseMode.planet === planet && (state.baseMode.moon || null) === moon;
+        state.baseMode = active ? null : { kind, planet, moon };
+        state.baseRadius = 60;
+        renderObjectInfo();   // надпись кнопки: «Создать базу» <-> «Отмена»
+    });
+}
+
+/** Перерисовать карточку выбранного объекта (зовёт input.js при отмене режима). */
+export function refreshObjectCard() {
+    renderObjectInfo();
+}
+
+/** Блок «Объект» для звездной базы, созданной игроком на карте. */
+function newBaseInfoHTML(b) {
+    const host = b.hostKind === 'moon'
+        ? 'луна ' + b.moon
+        : 'планета ' + (RU[b.planet] || b.planet);
+    return '<div class="obj-title"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
+            '<strong>База ' + b.name + '</strong></div>' +
+        '<div class="obj-kind">Звёздная база · ' + host + '</div>' +
+        '<div class="obj-rows">' +
+            row('Радиус орбиты', b.orbitRadius + ' <em>ед.</em>') +
+            row('Период обращения', fmtPeriod(b.period)) +
+            row('Создана', (b.created || '').slice(0, 10)) +
+        '</div>' +
+        '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>';
 }
 
 function row(k, v) {

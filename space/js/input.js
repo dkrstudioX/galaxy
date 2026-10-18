@@ -7,10 +7,12 @@
 // =============================================================================
 
 import { state } from './state.js';
-import { clamp } from './math.js';
+import { clamp, screenToWorld } from './math.js';
 import { MIN_ZOOM, MAX_ZOOM, MIN_SPEED, MAX_SPEED } from './config.js';
+import { planets } from './data.js';
 import { findBodyAt } from './hover.js';
-import { selectBody } from './ui.js';
+import { selectBody, refreshObjectCard } from './ui.js';
+import { createBase, BASE_MIN_R, BASE_MAX_R } from './bases.js';
 
 /**
  * Зум к точке экрана: мировая точка под (ax, ay) остаётся под ней после
@@ -98,11 +100,13 @@ export function initInput(canvas, ui) {
         if (e.button !== 0) return;
         const moved = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY);
         if (moved > 5 || !state.hoverTargets) return; // это было перетаскивание
+        if (state.baseMode) { confirmBase(e.clientX, e.clientY); return; } // выбираем орбиту базы
         selectBody(findBodyAt(state.hoverTargets, e.clientX, e.clientY));
     });
 
     canvas.addEventListener('mousedown', e => {
         if (e.button !== 2) return;
+        if (state.baseMode) cancelBaseMode();   // правая кнопка отменяет выбор орбиты
         mouseDragging = true;
         mouseStartX = e.clientX;
         mouseStartY = e.clientY;
@@ -114,6 +118,7 @@ export function initInput(canvas, ui) {
     // Курсор-указатель над выбираемыми объектами — те же цели, что выбираются
     // кликом (hoverTargets из render.js): солнце, планеты, луны, база.
     const updateCursor = (x, y) => {
+        if (state.baseMode) { canvas.style.cursor = 'crosshair'; return; } // выбираем орбиту
         canvas.style.cursor = (state.hoverTargets && findBodyAt(state.hoverTargets, x, y)) ? 'pointer' : '';
     };
 
@@ -126,6 +131,8 @@ export function initInput(canvas, ui) {
             state.camY = camStartMY + (e.clientY - mouseStartY) / state.zoom;
             return;
         }
+        // режим выбора орбиты базы: радиус следит за курсором
+        if (state.baseMode) updateBaseRadius(e.clientX, e.clientY);
         updateCursor(e.clientX, e.clientY);
     });
 
@@ -143,6 +150,11 @@ export function initInput(canvas, ui) {
 
     // отключаем системное контекстное меню, чтобы правая кнопка работала как панорамирование
     canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Esc отменяет выбор орбиты базы
+    window.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && state.baseMode) cancelBaseMode();
+    });
 
     // === КНОПКИ СКОРОСТИ ВРЕМЕНИ ===
     // «Быстрее» удваивает скорость, «Медленнее» делит пополам, «Нормально» = реальное время.
@@ -169,4 +181,42 @@ function updateSpeedUI(ui) {
     ui.normalBtn.classList.toggle('active', state.timeScale === 1);
     const speedEl = document.getElementById('speed');
     speedEl.textContent = (Math.round(state.timeScale * 10000) / 10000) + 'x';
+}
+
+/* ---------- Звёздные базы: режим выбора орбиты (кнопка в карточке) ---------- */
+
+/** Позиция хост-тела (планеты/луны) в мировых координатах из целей кадра. */
+function hostPosOf(host) {
+    const tg = state.hoverTargets || [];
+    const t = tg.find(t => t.kind === 'planet' && t.p.name === host.planet);
+    if (!t) return null;
+    if (host.kind === 'planet') return { x: t.x, y: t.y };
+    const mh = t.moons.find(m => m.m.n === host.moon);
+    return mh ? { x: mh.mx, y: mh.my } : null;
+}
+
+/** Радиус выбираемой орбиты: расстояние от курсора до хоста, с клампом. */
+function updateBaseRadius(x, y) {
+    const hp = hostPosOf(state.baseMode);
+    if (!hp) return;
+    const w = screenToWorld(x, y, state);
+    const d = Math.hypot(w.x - hp.x, w.y - hp.y);
+    state.baseRadius = Math.min(BASE_MAX_R, Math.max(BASE_MIN_R, d));
+}
+
+/** Клик в режиме выбора орбиты: создать базу у хоста и сразу выбрать её. */
+function confirmBase(x, y) {
+    const mode = state.baseMode;
+    if (!hostPosOf(mode)) return;   // хост не в кадре (луна скрыта зумом) — клик мимо
+    updateBaseRadius(x, y);
+    const rec = createBase(mode, state.baseRadius);
+    state.baseMode = null;
+    const p = planets.find(q => q.name === rec.planet);
+    selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
+}
+
+/** Выйти из режима выбора орбиты (Esc или правая кнопка). */
+function cancelBaseMode() {
+    state.baseMode = null;
+    refreshObjectCard();   // вернуть кнопке надпись «Создать базу»
 }

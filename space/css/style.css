@@ -214,3 +214,35 @@ canvas { display: block; width: 100vw; height: 100vh; }
 .ship-meta { align-items: end; text-align: right; }
 .ship-meta small { color: #a98be8; font: 8px "IBM Plex Mono", monospace; text-transform: uppercase; }
 .ship-meta b { margin-top: 5px; color: #d7e3e3; font: 600 10px "IBM Plex Mono", monospace; }
+
+/* ===== Звёздные базы: список в карточке планеты/луны и кнопка создания ===== */
+.base-list { display: flex; flex-direction: column; }
+.base-row {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 2px; cursor: pointer;
+    border-bottom: 1px solid rgba(120, 160, 170, .10);
+    transition: background .12s ease;
+}
+.base-row:last-child { border-bottom: 0; }
+.base-row:hover { background: rgba(0, 255, 255, .05); }
+.base-row .b-dot {
+    width: 7px; height: 7px; flex: none; border-radius: 1px;
+    background: #00ffff; box-shadow: 0 0 6px rgba(0, 255, 255, .55);
+}
+.base-row .b-name {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 600 11px "Manrope", sans-serif; color: #dce8e8;
+}
+.base-row small { margin-left: auto; color: #637a7a; font: 9px "IBM Plex Mono", monospace; white-space: nowrap; }
+.base-create {
+    margin-top: 10px; width: 100%; padding: 9px 10px;
+    border: 1px solid rgba(0, 255, 255, .35); border-radius: 6px;
+    background: rgba(0, 255, 255, .07); color: #bffcfc;
+    font: 600 10px "Manrope", sans-serif; letter-spacing: .1em; text-transform: uppercase;
+    cursor: pointer; transition: background .12s ease, border-color .12s ease;
+}
+.base-create:hover { background: rgba(0, 255, 255, .16); }
+.base-create.active {
+    border-color: rgba(255, 205, 120, .55); background: rgba(255, 205, 120, .10);
+    color: #ffd79a;
+}

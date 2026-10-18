@@ -14,6 +14,7 @@ import { SUN_R, COLORS, STROKE } from './config.js';
 import { planets, moonsByPlanet, moonDist, moonPeriod, moonL0, baseOrbitRadius, basePeriod } from './data.js';
 import { stars, visibleMoons } from './scene.js';
 import { drawSmallBodies } from './smallbodies.js';
+import { drawBases } from './bases.js';
 import { drawSky } from './sky.js';
 
 /**
@@ -46,6 +47,7 @@ export function renderScene(ctx) {
     hoverTargets.push({ kind: 'sun', name: 'Солнце / Sun', x: 0, y: 0, r: SUN_R, moons: [] });
 
     // === ПЛАНЕТЫ ===
+    const hostPos = {};   // мировые позиции хост-тел для звёздных баз (ключи bases.js)
     planets.forEach(p => {
         // Угол строго из simDays: движение по орбите и счётчик дней — один таймер.
         // y с минусом: против часовой, как видно с севера эклиптики.
@@ -79,6 +81,16 @@ export function renderScene(ctx) {
         hoverTargets.push({ kind: 'planet', p, x, y, moons: moonHits });
         // база добавляется после планеты: рисуется поверх и проверяется первой
         if (baseHit) hoverTargets.push(baseHit);
+
+        // позиции хост-тел для звёздных баз: планета и её нарисованные луны
+        hostPos['planet:' + p.name] = { x, y };
+        moonHits.forEach(h => { hostPos['moon:' + p.name + ':' + h.m.n] = { x: h.mx, y: h.my }; });
+    });
+
+    // Звёздные базы (bases.js): маркеры, орбиты и превью выбора орбиты
+    drawBases(ctx, hostPos).forEach(t => {
+        t.p = planets.find(x => x.name === t.local.planet);
+        hoverTargets.push(t);
     });
 
     ctx.restore();

@@ -44,7 +44,7 @@ export function drawSelection(ctx, sel, hoverTargets) {
 
     const target = hoverTargets.find(t =>
         sel.kind === 'sun' ? t.kind === 'sun' :
-        sel.kind === 'base' ? t.kind === 'base' :
+        sel.kind === 'base' ? (t.kind === 'base' && (sel.local ? t.local === sel.local : !t.local)) :
         sel.small ? t.small === sel.small : t.p === sel.p);
     if (!target) return; // тело ещё не в кадре (луна скрыта зумом и т.п.)
 
@@ -93,7 +93,7 @@ export function findBodyAt(hoverTargets, mouseX, mouseY) {
         if (t.kind === 'base') {
             const hitR = Math.max(t.r, MIN_HIT_MOON_PX / state.zoom);
             if ((w.x - t.x) ** 2 + (w.y - t.y) ** 2 <= hitR * hitR) {
-                return { kind: 'base', name: t.name, orbit: { cx: t.orbitCx, cy: t.orbitCy, r: t.orbitR }, p: t.p, m: null };
+                return { kind: 'base', name: t.name, orbit: { cx: t.orbitCx, cy: t.orbitCy, r: t.orbitR }, p: t.p, m: null, local: t.local || null };
             }
             continue;
         }
