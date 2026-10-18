@@ -942,7 +942,8 @@ const BASE_NAMES = [
 // планеты/луны включает режим выбора орбиты — радиус берётся от курсора,
 // клик подтверждает (input.js). У созданной базы в карточке есть кнопка
 // «Переместить базу» — тот же режим; клик переносит запись на выбранную
-// орбиту (хост при этом выбирается по правилу ближайшего тела). При переносе
+// орбиту (хост при этом выбирается по правилу ближайшего тела). Второй
+// кнопкой — «Удалить базу»: запись убирается из хранилища. При переносе
 // база встаёт со стороны курсора: направление от центра хозяина к курсору
 // становится её положением на орбите и в превью, и в записи (phase0); новая
 // база тоже появляется с этой стороны, а не в случайной точке. Радиус орбиты
@@ -1158,6 +1159,14 @@ function phaseFor(ang, period) {
     return ((ang - twoPi * state.simDays / period) % twoPi + twoPi) % twoPi;
 }
 
+/** Убрать из реестра запись о базе: она удалена (счётчик имени остаётся). */
+function removeBasePlace(rec) {
+    Object.keys(nameRegistry.names).forEach(k => {
+        const reg = nameRegistry.names[k];
+        reg.bases = reg.bases.filter(x => x.baseId !== rec.id);
+    });
+}
+
 /** Счётчик для уникальных id: базы могут создаваться в одну миллисекунду. */
 let baseSeq = 0;
 
@@ -1219,6 +1228,23 @@ function moveBase(rec, host, r, ang) {
     saveBases();
     saveNameRegistry();
     return rec;
+}
+
+/**
+ * Удалить созданную базу: убрать запись и её место из реестра имён. Счётчик
+ * использований имени не трогаем — номер у следующих баз не повторится.
+ * Карточку/список обновляет вызывающий код (ui.js).
+ * @param {Object} rec запись базы
+ * @returns {boolean} нашлась ли запись
+ */
+function deleteBase(rec) {
+    const i = bases.indexOf(rec);
+    if (i < 0) return false;
+    bases.splice(i, 1);
+    removeBasePlace(rec);
+    saveBases();
+    saveNameRegistry();
+    return true;
 }
 
 /** Базы на данном хосте — для списка в карточке планеты/луны. */
@@ -2754,10 +2780,17 @@ function moveBaseButtonHTML(b) {
         (active ? 'Отмена — выберите орбиту' : 'Переместить базу') + '</button>';
 }
 
+/** Кнопка «Удалить базу» — рядом с переносом, там же под описанием базы. */
+function deleteBaseButtonHTML(b) {
+    return '<button class="base-create" id="baseDeleteBtn"' +
+        ' data-delete-id="' + b.id + '">Удалить базу</button>';
+}
+
 /**
  * Оживить карточку после innerHTML: клики по строкам баз (выбор) и кнопка
  * «Создать базу» — включает режим выбора орбиты на карте (подтверждает клик,
- * отменяют Esc и правая кнопка; обработка — в input.js).
+ * отменяют Esc и правая кнопка; обработка — в input.js). У карточки базы —
+ * «Переместить базу» (тот же режим) и «Удалить базу» (запись убирается).
  */
 function wireObjectCard(box) {
     box.querySelectorAll('.base-row').forEach(el => {
@@ -2805,6 +2838,26 @@ function wireObjectCard(box) {
         }
         renderObjectInfo();   // надпись кнопки: «Переместить базу» <-> «Отмена»
     });
+
+    const delBtn = box.querySelector('#baseDeleteBtn');
+    if (delBtn) delBtn.addEventListener('click', () => {
+        const rec = bases.find(b => b.id === delBtn.dataset.deleteId);
+        if (!rec) return;
+        // Если эта база как раз переносилась — сначала выходим из режима.
+        if (state.baseMode && state.baseMode.moveId === rec.id) state.baseMode = null;
+        if (!deleteBase(rec)) return;
+        // Показываем карточку хозяина — её список баз уже без удалённой.
+        const p = planets.find(q => q.name === rec.planet);
+        if (!p) { selectBody(null); return; }
+        if (rec.hostKind === 'moon') {
+            // Луна Земли рисуется отдельным блоком (render.js) — как и там
+            const m = (moonsByPlanet[rec.planet] || []).find(x => x.n === rec.moon) ||
+                { n: rec.moon, r: 3, period: moonPeriod };
+            selectBody({ kind: 'moon', name: rec.moon, p, m });
+        } else {
+            selectBody({ kind: 'planet', name: p.name, p, m: null });
+        }
+    });
 }
 
 /** Перерисовать карточку выбранного объекта (зовёт input.js при отмене режима). */
@@ -2826,7 +2879,8 @@ function newBaseInfoHTML(b) {
             row('Создана', (b.created || '').slice(0, 10)) +
         '</div>' +
         '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>' +
-        moveBaseButtonHTML(b);
+        moveBaseButtonHTML(b) +
+        deleteBaseButtonHTML(b);
 }
 
 function row(k, v, cls) {

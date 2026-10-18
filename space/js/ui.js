@@ -12,8 +12,8 @@
 import { state } from './state.js';
 import { formatSimDate, clamp } from './math.js';
 import { SUN_R, COLORS, MIN_ZOOM, MAX_ZOOM } from './config.js';
-import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, moonOrbitRadius, baseOrbitRadius } from './data.js';
-import { bases, basesAt, baseRadiusRange } from './bases.js';
+import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, moonOrbitRadius, moonPeriod, baseOrbitRadius } from './data.js';
+import { bases, basesAt, baseRadiusRange, deleteBase } from './bases.js';
 
 // Русские названия и подписи классов для блока «ОБЪЕКТ».
 const RU = {
@@ -384,10 +384,17 @@ function moveBaseButtonHTML(b) {
         (active ? 'Отмена — выберите орбиту' : 'Переместить базу') + '</button>';
 }
 
+/** Кнопка «Удалить базу» — рядом с переносом, там же под описанием базы. */
+function deleteBaseButtonHTML(b) {
+    return '<button class="base-create" id="baseDeleteBtn"' +
+        ' data-delete-id="' + b.id + '">Удалить базу</button>';
+}
+
 /**
  * Оживить карточку после innerHTML: клики по строкам баз (выбор) и кнопка
  * «Создать базу» — включает режим выбора орбиты на карте (подтверждает клик,
- * отменяют Esc и правая кнопка; обработка — в input.js).
+ * отменяют Esc и правая кнопка; обработка — в input.js). У карточки базы —
+ * «Переместить базу» (тот же режим) и «Удалить базу» (запись убирается).
  */
 function wireObjectCard(box) {
     box.querySelectorAll('.base-row').forEach(el => {
@@ -435,6 +442,26 @@ function wireObjectCard(box) {
         }
         renderObjectInfo();   // надпись кнопки: «Переместить базу» <-> «Отмена»
     });
+
+    const delBtn = box.querySelector('#baseDeleteBtn');
+    if (delBtn) delBtn.addEventListener('click', () => {
+        const rec = bases.find(b => b.id === delBtn.dataset.deleteId);
+        if (!rec) return;
+        // Если эта база как раз переносилась — сначала выходим из режима.
+        if (state.baseMode && state.baseMode.moveId === rec.id) state.baseMode = null;
+        if (!deleteBase(rec)) return;
+        // Показываем карточку хозяина — её список баз уже без удалённой.
+        const p = planets.find(q => q.name === rec.planet);
+        if (!p) { selectBody(null); return; }
+        if (rec.hostKind === 'moon') {
+            // Луна Земли рисуется отдельным блоком (render.js) — как и там
+            const m = (moonsByPlanet[rec.planet] || []).find(x => x.n === rec.moon) ||
+                { n: rec.moon, r: 3, period: moonPeriod };
+            selectBody({ kind: 'moon', name: rec.moon, p, m });
+        } else {
+            selectBody({ kind: 'planet', name: p.name, p, m: null });
+        }
+    });
 }
 
 /** Перерисовать карточку выбранного объекта (зовёт input.js при отмене режима). */
@@ -456,7 +483,8 @@ function newBaseInfoHTML(b) {
             row('Создана', (b.created || '').slice(0, 10)) +
         '</div>' +
         '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>' +
-        moveBaseButtonHTML(b);
+        moveBaseButtonHTML(b) +
+        deleteBaseButtonHTML(b);
 }
 
 function row(k, v, cls) {
