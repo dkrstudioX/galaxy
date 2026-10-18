@@ -16,9 +16,11 @@
 // база встаёт со стороны курсора: направление от центра хозяина к курсору
 // становится её положением на орбите и в превью, и в записи (phase0); новая
 // база тоже появляется с этой стороны, а не в случайной точке. Радиус орбиты
-// зажат в коридор baseRadiusRange: от поверхности хозяина до поверхности
-// ближайшего соседа (луны планеты или планеты луны) — орбита не пересекает
-// небесные тела. Период обращения — как у Луны: одни сутки на радиусе
+// зажат в коридор baseRadiusRange: от поверхности хозяина до ближайшей чужой
+// «полосы» — дисков Солнца и соседних планет (база у Меркурия не дотянется до
+// орбиты Венеры) и соседних тел (лун планеты или планеты и лун-соседей у базы
+// на луне); так орбита базы не пересекает ни тела, ни их орбиты. Период
+// обращения — как у Луны: одни сутки на радиусе
 // baseOrbitRadius, дальше по закону Кеплера.
 //
 // Хранение — ОТДЕЛЬНЫЙ ключ localStorage («galaxy_space_bases_v1»): данные
@@ -37,7 +39,7 @@
 
 import { state } from './state.js';
 import { screenToWorld } from './math.js';
-import { COLORS } from './config.js';
+import { COLORS, SUN_R } from './config.js';
 import { planets, moonsByPlanet, moonDist, baseOrbitRadius, basePeriod, moonOrbitRadius } from './data.js';
 import { BASE_NAMES } from './bases_name.js';
 import { archiveBase } from './bases_removed.js';
@@ -61,10 +63,18 @@ export function basePeriodAt(r) {
 }
 
 /**
- * Допустимый коридор радиуса орбиты для хоста: от поверхности хозяина до
- * поверхности ближайшего соседа — лун у планеты (все их орбиты-кольца, даже
- * невидимые при текущем зуме) или самой планеты у луны. Так орбита базы
- * никогда не пересекает небесные тела, а не только «не налезает на хозяина».
+ * Допустимый коридор радиуса орбиты базы вокруг хозяина: от поверхности
+ * хозяина до ближайшей чужой «полосы» — так орбита базы не пересекает ни
+ * небесные тела, ни их орбиты:
+ *   • Солнце — диск звезды;
+ *   • другие планеты — полосы, которые заметают их диски: база у Меркурия
+ *     не дотянется до орбиты Венеры, база у Венеры — до Меркурия и Земли;
+ *   • луны — у базы на планете все её луны (даже невидимые при текущем
+ *     зуме), у базы на луне — планета под ней и соседние луны той же планеты.
+ * Для базы на луне полосы Солнца и планет сдвинуты на радиус орбиты луны
+ * (md): база ходит вокруг луны и не выходит за её окрестность. Если сосед
+ * слишком близко и коридор вырождается, хозяин приоритетнее: max = min
+ * (база прижата к поверхности хозяина; запас BASE_CLEAR съедается).
  * @param {{kind: string, planet: string, moon: ?string}} host
  * @returns {{min: number, max: number}} границы радиуса, единицы мира
  */
@@ -72,22 +82,40 @@ export function baseRadiusRange(host) {
     const p = planets.find(q => q.name === host.planet);
     if (!p) return { min: BASE_CLEAR, max: BASE_MAX_R };
 
+    // md — радиус орбиты хозяина-луны вокруг планеты (0 — база у планеты):
+    // на столько отодвинуто «кольцо» базы и на столько же экранируются
+    // внешние полосы (Солнце и другие планеты).
+    let md = 0;
+    let min, max = BASE_MAX_R;
+
     if (host.kind === 'moon') {
         const list = moonsByPlanet[host.planet] || [];
         const idx = list.findIndex(m => m.n === host.moon);
         // Луна Земли рисуется отдельным блоком (render.js): своя дистанция и радиус
         const mr = idx >= 0 ? list[idx].r : 3;
-        const md = idx >= 0 ? moonOrbitRadius(p, idx) : moonDist;
-        const min = mr + BASE_CLEAR;
-        return { min, max: Math.max(min, Math.min(BASE_MAX_R, md - p.r - BASE_CLEAR)) };
+        md = idx >= 0 ? moonOrbitRadius(p, idx) : moonDist;
+        min = mr + BASE_CLEAR;
+        max = Math.min(max, md - p.r - BASE_CLEAR);   // диск планеты под луной
+        list.forEach((m, i) => {                       // соседние луны: их диски на своих кольцах
+            if (i === idx) return;
+            max = Math.min(max, Math.abs(moonOrbitRadius(p, i) - md) - m.r - BASE_CLEAR);
+        });
+    } else {
+        min = p.r + BASE_CLEAR;
+        (moonsByPlanet[p.name] || []).forEach((m, i) => {   // свои луны: все кольца, даже невидимые
+            max = Math.min(max, moonOrbitRadius(p, i) - m.r - BASE_CLEAR);
+        });
+        if (p.name === 'Earth') max = Math.min(max, moonDist - 3 - BASE_CLEAR); // Луна Земли (r=3, render.js)
     }
 
-    let max = BASE_MAX_R;
-    (moonsByPlanet[p.name] || []).forEach((m, i) => {
-        max = Math.min(max, moonOrbitRadius(p, i) - m.r - BASE_CLEAR);
+    // Солнце и другие планеты: расстояние от Солнца до базы лежит в
+    // [p.dist − md − R, p.dist + md + R] — берём у каждой полосы ближний край.
+    max = Math.min(max, p.dist - md - SUN_R - BASE_CLEAR);
+    planets.forEach(q => {
+        if (q === p) return;
+        max = Math.min(max, Math.abs(q.dist - p.dist) - q.r - md - BASE_CLEAR);
     });
-    if (p.name === 'Earth') max = Math.min(max, moonDist - 3 - BASE_CLEAR); // Луна Земли (r=3, render.js)
-    const min = p.r + BASE_CLEAR;
+
     return { min, max: Math.max(min, max) };
 }
 
@@ -114,6 +142,26 @@ function saveBases() {
 
 /** Записи баз + позиции x/y, обновляемые каждый кадр при отрисовке. */
 export const bases = loadBases();
+
+/**
+ * Привести радиусы загруженных баз к коридору хозяина (baseRadiusRange):
+ * базы, созданные до появления полос Солнца/планет/лун, могли пересекать
+ * чужие орбиты. Период пересчитывается под новый радиус; надгробия
+ * (`removed`) не трогаем — их место уже история. Если что-то поменялось,
+ * хранилище сразу перезаписывается.
+ */
+(function normalizeBaseRadii() {
+    let changed = false;
+    bases.forEach(b => {
+        if (b.status === 'removed') return;
+        const r = radiusOf(b.orbitRadius, { kind: b.hostKind, planet: b.planet, moon: b.moon || null });
+        if (r === b.orbitRadius) return;
+        b.orbitRadius = r;
+        b.period = basePeriodAt(r);
+        changed = true;
+    });
+    if (changed) saveBases();
+})();
 
 /** Ключ хоста: 'planet:Mars' или 'moon:Mars:Фобос / Phobos'. */
 export function hostKey(kind, planet, moon) {
