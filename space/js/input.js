@@ -1,6 +1,7 @@
 // =============================================================================
-// input.js — всё пользовательское управление: тач, колесо мыши, панорамирование
-// правой кнопкой, позиция курсора для hover, кнопки скорости времени.
+// input.js — всё пользовательское управление: тач (перетаскивание, pinch),
+// колесо мыши (зум к точке под курсором), панорамирование правой кнопкой,
+// позиция курсора для hover, кнопки скорости времени.
 // Только меняет state, ничего не рисует.
 // =============================================================================
 
@@ -9,6 +10,21 @@ import { clamp } from './math.js';
 import { MIN_ZOOM, MAX_ZOOM, MIN_SPEED, MAX_SPEED } from './config.js';
 import { findBodyAt } from './hover.js';
 import { selectBody } from './ui.js';
+
+/**
+ * Зум к точке экрана: мировая точка под (ax, ay) остаётся под ней после
+ * смены масштаба — колесо приближает карту туда, где курсор, pinch — к
+ * середине между пальцами. Если зум упёрся в предел, камера не сдвигается.
+ */
+function zoomAt(ax, ay, target) {
+    const z0 = state.zoom;
+    const z1 = clamp(target, MIN_ZOOM, MAX_ZOOM);
+    if (z1 === z0) return;
+    const k = 1 / z0 - 1 / z1;   // так cam сдвигается ровно под точку (ax, ay)
+    state.camX += (ax - state.W / 2) * k;
+    state.camY += (ay - state.H / 2) * k;
+    state.zoom = z1;
+}
 
 /** Прицепить все обработчики ввода к канвасу и кнопкам. Вызывается один раз. */
 export function initInput(canvas, ui) {
@@ -49,7 +65,9 @@ export function initInput(canvas, ui) {
             const dx = t2.clientX - t1.clientX;
             const dy = t2.clientY - t1.clientY;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            state.zoom = clamp(lastZoom * (dist / lastDist), MIN_ZOOM, MAX_ZOOM);
+            // зум к середине между пальцами
+            zoomAt((t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2,
+                   lastZoom * (dist / lastDist));
         }
     }, { passive: false });
 
@@ -58,10 +76,10 @@ export function initInput(canvas, ui) {
         if (e.touches.length === 0) { touch1 = null; isDragging = false; }
     });
 
-    // === КОЛЕСО МЫШИ: зум ===
+    // === КОЛЕСО МЫШИ: зум к точке под курсором ===
     canvas.addEventListener('wheel', e => {
         e.preventDefault();
-        state.zoom = clamp(state.zoom * (e.deltaY > 0 ? 0.9 : 1.1), MIN_ZOOM, MAX_ZOOM);
+        zoomAt(e.clientX, e.clientY, state.zoom * (e.deltaY > 0 ? 0.9 : 1.1));
     }, { passive: false });
 
     // === ПАНОРАМИРОВАНИЕ ПРАВОЙ КНОПКОЙ ===
