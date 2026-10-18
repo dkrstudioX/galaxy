@@ -14,7 +14,7 @@ import { state } from './state.js';
 import { formatSimDate, clamp } from './math.js';
 import { SUN_R, COLORS, MIN_ZOOM, MAX_ZOOM } from './config.js';
 import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, moonOrbitRadius, moonPeriod, baseOrbitRadius } from './data.js';
-import { bases, basesAt, baseRadiusRange, startBaseRemoval, removalSecondsLeft, BASE_REMOVAL_MS } from './bases.js';
+import { bases, basesAt, baseRadiusRange, startBaseRemoval, removalProgress, BASE_REMOVAL_MS } from './bases.js';
 
 // Русские названия и подписи классов для блока «ОБЪЕКТ».
 const RU = {
@@ -361,12 +361,10 @@ function asteroidInfoHTML(b) {
 function basesSectionHTML(kind, planet, moon) {
     const rows = [];
     if (kind === 'moon' && planet === 'Earth' && moon === 'Луна / Moon') {
-        rows.push(baseRowHTML('', 'LUNA-ORBIT', 'орбита ' + Math.round(baseOrbitRadius) + ' ед.')); // стартовая база
+        rows.push(baseRowHTML('', 'LUNA-ORBIT', 'орбита ' + Math.round(baseOrbitRadius) + ' ед.', null)); // стартовая база
     }
     basesAt(kind, planet, moon).forEach(b => rows.push(baseRowHTML(b.id, b.name,
-        b.status === 'removing'
-            ? 'демонтаж ' + removalSecondsLeft(b) + ' с'
-            : 'орбита ' + Math.round(b.orbitRadius) + ' ед.')));
+        'орбита ' + Math.round(b.orbitRadius) + ' ед.', b)));
 
     const active = state.baseMode && state.baseMode.kind === kind &&
         state.baseMode.planet === planet && (state.baseMode.moon || null) === (moon || null);
@@ -381,11 +379,31 @@ function basesSectionHTML(kind, planet, moon) {
             (active ? 'Отмена — выберите орбиту' : 'Создать базу') + '</button>';
 }
 
-/** Строка базы в списке: имя и хвостик-подпись (id пустой — стартовая LUNA-ORBIT). */
-function baseRowHTML(id, name, tail) {
-    return '<div class="base-row" data-base="' + id + '"><span class="b-dot"></span>' +
-        '<span class="b-name">' + name + '</span>' +
-        '<small>' + tail + '</small></div>';
+/**
+ * Строка базы в списке: имя и хвостик-подпись (id пустой — стартовая
+ * LUNA-ORBIT). У удаляемой базы (rec.status 'removing') хвостик со временем
+ * заменяется красной полоской прогресса под именем.
+ */
+function baseRowHTML(id, name, tail, rec) {
+    const removing = rec && rec.status === 'removing' ? rec : null;
+    return '<div class="base-row' + (removing ? ' removing' : '') + '" data-base="' + id + '">' +
+        '<span class="b-dot"></span>' +
+        '<span class="b-body"><span class="b-name">' + name + '</span>' +
+            (removing ? removalBarHTML(removing) : '') + '</span>' +
+        (removing ? '' : '<small>' + tail + '</small>') +
+        '</div>';
+}
+
+/**
+ * Красная полоска прогресса разбора под именем базы. Ширина растёт
+ * CSS-анимацией на BASE_REMOVAL_MS; отрицательная задержка ставит её сразу
+ * на текущий прогресс (карточка перерисовывается раз в секунду — полоска
+ * между перерисовками не дёргается).
+ */
+function removalBarHTML(rec) {
+    const elapsed = Math.round(removalProgress(rec) * BASE_REMOVAL_MS);
+    return '<span class="rm-bar"><i style="animation-duration:' + BASE_REMOVAL_MS +
+        'ms;animation-delay:-' + elapsed + 'ms"></i></span>';
 }
 
 /** Кнопка «Переместить базу» у созданной базы — в том же месте, что «Создать базу». */
@@ -583,17 +601,16 @@ function newBaseInfoHTML(b) {
     const host = b.hostKind === 'moon'
         ? 'луна ' + b.moon
         : 'планета ' + (RU[b.planet] || b.planet);
-    const removing = b.status === 'removing';   // идёт разбор: статус и таймер, кнопки выключены
-    return '<div class="obj-title"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
+    const removing = b.status === 'removing';   // идёт разбор: имя краснеет, под ним полоска прогресса, кнопки выключены
+    return '<div class="obj-title' + (removing ? ' danger' : '') + '"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
             '<strong>База ' + b.name + '</strong></div>' +
+        (removing ? removalBarHTML(b) : '') +
         '<div class="obj-kind">Звёздная база · ' + host + '</div>' +
         '<div class="obj-rows">' +
             row('Радиус орбиты', b.orbitRadius + ' <em>ед.</em>') +
             row('Период обращения', fmtPeriod(b.period)) +
             row('Создана', (b.created || '').slice(0, 10)) +
-            (removing
-                ? row('Статус', 'удаляется') + row('Осталось', removalSecondsLeft(b) + ' <em>с</em>')
-                : '') +
+            (removing ? row('Статус', 'удаляется') : '') +
         '</div>' +
         '<div class="obj-note">' + (removing
             ? 'База разбирается — перенос и повторное удаление недоступны'

@@ -33,6 +33,7 @@ export const COLORS = {
     moon: '#a8a8a8',
     moonStroke: '#d6d6d6',
     base: '#00ffff', // функциональный маркер базы, не декор
+    danger: '#ff5f7a', // удаление базы: имя и полоска прогресса (общий красный проекта)
     tooltip: '#ffffff',
     tooltipShadow: 'rgba(0,0,0,0.6)',
     orbitPlanet: 'rgba(120,140,200,0.6)',

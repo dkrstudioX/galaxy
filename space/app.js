@@ -37,6 +37,7 @@ const COLORS = {
     moon: '#a8a8a8',
     moonStroke: '#d6d6d6',
     base: '#00ffff', // функциональный маркер базы, не декор
+    danger: '#ff5f7a', // удаление базы: имя и полоска прогресса (общий красный проекта)
     tooltip: '#ffffff',
     tooltipShadow: 'rgba(0,0,0,0.6)',
     orbitPlanet: 'rgba(120,140,200,0.6)',
@@ -1345,16 +1346,17 @@ function moveBase(rec, host, r, ang) {
     return rec;
 }
 
-/** Сколько секунд осталось до конца удаления базы (0 — уже пора). */
-function removalSecondsLeft(rec) {
-    return Math.max(0, Math.ceil((rec.removeEndsAt - Date.now()) / 1000));
+/** Прогресс разбора удаляемой базы: 0 — только начали, 1 — время вышло. */
+function removalProgress(rec) {
+    return Math.max(0, Math.min(1, 1 - (rec.removeEndsAt - Date.now()) / BASE_REMOVAL_MS));
 }
 
 /**
  * Начать удаление базы: статус 'removing', таймер removeEndsAt (реальное
  * время, BASE_REMOVAL_MS). Пока идёт разбор, базой нельзя пользоваться —
- * перенос и повторное удаление недоступны, а на карте и в карточке висит
- * таймер. Завершает удаление updateBaseRemovals() в кадре (main.js).
+ * перенос и повторное удаление недоступны, а имя базы на карте и в карточке
+ * краснеет и под ним идёт полоска прогресса разбора. Завершает удаление
+ * updateBaseRemovals() в кадре (main.js).
  * @param {Object} rec запись базы
  * @returns {boolean} запустилось ли удаление
  */
@@ -1471,13 +1473,21 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR) {
     ctx.arc(b.x, b.y, bs + pulse * 4, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.fillStyle = COLORS.base;
     ctx.font = `bold ${Math.max(9, 10 / zoom)}px monospace`;
-    // у удаляемой базы в подписи тикает таймер до конца разбора
-    const label = b.status === 'removing'
-        ? b.name + ' · демонтаж ' + removalSecondsLeft(b) + ' с'
-        : b.name;
-    ctx.fillText(label, b.x + bs + 3 / zoom, b.y - 3 / zoom);
+    // У удаляемой базы имя краснеет, а вместо текста «демонтаж N с» под
+    // именем тянется красная полоска прогресса разбора.
+    const removing = b.status === 'removing';
+    ctx.fillStyle = removing ? COLORS.danger : COLORS.base;
+    const lx = b.x + bs + 3 / zoom;
+    const ly = b.y - 3 / zoom;
+    ctx.fillText(b.name, lx, ly);
+    if (removing) {
+        const bw = 42 / zoom, bh = 3 / zoom, by = ly + 4 / zoom;
+        ctx.fillStyle = 'rgba(255, 95, 122, 0.22)';
+        ctx.fillRect(lx, by, bw, bh);
+        ctx.fillStyle = COLORS.danger;
+        ctx.fillRect(lx, by, bw * removalProgress(b), bh);
+    }
 }
 
 /** Превью режима «выбрать орбиту»: окружность радиуса, лучик и подсказка. */
@@ -2907,12 +2917,10 @@ function asteroidInfoHTML(b) {
 function basesSectionHTML(kind, planet, moon) {
     const rows = [];
     if (kind === 'moon' && planet === 'Earth' && moon === 'Луна / Moon') {
-        rows.push(baseRowHTML('', 'LUNA-ORBIT', 'орбита ' + Math.round(baseOrbitRadius) + ' ед.')); // стартовая база
+        rows.push(baseRowHTML('', 'LUNA-ORBIT', 'орбита ' + Math.round(baseOrbitRadius) + ' ед.', null)); // стартовая база
     }
     basesAt(kind, planet, moon).forEach(b => rows.push(baseRowHTML(b.id, b.name,
-        b.status === 'removing'
-            ? 'демонтаж ' + removalSecondsLeft(b) + ' с'
-            : 'орбита ' + Math.round(b.orbitRadius) + ' ед.')));
+        'орбита ' + Math.round(b.orbitRadius) + ' ед.', b)));
 
     const active = state.baseMode && state.baseMode.kind === kind &&
         state.baseMode.planet === planet && (state.baseMode.moon || null) === (moon || null);
@@ -2927,11 +2935,31 @@ function basesSectionHTML(kind, planet, moon) {
             (active ? 'Отмена — выберите орбиту' : 'Создать базу') + '</button>';
 }
 
-/** Строка базы в списке: имя и хвостик-подпись (id пустой — стартовая LUNA-ORBIT). */
-function baseRowHTML(id, name, tail) {
-    return '<div class="base-row" data-base="' + id + '"><span class="b-dot"></span>' +
-        '<span class="b-name">' + name + '</span>' +
-        '<small>' + tail + '</small></div>';
+/**
+ * Строка базы в списке: имя и хвостик-подпись (id пустой — стартовая
+ * LUNA-ORBIT). У удаляемой базы (rec.status 'removing') хвостик со временем
+ * заменяется красной полоской прогресса под именем.
+ */
+function baseRowHTML(id, name, tail, rec) {
+    const removing = rec && rec.status === 'removing' ? rec : null;
+    return '<div class="base-row' + (removing ? ' removing' : '') + '" data-base="' + id + '">' +
+        '<span class="b-dot"></span>' +
+        '<span class="b-body"><span class="b-name">' + name + '</span>' +
+            (removing ? removalBarHTML(removing) : '') + '</span>' +
+        (removing ? '' : '<small>' + tail + '</small>') +
+        '</div>';
+}
+
+/**
+ * Красная полоска прогресса разбора под именем базы. Ширина растёт
+ * CSS-анимацией на BASE_REMOVAL_MS; отрицательная задержка ставит её сразу
+ * на текущий прогресс (карточка перерисовывается раз в секунду — полоска
+ * между перерисовками не дёргается).
+ */
+function removalBarHTML(rec) {
+    const elapsed = Math.round(removalProgress(rec) * BASE_REMOVAL_MS);
+    return '<span class="rm-bar"><i style="animation-duration:' + BASE_REMOVAL_MS +
+        'ms;animation-delay:-' + elapsed + 'ms"></i></span>';
 }
 
 /** Кнопка «Переместить базу» у созданной базы — в том же месте, что «Создать базу». */
@@ -3129,17 +3157,16 @@ function newBaseInfoHTML(b) {
     const host = b.hostKind === 'moon'
         ? 'луна ' + b.moon
         : 'планета ' + (RU[b.planet] || b.planet);
-    const removing = b.status === 'removing';   // идёт разбор: статус и таймер, кнопки выключены
-    return '<div class="obj-title"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
+    const removing = b.status === 'removing';   // идёт разбор: имя краснеет, под ним полоска прогресса, кнопки выключены
+    return '<div class="obj-title' + (removing ? ' danger' : '') + '"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
             '<strong>База ' + b.name + '</strong></div>' +
+        (removing ? removalBarHTML(b) : '') +
         '<div class="obj-kind">Звёздная база · ' + host + '</div>' +
         '<div class="obj-rows">' +
             row('Радиус орбиты', b.orbitRadius + ' <em>ед.</em>') +
             row('Период обращения', fmtPeriod(b.period)) +
             row('Создана', (b.created || '').slice(0, 10)) +
-            (removing
-                ? row('Статус', 'удаляется') + row('Осталось', removalSecondsLeft(b) + ' <em>с</em>')
-                : '') +
+            (removing ? row('Статус', 'удаляется') : '') +
         '</div>' +
         '<div class="obj-note">' + (removing
             ? 'База разбирается — перенос и повторное удаление недоступны'

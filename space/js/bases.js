@@ -357,16 +357,17 @@ export function moveBase(rec, host, r, ang) {
     return rec;
 }
 
-/** Сколько секунд осталось до конца удаления базы (0 — уже пора). */
-export function removalSecondsLeft(rec) {
-    return Math.max(0, Math.ceil((rec.removeEndsAt - Date.now()) / 1000));
+/** Прогресс разбора удаляемой базы: 0 — только начали, 1 — время вышло. */
+export function removalProgress(rec) {
+    return Math.max(0, Math.min(1, 1 - (rec.removeEndsAt - Date.now()) / BASE_REMOVAL_MS));
 }
 
 /**
  * Начать удаление базы: статус 'removing', таймер removeEndsAt (реальное
  * время, BASE_REMOVAL_MS). Пока идёт разбор, базой нельзя пользоваться —
- * перенос и повторное удаление недоступны, а на карте и в карточке висит
- * таймер. Завершает удаление updateBaseRemovals() в кадре (main.js).
+ * перенос и повторное удаление недоступны, а имя базы на карте и в карточке
+ * краснеет и под ним идёт полоска прогресса разбора. Завершает удаление
+ * updateBaseRemovals() в кадре (main.js).
  * @param {Object} rec запись базы
  * @returns {boolean} запустилось ли удаление
  */
@@ -483,13 +484,21 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR) {
     ctx.arc(b.x, b.y, bs + pulse * 4, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.fillStyle = COLORS.base;
     ctx.font = `bold ${Math.max(9, 10 / zoom)}px monospace`;
-    // у удаляемой базы в подписи тикает таймер до конца разбора
-    const label = b.status === 'removing'
-        ? b.name + ' · демонтаж ' + removalSecondsLeft(b) + ' с'
-        : b.name;
-    ctx.fillText(label, b.x + bs + 3 / zoom, b.y - 3 / zoom);
+    // У удаляемой базы имя краснеет, а вместо текста «демонтаж N с» под
+    // именем тянется красная полоска прогресса разбора.
+    const removing = b.status === 'removing';
+    ctx.fillStyle = removing ? COLORS.danger : COLORS.base;
+    const lx = b.x + bs + 3 / zoom;
+    const ly = b.y - 3 / zoom;
+    ctx.fillText(b.name, lx, ly);
+    if (removing) {
+        const bw = 42 / zoom, bh = 3 / zoom, by = ly + 4 / zoom;
+        ctx.fillStyle = 'rgba(255, 95, 122, 0.22)';
+        ctx.fillRect(lx, by, bw, bh);
+        ctx.fillStyle = COLORS.danger;
+        ctx.fillRect(lx, by, bw * removalProgress(b), bh);
+    }
 }
 
 /** Превью режима «выбрать орбиту»: окружность радиуса, лучик и подсказка. */

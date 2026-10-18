@@ -165,6 +165,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
 .obj-title { display: flex; align-items: center; gap: 9px; margin-bottom: 2px; }
 .obj-title .dot { width: 11px; height: 11px; border-radius: 50%; flex: none; box-shadow: 0 0 8px rgba(255, 255, 255, .3); }
 .obj-title strong { font: 600 13px "Manrope", sans-serif; letter-spacing: .02em; }
+.obj-title.danger strong { color: #ff5f7a; }
 .obj-kind {
     color: #9c7ee1; font: 500 8px "IBM Plex Mono", monospace;
     letter-spacing: .19em; text-transform: uppercase;
@@ -229,11 +230,25 @@ canvas { display: block; width: 100vw; height: 100vh; }
     width: 7px; height: 7px; flex: none; border-radius: 1px;
     background: #00ffff; box-shadow: 0 0 6px rgba(0, 255, 255, .55);
 }
+.base-row .b-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .base-row .b-name {
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font: 600 11px "Manrope", sans-serif; color: #dce8e8;
 }
 .base-row small { margin-left: auto; color: #637a7a; font: 9px "IBM Plex Mono", monospace; white-space: nowrap; }
+.base-row.removing .b-name { color: #ff5f7a; }
+
+/* ===== Разбор базы: красная полоска прогресса под именем ===================== */
+.rm-bar {
+    display: block; height: 3px; margin-top: 4px; overflow: hidden;
+    background: rgba(255, 95, 122, .18);
+}
+.rm-bar i {
+    display: block; height: 100%; background: #ff5f7a;
+    box-shadow: 0 0 6px rgba(255, 95, 122, .55);
+    animation: rm-progress linear forwards;
+}
+@keyframes rm-progress { from { width: 0; } to { width: 100%; } }
 .base-create {
     margin-top: 10px; width: 100%; padding: 9px 10px;
     border: 1px solid rgba(0, 255, 255, .35); border-radius: 6px;
