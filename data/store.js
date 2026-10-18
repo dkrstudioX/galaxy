@@ -672,7 +672,7 @@
 
     var shipSpecs = [
       /* Линкоры: тяжёлые, медленные, дорогие */
-      { name: 'Гром', cat: catLiners, hp: '5200', sp: '11', mass: '18000', price: '1000',
+      { name: 'Гром', cat: catLiners, hp: '5200', sp: '11', mass: '18000', price: '990',
         slots: [[slotTurret], [slotTurret], [slotTurret], [slotTurret], [slotGun],
           [slotShield], [slotShield], [slotEngine], [slotRadar],
           [slotHold5, [['Железная руда', 100], ['Медная руда', 50]]]] },
@@ -716,7 +716,7 @@
         slots: [[slotGun], [slotShield], [slotEngine], [slotHold1]] },
 
       /* Грузовозы: промышленники с добычей и переработкой */
-      { name: 'Баржа', cat: catFreighters, hp: '2600', sp: '8', mass: '12000', price: '1000',
+      { name: 'Баржа', cat: catFreighters, hp: '2600', sp: '8', mass: '12000', price: '970',
         slots: [[slotGun], [slotShield], [slotEngine], [slotEngine],
           [slotHold10, [['Титановая руда', 200], ['Вольфрамовая руда', 100]]],
           [slotHold5, [['Железная руда', 100]]]] },
@@ -727,9 +727,10 @@
         slots: [[slotGun], [slotShield], [slotEngine], [slotMining], [slotRefinery], [slotHold5]] }
     ];
 
+    var shipRefs = {};
     shipSpecs.forEach(function (spec) {
       var p = prices(spec.price);
-      d.objects.push({
+      var ship = {
         id: uid(), name: spec.name, categoryId: spec.cat.id, parentCategoryId: spec.cat.parentId || '',
         values: vals([[durability, spec.hp], [speed, spec.sp], [massProp, spec.mass]]),
         price_buy: p.buy, price_sale: p.sale, icon: 'ship', slotId: null,
@@ -741,6 +742,18 @@
             })
           };
         })
+      };
+      d.objects.push(ship);
+      shipRefs[spec.name] = ship;
+    });
+
+    /* Три корабля уже куплены — стартовый ангар пользователя. */
+    [['Гром', '2026-10-12'], ['Сокол', '2026-10-14'], ['Баржа', '2026-10-15']].forEach(function (pair) {
+      var ship = shipRefs[pair[0]];
+      if (!ship) return;
+      d.users_ships.push({
+        id: uid(), shipId: ship.id, name: ship.name, categoryId: ship.categoryId,
+        price: ship.price_buy, boughtAt: pair[1] + 'T09:30:00.000Z'
       });
     });
 

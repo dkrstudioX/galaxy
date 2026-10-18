@@ -139,6 +139,7 @@
     tradeMode: 'buy',
     notice: 'Торговый терминал подключён',
     infoSection: 'properties',
+    userShipId: '',
     selectedResource: '201',
     transferMode: 'load',
     transferAmount: 1,
@@ -390,29 +391,82 @@
 
   /* ---------- Рендер: информация о базе ---------- */
 
+  /* Купленные корабли: записи пользователя и выбранный корабль. */
+  function userShipRecords() { return window.Store ? Store.userShips() : []; }
+
+  function activeUserShip() {
+    var list = userShipRecords();
+    for (var i = 0; i < list.length; i++) if (list[i].shipId === state.userShipId) return list[i];
+    return list[0] || null;
+  }
+
+  /* Полоска купленных кораблей над свойствами — клик выбирает корабль. */
+  function userShipStrip(active) {
+    var list = userShipRecords();
+    if (!list.length) return '';
+    return '<div class="user-ships">' + list.map(function (rec) {
+      var on = active && active.shipId === rec.shipId;
+      return '<button class="user-ship' + (on ? ' active' : '') + '" data-action="select-user-ship" data-id="' + rec.shipId + '">' +
+        '<small>КУПЛЕН</small><strong>' + rec.name + '</strong></button>';
+    }).join('') + '</div>';
+  }
+
   function propertiesHTML() {
-    return '<div class="info-grid">' +
-      '<div class="hero-ship">' +
-      '<div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>' +
+    var rec = activeUserShip();
+    var ship = rec && window.Store ? Store.byId('objects', rec.shipId) : null;
+    var strip = userShipStrip(rec);
+
+    if (!ship) {
+      return strip + '<div class="collection-panel"><div class="collection-head"><div>' +
+        '<span class="eyebrow">АНГАР</span><h2>Купленных кораблей нет</h2></div></div>' +
+        '<div class="collection-row"><div class="collection-copy"><strong>Купите корабль в магазине</strong>' +
+        '<span>Он появится здесь со своими свойствами и слотами.</span></div></div></div>';
+    }
+
+    var cat = Store.byId('categories', ship.categoryId);
+    var props = Store.categoryProps(ship.categoryId).map(function (p) {
+      return { name: p.name, value: (ship.values && ship.values[p.id]) || p.value || '' };
+    }).filter(function (p) { return p.value; });
+    var statRows = props.map(function (p) {
+      var raw = String(p.value).trim();
+      var v = /^\d+([.,]\d+)?$/.test(raw) ? fmt(Number(raw.replace(',', '.'))) : raw;
+      return '<div><span>' + p.name + '</span><b>' + v + '</b></div>';
+    }).join('');
+
+    var slots = (ship.slots || []).map(function (s, index) {
+      var slot = Store.byId('slots', s.slotId);
+      var names = (s.contents || []).map(function (c) {
+        var it = Store.byId('objects', c.itemId);
+        var qty = Number(c.qty) || 0;
+        return (it ? it.name : '—') + (qty > 1 ? ' ×' + fmt(qty) : '');
+      });
+      var cap = slot && slot.capacity ? 'до ' + fmt(slot.capacity) + ' кг' : 'без лимита по массе';
+      return '<div class="collection-row">' +
+        '<span class="item-icon">' + icon(slot && slot.kind === 'cargo' ? 'crate' : 'grid', 22) + '</span>' +
+        '<div class="collection-copy"><small>СЛОТ // ' + pad2(index + 1) + '</small>' +
+        '<strong>' + (slot ? slot.name : 'СЛОТ') + '</strong>' +
+        '<span>' + (names.length ? names.join(', ') : 'пусто') + ' · ' + cap + '</span></div>' +
+        '</div>';
+    }).join('');
+
+    var bought = rec.boughtAt ? new Date(rec.boughtAt).toLocaleDateString('ru-RU') : '';
+    var subtitle = (cat ? Store.categoryPath(cat.id) : '');
+    if (rec.price) subtitle += ' · куплен за ' + fmt(Number(rec.price)) + ' ¤';
+    if (bought) subtitle += ' · ' + bought;
+
+    return strip + '<div class="info-grid">' +
+      '<div class="hero-ship"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>' +
       shipGlyph(false) +
-      '<span class="axis-label left">КОРМA</span><span class="axis-label right">НОС</span>' +
-      '</div>' +
+      '<span class="axis-label left">КОРМA</span><span class="axis-label right">НОС</span></div>' +
       '<div class="ship-data">' +
-      '<span class="eyebrow">ВЫБРАННЫЙ КОРАБЛЬ</span>' +
-      '<h2>ASTERION <small>MK.IV</small></h2>' +
-      '<p>Многоцелевой фрегат дальнего радиуса действия. Готов к вылету.</p>' +
-      '<div class="stat-grid">' +
-      '<div><span>Целостность</span><b>2 480</b><i><em style="width:88%"></em></i></div>' +
-      '<div><span>Щиты</span><b>1 260</b><i><em style="width:72%"></em></i></div>' +
-      '<div><span>Огневая мощь</span><b>786</b><i><em style="width:64%"></em></i></div>' +
-      '<div><span>Манёвренность</span><b>82</b><i><em style="width:82%"></em></i></div>' +
+      '<span class="eyebrow">КУПЛЕННЫЙ КОРАБЛЬ</span>' +
+      '<h2>' + ship.name + '</h2>' +
+      '<p>' + subtitle + '</p>' +
+      '<div class="stat-grid">' + (statRows || '<div><span>Свойства</span><b>—</b></div>') + '</div>' +
       '</div></div>' +
-      '<div class="base-data">' +
-      '<div><span>Уровень базы</span><strong>07</strong></div>' +
-      '<div><span>Репутация</span><strong>Доверие</strong></div>' +
-      '<div><span>Техобслуживание</span><strong class="accent">Доступно</strong></div>' +
-      '<div><span>До вылета</span><strong>00:12:44</strong></div>' +
-      '</div></div>';
+      '<div class="collection-panel"><div class="collection-head"><div>' +
+      '<span class="eyebrow">СЛОТЫ</span><h2>Слоты и содержимое</h2></div>' +
+      '<span>' + (ship.slots || []).length + ' слотов</span></div>' + slots + '</div>';
   }
 
   function equipmentHTML() {
@@ -574,6 +628,7 @@
     else if (action === 'transfer-amount') state.transferAmount = Math.min(99, Math.max(1, state.transferAmount + dir));
     else if (action === 'transfer') transferResource();
     else if (action === 'info-section') state.infoSection = el.getAttribute('data-sec');
+    else if (action === 'select-user-ship') state.userShipId = el.getAttribute('data-id');
     else return;
 
     render();

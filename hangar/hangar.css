@@ -482,6 +482,17 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
   font: 500 9px "IBM Plex Mono"; text-transform: uppercase; letter-spacing: .07em; cursor: pointer;
 }
 .info-tabs button:last-child { border-right: 0; }
+
+/* На вкладке информации док кораблей прижат снизу — оставляем место под него */
+.info-view { padding-bottom: 8px; }
+
+/* Купленные корабли над свойствами: клик выбирает корабль */
+.user-ships { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.user-ship { display: grid; gap: 3px; padding: 8px 16px; border: 1px solid rgba(143, 245, 227, .18); background: rgba(8, 18, 24, .55); color: inherit; font-family: inherit; text-align: left; cursor: pointer; transition: border-color .15s, background .15s; }
+.user-ship small { font-size: 9px; letter-spacing: .18em; color: var(--dim); }
+.user-ship strong { font-size: 13px; font-weight: 600; }
+.user-ship:hover { border-color: rgba(143, 245, 227, .38); }
+.user-ship.active { border-color: rgba(143, 245, 227, .55); background: rgba(143, 245, 227, .12); }
 .info-tabs button.active {
   color: #e1d5ff; background: linear-gradient(110deg, rgba(69, 51, 103, .55), rgba(31, 28, 59, .55));
   box-shadow: inset 0 -2px #a985f5;
