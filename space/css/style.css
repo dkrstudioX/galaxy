@@ -1,0 +1,183 @@
+/* =============================================================================
+   style.css — стили страницы space/. Дизайн взят из hangar/index.html
+   (стеклянные панели, IBM Plex Mono, бирюзово-фиолетовые акценты).
+   ============================================================================= */
+
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap");
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #05070d;
+    overflow: hidden;
+    touch-action: none;
+    font-family: "Manrope", sans-serif;
+    color: #dce8e8;
+}
+
+canvas { display: block; width: 100vw; height: 100vh; }
+
+/* ===== Стеклянная панель (как .inventory-panel в hangar) ==================== */
+.glass {
+    position: relative;
+    border: 1px solid rgba(150, 190, 255, .17);
+    background:
+        linear-gradient(150deg, rgba(255, 255, 255, .055) 0%, rgba(255, 255, 255, .015) 42%, rgba(120, 90, 200, .05) 100%);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    backdrop-filter: blur(20px) saturate(1.6);
+    box-shadow:
+        0 18px 50px rgba(2, 4, 12, .45),
+        0 0 44px rgba(124, 58, 237, .08),
+        inset 0 1px 0 rgba(255, 255, 255, .15),
+        inset 0 0 50px rgba(90, 220, 200, .03);
+}
+/* световая кромка сверху и угловой акцент справа сверху */
+.glass::before {
+    content: ""; position: absolute; top: 0; left: 7%; right: 7%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(122, 236, 224, .55), rgba(169, 133, 245, .55), transparent);
+    pointer-events: none;
+}
+.glass::after {
+    content: ""; position: absolute; top: 6px; right: 6px; width: 13px; height: 13px;
+    border-top: 2px solid rgba(122, 236, 224, .75); border-right: 2px solid rgba(122, 236, 224, .75);
+    filter: drop-shadow(0 0 4px rgba(87, 216, 195, .55));
+    pointer-events: none;
+}
+
+/* ===== HUD (показатели зума/времени) ======================================== */
+#ui {
+    position: fixed; top: 14px; left: 14px; z-index: 10;
+    padding: 12px 16px;
+    font: 500 10px "IBM Plex Mono", monospace;
+    letter-spacing: .12em; text-transform: uppercase;
+    color: #688080; line-height: 1.9;
+    pointer-events: none;
+}
+#ui b { color: #dce8e8; font-weight: 600; letter-spacing: .06em; }
+#ui .hud-title { color: #9c7ee1; margin-bottom: 2px; }
+
+/* ===== Кнопки скорости времени (сегменты как .category-tabs) ================ */
+#controls {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    display: flex; z-index: 10;
+    border: 1px solid rgba(150, 190, 255, .16);
+    background: rgba(9, 24, 25, .42);
+    -webkit-backdrop-filter: blur(14px) saturate(1.5);
+    backdrop-filter: blur(14px) saturate(1.5);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
+}
+#controls .btn {
+    height: 38px; min-width: 104px; padding: 0 20px;
+    display: flex; align-items: center; justify-content: center;
+    color: #637d7d; border: 0; border-right: 1px solid rgba(120, 160, 170, .12);
+    background: transparent; cursor: pointer;
+    font: 500 9px "IBM Plex Mono", monospace;
+    text-transform: uppercase; letter-spacing: .09em;
+    transition: color .14s ease, background .14s ease;
+}
+#controls .btn:last-child { border-right: 0; }
+#controls .btn:hover { color: #9fb3b3; background: rgba(122, 236, 224, .06); }
+#controls .btn.active {
+    color: #100b1b; background: linear-gradient(100deg, #75dfd2, #aa88f6);
+    box-shadow: 0 0 18px rgba(169, 133, 245, .45);
+}
+
+/* ===== Правая колонка: карта системы + объект ================================ */
+#sidePanel {
+    position: fixed; top: 14px; right: 14px; z-index: 10;
+    width: 288px;
+    display: flex; flex-direction: column; gap: 10px;
+    max-height: calc(100vh - 28px);
+}
+
+.panel-block { display: flex; flex-direction: column; min-height: 0; }
+.panel-block .panel-body { overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(120, 160, 170, .35) transparent; }
+.panel-block .panel-body::-webkit-scrollbar { width: 8px; }
+.panel-block .panel-body::-webkit-scrollbar-track { background: transparent; }
+.panel-block .panel-body::-webkit-scrollbar-thumb { background: rgba(120, 160, 170, .35); border-radius: 4px; }
+
+/* шапка блока: клик сворачивает/разворачивает тело (кнопок-стрелок сбоку нет) */
+.panel-head {
+    flex: none;
+    height: 44px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 14px; cursor: pointer; user-select: none;
+    border-bottom: 1px solid rgba(150, 180, 255, .13);
+    background: linear-gradient(90deg, rgba(11, 28, 29, .30), rgba(28, 21, 47, .30));
+}
+.panel-head div { display: flex; align-items: center; gap: 10px; }
+.panel-head div span {
+    color: #b89cff; font: 500 9px "IBM Plex Mono", monospace;
+    padding: 3px 5px; border: 1px solid #574580;
+}
+.panel-head strong { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .09em; }
+.panel-head small { color: #637a7a; font: 9px "IBM Plex Mono", monospace; text-transform: uppercase; }
+.panel-head .caret { transition: transform .15s ease; color: #637a7a; font-size: 9px; }
+.panel-block.collapsed .panel-head { border-bottom-color: transparent; }
+.panel-block.collapsed .panel-body { display: none; }
+.panel-block.collapsed .caret { transform: rotate(-90deg); }
+
+/* ===== Дерево «планета → луны» =============================================== */
+.tree, .tree ul { list-style: none; }
+#mapBlock .panel-body { padding: 7px; }
+.tree .planet > .node {
+    display: flex; align-items: center; gap: 8px;
+    min-height: 34px; padding: 4px 8px; border-radius: 6px;
+    cursor: pointer; user-select: none;
+    border: 1px solid transparent; border-bottom-color: rgba(120, 160, 170, .10);
+    transition: background .14s ease;
+}
+.tree .planet > .node:hover { background: rgba(122, 236, 224, .06); }
+.tree .caret {
+    width: 10px; color: #637a7a; transition: transform .15s;
+    display: inline-block; font-size: 9px;
+}
+.tree .planet.open > .node .caret { transform: rotate(90deg); }
+.tree .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: 0 0 6px rgba(255, 255, 255, .25); }
+.tree .pname { font: 500 11px "IBM Plex Mono", monospace; letter-spacing: .05em; }
+.tree .cnt { margin-left: auto; color: #637a7a; font: 9px "IBM Plex Mono", monospace; }
+.tree .loot { display: none; padding: 1px 0 6px 27px; }
+.tree .planet.open > .loot { display: block; }
+.tree .loot li {
+    min-height: 26px; padding: 3px 8px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    cursor: pointer;
+    color: #9fb3b3; font: 11px "IBM Plex Mono", monospace;
+}
+.tree .loot li:hover { background: rgba(122, 236, 224, .06); }
+.tree .loot li i { font-style: normal; color: #637a7a; font-size: 9px; }
+.tree .loot li::before { content: "☾"; color: #6e8b8b; margin-right: 2px; }
+
+/* выбранный объект подсвечивается и в дереве, и на карте */
+.tree .sel > .node, .tree li.sel {
+    background: rgba(122, 236, 224, .10) !important;
+    border-color: rgba(122, 236, 224, .35) !important;
+    box-shadow: 0 0 12px rgba(87, 216, 195, .15);
+}
+
+/* ===== Блок «Объект»: информация о выбранном ================================= */
+#objectInfo { padding: 12px 14px 14px; }
+.obj-empty {
+    padding: 18px 12px; text-align: center;
+    color: #7d9a9a; font: 11px "IBM Plex Mono", monospace;
+    border: 1px dashed rgba(150, 190, 255, .16); border-radius: 8px;
+    background: rgba(9, 24, 25, .30);
+}
+.obj-title { display: flex; align-items: center; gap: 9px; margin-bottom: 2px; }
+.obj-title .dot { width: 11px; height: 11px; border-radius: 50%; flex: none; box-shadow: 0 0 8px rgba(255, 255, 255, .3); }
+.obj-title strong { font: 600 13px "Manrope", sans-serif; letter-spacing: .02em; }
+.obj-kind {
+    color: #9c7ee1; font: 500 8px "IBM Plex Mono", monospace;
+    letter-spacing: .19em; text-transform: uppercase;
+    margin: 0 0 10px 20px;
+}
+.obj-rows { display: flex; flex-direction: column; }
+.obj-row {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    min-height: 28px; padding: 3px 0;
+    border-bottom: 1px solid rgba(120, 160, 170, .10);
+    font: 11px "IBM Plex Mono", monospace;
+}
+.obj-row:last-child { border-bottom: 0; }
+.obj-row .k { color: #637a7a; font-size: 9px; text-transform: uppercase; letter-spacing: .12em; }
+.obj-row .v { color: #dce8e8; text-align: right; }
+.obj-row .v em { font-style: normal; color: #637a7a; font-size: 9px; margin-left: 4px; }

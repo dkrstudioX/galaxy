@@ -40,7 +40,8 @@ const COLORS = {
     tooltip: '#ffffff',
     tooltipShadow: 'rgba(0,0,0,0.6)',
     orbitPlanet: 'rgba(120,140,200,0.6)',
-    orbitMoon: 'rgba(150,160,180,0.6)'
+    orbitMoon: 'rgba(150,160,180,0.6)',
+    orbitSelected: 'rgba(122,236,224,0.8)' // орбита выбранного кликом тела (акцент hangar)
 };
 
 // Толщина обводок в пикселях экрана (делим на zoom при отрисовке).
@@ -209,6 +210,10 @@ const state = {
     mouseX: -1,     // -1 = курсора нет на канвасе
     mouseY: -1,
 
+    // --- Выбор и hover ----------------------------------------------------------
+    hoverTargets: null, // тела текущего кадра (заполняет main.js), для клика
+    selected: null,     // выбранный объект: {kind:'sun'|'planet'|'moon', p, m}
+
     // --- Канвас ---------------------------------------------------------------
     W: 0,           // размеры канваса в пикселях (обновляет resize())
     H: 0
@@ -295,7 +300,6 @@ function renderScene(ctx) {
     ctx.translate(-state.camX, -state.camY);
 
     drawStars(ctx, time);
-    drawGrid(ctx);
     drawAsteroids(ctx);
 
     // Солнце — первая hover-цель (проверяется последней, т.к. планеты поверх)
@@ -338,17 +342,6 @@ function drawStars(ctx, time) {
         ctx.fillStyle = `rgba(255,255,255,${0.3 + twinkle * 0.7})`;
         ctx.fillRect(s.x, s.y, s.s, s.s);
     });
-}
-
-/** Едва заметная полярная сетка из 20 колец радиусами 50..1000. */
-function drawGrid(ctx) {
-    ctx.strokeStyle = '#0f0f1a';
-    ctx.lineWidth = 1 / state.zoom;
-    for (let i = 1; i <= 20; i++) {
-        ctx.beginPath();
-        ctx.arc(0, 0, i * 50, 0, Math.PI * 2);
-        ctx.stroke();
-    }
 }
 
 /** Пояс астероидов между Марсом и Юпитером. */
@@ -500,7 +493,7 @@ function drawEarthMoonAndBase(ctx, x, y) {
     ctx.font = `bold ${Math.max(9, 10 / z)}px monospace`;
     ctx.fillText('BASE', bx + bs + 3 / z, by - 3 / z);
 
-    return { m: { n: 'Луна / Moon', r: 3 }, md: moonDist, mx, my };
+    return { m: { n: 'Луна / Moon', r: 3, period: moonPeriod }, md: moonDist, mx, my };
 }
 
 /** Начать путь-окружность (без fill/stroke — их выбирает вызывающий). */
@@ -513,6 +506,8 @@ function circle(ctx, x, y, r) {
 // =============================================================================
 // hover.js — наведение курсора: hit-тест по телам, орбита наведённого тела
 // и текстовая подсказка с названием (просто текст без рамки).
+// Здесь же — орбита и маркер ВЫБРАННОГО объекта (клик) и экспорт findBodyAt
+// для обработчика клика в input.js.
 // Вызывается из main.js ПОСЛЕ renderScene и уже вне мирового transform.
 // =============================================================================
 
@@ -533,22 +528,49 @@ function drawHover(ctx, hoverTargets) {
     const { mouseX, mouseY } = state;
     if (mouseX < 0) return;
 
-    const hover = hitTest(hoverTargets, mouseX, mouseY);
+    const hover = findBodyAt(hoverTargets, mouseX, mouseY);
     if (!hover) return;
 
     // орбита наведённого тела (у солнца орбиты нет)
     if (hover.orbit) {
-        drawOrbitOverlay(ctx, hover);
+        drawOrbitOverlay(ctx, hover, COLORS.orbitPlanet);
     }
     drawTooltip(ctx, hover.name, mouseX, mouseY);
 }
 
 /**
+ * Нарисовать орбиту выбранного кликом тела — пунктир держится, пока объект выбран.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {?{kind: string, p: object, m: object}} sel — текущий выбор (state.selected)
+ * @param {Array} hoverTargets — результат renderScene() этого кадра
+ */
+function drawSelection(ctx, sel, hoverTargets) {
+    if (!sel) return;
+
+    const target = hoverTargets.find(t => sel.kind === 'sun' ? t.kind === 'sun' : t.p === sel.p);
+    if (!target) return; // тело ещё не в кадре (луна скрыта зумом и т.п.)
+
+    if (sel.kind === 'sun') return; // у солнца орбиты нет
+
+    let orbit = null;
+    if (sel.kind === 'planet') {
+        orbit = { cx: 0, cy: 0, r: target.p.dist };
+    } else {
+        // луна ищется по имени: объекты лун в кадре и в дереве — разные ссылки
+        const mh = target.moons.find(x => x.m.n === sel.m.n);
+        if (!mh) return;
+        orbit = { cx: target.x, cy: target.y, r: mh.md };
+    }
+    drawOrbitOverlay(ctx, { kind: sel.kind, orbit }, COLORS.orbitSelected);
+}
+
+/**
  * Hit-тест: перебираем цели с конца (планеты добавлены после солнца, луны
  * проверяются первыми — они мельче и лежат поверх).
- * @returns {?{kind: string, name: string, orbit: ?{cx, cy, r}}}
+ * Экспортируется для выбора объекта по клику (input.js).
+ * @returns {?{kind: string, name: string, orbit: ?{cx, cy, r}, p: object, m: object}}
  */
-function hitTest(hoverTargets, mouseX, mouseY) {
+function findBodyAt(hoverTargets, mouseX, mouseY) {
     const w = screenToWorld(mouseX, mouseY, state);
 
     for (let i = hoverTargets.length - 1; i >= 0; i--) {
@@ -559,7 +581,7 @@ function hitTest(hoverTargets, mouseX, mouseY) {
             const hitR = Math.max(mh.m.r, MIN_HIT_MOON_PX / state.zoom);
             if ((w.x - mh.mx) ** 2 + (w.y - mh.my) ** 2 <= hitR * hitR) {
                 // луна: орбита вокруг своей планеты
-                return { kind: 'moon', name: mh.m.n, orbit: { cx: t.x, cy: t.y, r: mh.md } };
+                return { kind: 'moon', name: mh.m.n, orbit: { cx: t.x, cy: t.y, r: mh.md }, p: t.p, m: mh.m };
             }
         }
 
@@ -569,14 +591,14 @@ function hitTest(hoverTargets, mouseX, mouseY) {
         if ((w.x - t.x) ** 2 + (w.y - t.y) ** 2 <= hitR * hitR) {
             // планета: орбита вокруг солнца; у самого солнца орбиты нет
             const orbit = t.kind === 'sun' ? null : { cx: 0, cy: 0, r: t.p.dist };
-            return { kind: t.kind, name, orbit };
+            return { kind: t.kind, name, orbit, p: t.p, m: null };
         }
     }
     return null;
 }
 
-/** Пунктирная орбита наведённого тела в мировой системе координат. */
-function drawOrbitOverlay(ctx, hover) {
+/** Пунктирная орбита тела в мировой системе координат. */
+function drawOrbitOverlay(ctx, hover, color) {
     const { zoom, camX, camY, W, H } = state;
 
     ctx.save();
@@ -584,7 +606,7 @@ function drawOrbitOverlay(ctx, hover) {
     ctx.scale(zoom, zoom);
     ctx.translate(-camX, -camY);
 
-    ctx.strokeStyle = hover.kind === 'planet' ? COLORS.orbitPlanet : COLORS.orbitMoon;
+    ctx.strokeStyle = color;
     ctx.lineWidth = 1 / zoom;
     ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.beginPath();
@@ -616,6 +638,8 @@ function drawTooltip(ctx, name, mouseX, mouseY) {
 // правой кнопкой, позиция курсора для hover, кнопки скорости времени.
 // Только меняет state, ничего не рисует.
 // =============================================================================
+
+
 
 
 
@@ -679,6 +703,20 @@ function initInput(canvas, ui) {
     // Удерживайте правую кнопку — карта следует за курсором (удобно на большом зуме).
     let mouseDragging = false, mouseStartX = 0, mouseStartY = 0, camStartMX = 0, camStartMY = 0;
 
+    // Левый клик без перетаскивания выбирает тело: солнце / планету / луну.
+    let downX = 0, downY = 0;
+    canvas.addEventListener('mousedown', e => {
+        if (e.button !== 0) return;
+        downX = e.clientX;
+        downY = e.clientY;
+    });
+    canvas.addEventListener('mouseup', e => {
+        if (e.button !== 0) return;
+        const moved = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY);
+        if (moved > 5 || !state.hoverTargets) return; // это было перетаскивание
+        selectBody(findBodyAt(state.hoverTargets, e.clientX, e.clientY));
+    });
+
     canvas.addEventListener('mousedown', e => {
         if (e.button !== 2) return;
         mouseDragging = true;
@@ -741,13 +779,34 @@ function updateSpeedUI(ui) {
 
 // ===== ui.js =====
 // =============================================================================
-// ui.js — DOM-интерфейс: HUD-показатели (зум/скорость/дата) и боковая панель
-// «ЛУНЫ СИСТЕМЫ» с деревом планет. Работает с DOM, не с канвасом.
+// ui.js — DOM-интерфейс: HUD-показатели (зум/скорость/дата), боковые блоки
+// «КАРТА СИСТЕМЫ» (дерево планет/лун) и «ОБЪЕКТ» (информация о выбранном).
+// Выбор делается кликом по канвасу (selectBody вызывает input.js) или по
+// элементу дерева. Шапка каждого блока сворачивает его — отдельных кнопок
+// «скрыть/показать» нет. Работает с DOM, не с канвасом.
 // =============================================================================
 
 
 
 
+
+
+// Русские названия и подписи классов для блока «ОБЪЕКТ».
+const RU = {
+    Sun: 'Солнце', Mercury: 'Меркурий', Venus: 'Венера', Earth: 'Земля', Mars: 'Марс',
+    Jupiter: 'Юпитер', Saturn: 'Сатурн', Uranus: 'Уран', Neptune: 'Нептун'
+};
+const TYPES = {
+    rocky: 'Каменная планета', earth: 'Обитаемая планета',
+    gas: 'Газовый гигант', ice: 'Ледяной гигант'
+};
+
+function fmtPeriod(days) {
+    const d = Math.round(days * 100) / 100;
+    return days >= 365.25
+        ? d + ' сут (' + (days / 365.256).toFixed(2) + ' лет)'
+        : d + ' сут';
+}
 
 /** Собрать ссылки на элементы HUD. Вызывается один раз в main.js. */
 function getHudElements() {
@@ -777,13 +836,15 @@ function updateHud(hud) {
     hud.zEl.textContent = state.zoom.toFixed(2) + 'x';
 }
 
-/** Построить дерево «планета → главные луны» и логику сворачивания панели. */
+/** Построить дерево «планета → луны», блок «Объект» и сворачивание блоков. */
 function buildSidePanel() {
     const treeEl = document.getElementById('lootTree');
 
     planets.forEach(p => {
         const li = document.createElement('li');
         li.className = 'planet';
+        li.dataset.kind = 'planet';
+        li.dataset.name = p.name;
         const moons = moonTree[p.name] || [];
         li.innerHTML =
             '<div class="node">' +
@@ -793,20 +854,122 @@ function buildSidePanel() {
                 '<span class="cnt">☾ ' + moonTotals[p.name] + '</span>' +
             '</div>' +
             '<ul class="loot">' +
-                moons.map(([n, t]) => '<li>' + n + '<i>' + t + '</i></li>').join('') +
+                moons.map(([n, t]) =>
+                    '<li data-kind="moon" data-name="' + n + '" data-planet="' + p.name + '">' +
+                    n + '<i>' + t + '</i></li>').join('') +
             '</ul>';
-        li.querySelector('.node').addEventListener('click', () => li.classList.toggle('open'));
+        // клик по шапке планеты: выбрать планету; клик по карет-зоне — только раскрыть
+        li.querySelector('.node').addEventListener('click', e => {
+            li.classList.toggle('open');
+            selectBody({ kind: 'planet', p });
+        });
+        li.querySelectorAll('.loot li').forEach(mEl => {
+            mEl.addEventListener('click', () => {
+                const pName = mEl.dataset.planet;
+                const planet = planets.find(x => x.name === pName);
+                const m = moonFromTree(planet, mEl.dataset.name);
+                selectBody({ kind: 'moon', p: planet, m });
+            });
+        });
         treeEl.appendChild(li);
     });
 
-    // Кнопка сворачивания панели целиком
-    const sidePanel = document.getElementById('sidePanel');
-    const panelToggle = document.getElementById('panelToggle');
-    panelToggle.addEventListener('click', () => {
-        sidePanel.classList.toggle('collapsed');
-        panelToggle.textContent = sidePanel.classList.contains('collapsed') ? '◀' : '▶';
-        panelToggle.title = sidePanel.classList.contains('collapsed') ? 'Развернуть' : 'Свернуть';
+    // Солнце в дереве нет — выбирается только кликом по канвасу.
+
+    // Шапки блоков сворачивают своё тело: отдельные кнопки «скрыть/показать» не нужны.
+    document.querySelectorAll('#sidePanel .panel-head').forEach(head => {
+        head.addEventListener('click', () => head.parentElement.classList.toggle('collapsed'));
     });
+}
+
+/**
+ * Объект луны для выбора из дерева: настоящая луна из moonsByPlanet либо
+ (у Земли) псевдо-луна, которую рисует render.js.
+ */
+function moonFromTree(planet, name) {
+    const real = (moonsByPlanet[planet.name] || []).find(m => m.n === name);
+    if (real) return real;
+    return { n: name, period: planet.hasBase ? 27.321661 : 0, r: 3 };
+}
+
+/**
+ * Выбрать объект (канвас или дерево): обновить state.selected, блок «Объект»
+ * и подсветку в дереве. sel = null сбрасывает выбор.
+ */
+function selectBody(sel) {
+    state.selected = sel;
+    renderObjectInfo();
+    highlightTree();
+}
+
+/** Заполнить блок «Объект» данными выбранного тела. */
+function renderObjectInfo() {
+    const box = document.getElementById('objectInfo');
+    const sel = state.selected;
+
+    if (!sel) {
+        box.innerHTML = '<div class="obj-empty">Кликните по солнцу, планете или луне на карте</div>';
+        return;
+    }
+
+    let html = '';
+    if (sel.kind === 'sun') {
+        html =
+            '<div class="obj-title"><span class="dot" style="background:#eeeeee"></span>' +
+                '<strong>' + RU.Sun + ' / Sun</strong></div>' +
+            '<div class="obj-kind">Звезда · G2V</div>' +
+            row('Радиус отрисовки', SUN_R + ' <em>ед.</em>');
+    } else if (sel.kind === 'planet') {
+        const p = sel.p;
+        const orbitR = Math.round(p.dist * 10) / 10;
+        const mapMoons = moonsByPlanet[p.name] || [];
+        html =
+            '<div class="obj-title"><span class="dot" style="background:' + p.color + '"></span>' +
+                '<strong>' + (RU[p.name] || p.name) + ' / ' + p.name + '</strong></div>' +
+            '<div class="obj-kind">' + (TYPES[p.type] || 'Планета') + '</div>' +
+            row('Период обращения', fmtPeriod(p.period)) +
+            row('Радиус орбиты', orbitR + ' <em>ед.</em>') +
+            row('Известных лун', moonTotals[p.name]) +
+            row('На карте (крупные)', mapMoons.length);
+    } else {
+        const p = sel.p;
+        const m = sel.m;
+        const idx = (moonsByPlanet[p.name] || []).findIndex(x => x.n === m.n);
+        const md = idx >= 0 ? p.r + 12 + idx * 7 : moonDist;
+        html =
+            '<div class="obj-title"><span class="dot" style="background:' + (m.c || '#a8a8a8') + '"></span>' +
+                '<strong>' + m.n + '</strong></div>' +
+            '<div class="obj-kind">Спутник · ' + (RU[p.name] || p.name) + '</div>' +
+            row('Планета', (RU[p.name] || p.name) + ' / ' + p.name) +
+            (m.period ? row('Период обращения', fmtPeriod(m.period)) : '') +
+            row('Радиус орбиты', Math.round(md * 10) / 10 + ' <em>ед.</em>') +
+            (p.hasBase && m.n.indexOf('Луна') === 0 ? row('На орбите', 'База LUNA-ORBIT') : '');
+    }
+    box.innerHTML = html;
+}
+
+function row(k, v) {
+    return '<div class="obj-row"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
+}
+
+/** Подсветить выбранный объект в дереве и раскрыть его планету. */
+function highlightTree() {
+    const sel = state.selected;
+    document.querySelectorAll('#lootTree .sel').forEach(el => el.classList.remove('sel'));
+
+    if (!sel || sel.kind === 'sun') return;
+
+    const tree = document.getElementById('lootTree');
+    const li = Array.from(tree.children).find(el => el.dataset.name === sel.p.name);
+    if (!li) return;
+    li.classList.add('open');
+
+    if (sel.kind === 'planet') {
+        li.classList.add('sel');
+    } else {
+        const mEl = li.querySelector('.loot li[data-name="' + sel.m.n + '"]');
+        if (mEl) mEl.classList.add('sel');
+    }
 }
 
 // ===== main.js =====
@@ -818,6 +981,7 @@ function buildSidePanel() {
 //   3) рисует hover-подсказки поверх (hover.js),
 //   4) обновляет HUD (ui.js).
 // =============================================================================
+
 
 
 
@@ -857,9 +1021,11 @@ function frame() {
 
     // мир (в мировой системе координат) + сбор тел для наведения
     const hoverTargets = renderScene(ctx);
+    state.hoverTargets = hoverTargets; // для выбора по клику (input.js)
 
     // подсказки и орбиты поверх мира, уже в экранных координатах
     drawHover(ctx, hoverTargets);
+    drawSelection(ctx, state.selected, hoverTargets);
 
     updateHud(hud);
 

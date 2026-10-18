@@ -13,6 +13,7 @@ import { initInput } from './input.js';
 import { renderScene } from './render.js';
 import { drawHover } from './hover.js';
 import { getHudElements, getSpeedButtons, updateHud, buildSidePanel } from './ui.js';
+import { drawSelection } from './hover.js';
 
 // --- Инициализация --------------------------------------------------------------
 const canvas = document.getElementById('c');
@@ -45,9 +46,11 @@ function frame() {
 
     // мир (в мировой системе координат) + сбор тел для наведения
     const hoverTargets = renderScene(ctx);
+    state.hoverTargets = hoverTargets; // для выбора по клику (input.js)
 
     // подсказки и орбиты поверх мира, уже в экранных координатах
     drawHover(ctx, hoverTargets);
+    drawSelection(ctx, state.selected, hoverTargets);
 
     updateHud(hud);
 

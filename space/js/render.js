@@ -29,7 +29,6 @@ export function renderScene(ctx) {
     ctx.translate(-state.camX, -state.camY);
 
     drawStars(ctx, time);
-    drawGrid(ctx);
     drawAsteroids(ctx);
 
     // Солнце — первая hover-цель (проверяется последней, т.к. планеты поверх)
@@ -72,17 +71,6 @@ function drawStars(ctx, time) {
         ctx.fillStyle = `rgba(255,255,255,${0.3 + twinkle * 0.7})`;
         ctx.fillRect(s.x, s.y, s.s, s.s);
     });
-}
-
-/** Едва заметная полярная сетка из 20 колец радиусами 50..1000. */
-function drawGrid(ctx) {
-    ctx.strokeStyle = '#0f0f1a';
-    ctx.lineWidth = 1 / state.zoom;
-    for (let i = 1; i <= 20; i++) {
-        ctx.beginPath();
-        ctx.arc(0, 0, i * 50, 0, Math.PI * 2);
-        ctx.stroke();
-    }
 }
 
 /** Пояс астероидов между Марсом и Юпитером. */
@@ -234,7 +222,7 @@ function drawEarthMoonAndBase(ctx, x, y) {
     ctx.font = `bold ${Math.max(9, 10 / z)}px monospace`;
     ctx.fillText('BASE', bx + bs + 3 / z, by - 3 / z);
 
-    return { m: { n: 'Луна / Moon', r: 3 }, md: moonDist, mx, my };
+    return { m: { n: 'Луна / Moon', r: 3, period: moonPeriod }, md: moonDist, mx, my };
 }
 
 /** Начать путь-окружность (без fill/stroke — их выбирает вызывающий). */

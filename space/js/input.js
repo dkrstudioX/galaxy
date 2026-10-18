@@ -7,6 +7,8 @@
 import { state } from './state.js';
 import { clamp } from './math.js';
 import { MIN_ZOOM, MAX_ZOOM, MIN_SPEED, MAX_SPEED } from './config.js';
+import { findBodyAt } from './hover.js';
+import { selectBody } from './ui.js';
 
 /** Прицепить все обработчики ввода к канвасу и кнопкам. Вызывается один раз. */
 export function initInput(canvas, ui) {
@@ -65,6 +67,20 @@ export function initInput(canvas, ui) {
     // === ПАНОРАМИРОВАНИЕ ПРАВОЙ КНОПКОЙ ===
     // Удерживайте правую кнопку — карта следует за курсором (удобно на большом зуме).
     let mouseDragging = false, mouseStartX = 0, mouseStartY = 0, camStartMX = 0, camStartMY = 0;
+
+    // Левый клик без перетаскивания выбирает тело: солнце / планету / луну.
+    let downX = 0, downY = 0;
+    canvas.addEventListener('mousedown', e => {
+        if (e.button !== 0) return;
+        downX = e.clientX;
+        downY = e.clientY;
+    });
+    canvas.addEventListener('mouseup', e => {
+        if (e.button !== 0) return;
+        const moved = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY);
+        if (moved > 5 || !state.hoverTargets) return; // это было перетаскивание
+        selectBody(findBodyAt(state.hoverTargets, e.clientX, e.clientY));
+    });
 
     canvas.addEventListener('mousedown', e => {
         if (e.button !== 2) return;

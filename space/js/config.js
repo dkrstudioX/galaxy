@@ -36,7 +36,8 @@ export const COLORS = {
     tooltip: '#ffffff',
     tooltipShadow: 'rgba(0,0,0,0.6)',
     orbitPlanet: 'rgba(120,140,200,0.6)',
-    orbitMoon: 'rgba(150,160,180,0.6)'
+    orbitMoon: 'rgba(150,160,180,0.6)',
+    orbitSelected: 'rgba(122,236,224,0.8)' // орбита выбранного кликом тела (акцент hangar)
 };
 
 // Толщина обводок в пикселях экрана (делим на zoom при отрисовке).

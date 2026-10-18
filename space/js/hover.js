@@ -1,6 +1,8 @@
 // =============================================================================
 // hover.js — наведение курсора: hit-тест по телам, орбита наведённого тела
 // и текстовая подсказка с названием (просто текст без рамки).
+// Здесь же — орбита и маркер ВЫБРАННОГО объекта (клик) и экспорт findBodyAt
+// для обработчика клика в input.js.
 // Вызывается из main.js ПОСЛЕ renderScene и уже вне мирового transform.
 // =============================================================================
 
@@ -21,22 +23,49 @@ export function drawHover(ctx, hoverTargets) {
     const { mouseX, mouseY } = state;
     if (mouseX < 0) return;
 
-    const hover = hitTest(hoverTargets, mouseX, mouseY);
+    const hover = findBodyAt(hoverTargets, mouseX, mouseY);
     if (!hover) return;
 
     // орбита наведённого тела (у солнца орбиты нет)
     if (hover.orbit) {
-        drawOrbitOverlay(ctx, hover);
+        drawOrbitOverlay(ctx, hover, COLORS.orbitPlanet);
     }
     drawTooltip(ctx, hover.name, mouseX, mouseY);
 }
 
 /**
+ * Нарисовать орбиту выбранного кликом тела — пунктир держится, пока объект выбран.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {?{kind: string, p: object, m: object}} sel — текущий выбор (state.selected)
+ * @param {Array} hoverTargets — результат renderScene() этого кадра
+ */
+export function drawSelection(ctx, sel, hoverTargets) {
+    if (!sel) return;
+
+    const target = hoverTargets.find(t => sel.kind === 'sun' ? t.kind === 'sun' : t.p === sel.p);
+    if (!target) return; // тело ещё не в кадре (луна скрыта зумом и т.п.)
+
+    if (sel.kind === 'sun') return; // у солнца орбиты нет
+
+    let orbit = null;
+    if (sel.kind === 'planet') {
+        orbit = { cx: 0, cy: 0, r: target.p.dist };
+    } else {
+        // луна ищется по имени: объекты лун в кадре и в дереве — разные ссылки
+        const mh = target.moons.find(x => x.m.n === sel.m.n);
+        if (!mh) return;
+        orbit = { cx: target.x, cy: target.y, r: mh.md };
+    }
+    drawOrbitOverlay(ctx, { kind: sel.kind, orbit }, COLORS.orbitSelected);
+}
+
+/**
  * Hit-тест: перебираем цели с конца (планеты добавлены после солнца, луны
  * проверяются первыми — они мельче и лежат поверх).
- * @returns {?{kind: string, name: string, orbit: ?{cx, cy, r}}}
+ * Экспортируется для выбора объекта по клику (input.js).
+ * @returns {?{kind: string, name: string, orbit: ?{cx, cy, r}, p: object, m: object}}
  */
-function hitTest(hoverTargets, mouseX, mouseY) {
+export function findBodyAt(hoverTargets, mouseX, mouseY) {
     const w = screenToWorld(mouseX, mouseY, state);
 
     for (let i = hoverTargets.length - 1; i >= 0; i--) {
@@ -47,7 +76,7 @@ function hitTest(hoverTargets, mouseX, mouseY) {
             const hitR = Math.max(mh.m.r, MIN_HIT_MOON_PX / state.zoom);
             if ((w.x - mh.mx) ** 2 + (w.y - mh.my) ** 2 <= hitR * hitR) {
                 // луна: орбита вокруг своей планеты
-                return { kind: 'moon', name: mh.m.n, orbit: { cx: t.x, cy: t.y, r: mh.md } };
+                return { kind: 'moon', name: mh.m.n, orbit: { cx: t.x, cy: t.y, r: mh.md }, p: t.p, m: mh.m };
             }
         }
 
@@ -57,14 +86,14 @@ function hitTest(hoverTargets, mouseX, mouseY) {
         if ((w.x - t.x) ** 2 + (w.y - t.y) ** 2 <= hitR * hitR) {
             // планета: орбита вокруг солнца; у самого солнца орбиты нет
             const orbit = t.kind === 'sun' ? null : { cx: 0, cy: 0, r: t.p.dist };
-            return { kind: t.kind, name, orbit };
+            return { kind: t.kind, name, orbit, p: t.p, m: null };
         }
     }
     return null;
 }
 
-/** Пунктирная орбита наведённого тела в мировой системе координат. */
-function drawOrbitOverlay(ctx, hover) {
+/** Пунктирная орбита тела в мировой системе координат. */
+function drawOrbitOverlay(ctx, hover, color) {
     const { zoom, camX, camY, W, H } = state;
 
     ctx.save();
@@ -72,7 +101,7 @@ function drawOrbitOverlay(ctx, hover) {
     ctx.scale(zoom, zoom);
     ctx.translate(-camX, -camY);
 
-    ctx.strokeStyle = hover.kind === 'planet' ? COLORS.orbitPlanet : COLORS.orbitMoon;
+    ctx.strokeStyle = color;
     ctx.lineWidth = 1 / zoom;
     ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.beginPath();
