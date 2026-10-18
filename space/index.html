@@ -41,7 +41,7 @@
             <span class="caret">▼</span>
         </div>
         <div class="panel-body" id="objectInfo">
-            <div class="obj-empty">Кликните по солнцу, планете или луне на карте</div>
+            <div class="obj-empty">Кликните по солнцу, планете, луне или базе на карте</div>
         </div>
     </div>
 </div>
@@ -54,7 +54,12 @@ window.__bootErrs = [];
 window.addEventListener('error', e => window.__bootErrs.push(e.filename + ':' + e.lineno + ' ' + e.message));
 window.addEventListener('unhandledrejection', e => window.__bootErrs.push('promise: ' + e.reason));
 </script>
+<!-- Общие данные проекта (как в админке и ангаре): объекты, категории,
+     купленные корабли. Только чтение; при отсутствии Store панель базы
+     покажет заметку. Классические скрипты — работают и с file://. -->
+<script src="../data/store.js?v=20261017"></script>
+<script src="../data/icons.js?v=20261017"></script>
 <!-- app.js = сборка js/*.js (py build.py), без модулей — чтобы страница открывалась напрямую с file:// -->
-<script src="app.js"></script>
+<script src="app.js?v=20261018"></script>
 </body>
 </html>

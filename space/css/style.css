@@ -181,3 +181,36 @@ canvas { display: block; width: 100vw; height: 100vh; }
 .obj-row .k { color: #637a7a; font-size: 9px; text-transform: uppercase; letter-spacing: .12em; }
 .obj-row .v { color: #dce8e8; text-align: right; }
 .obj-row .v em { font-style: normal; color: #637a7a; font-size: 9px; margin-left: 4px; }
+
+/* ===== База: купленные корабли (формат списка «В продаже» из ангара) ======== */
+.obj-sub-title {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    margin: 14px 0 8px; padding-top: 10px;
+    border-top: 1px solid rgba(150, 180, 255, .13);
+    color: #b89cff; font: 500 9px "IBM Plex Mono", monospace;
+    letter-spacing: .16em; text-transform: uppercase;
+}
+.obj-sub-title small { color: #637a7a; letter-spacing: .08em; font-size: 8.5px; }
+.obj-note {
+    padding: 12px 10px; text-align: center; border-radius: 7px;
+    border: 1px dashed rgba(150, 190, 255, .16);
+    background: rgba(9, 24, 25, .30);
+    color: #7d9a9a; font: 10px "IBM Plex Mono", monospace;
+}
+.ship-list { display: flex; flex-direction: column; }
+.ship-row {
+    display: grid; grid-template-columns: 30px minmax(0, 1fr) auto;
+    align-items: center; gap: 9px; padding: 7px 2px;
+    border-bottom: 1px solid rgba(120, 160, 170, .10);
+}
+.ship-row:last-child { border-bottom: 0; }
+.ship-icon {
+    width: 30px; height: 30px; display: grid; place-items: center;
+    color: #7bdcca; border: 1px solid #274846; background: #0a191a;
+}
+.ship-copy, .ship-meta { display: flex; flex-direction: column; min-width: 0; }
+.ship-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 11px "Manrope", sans-serif; }
+.ship-copy span { margin-top: 3px; color: #5d7575; font: 9px "IBM Plex Mono", monospace; white-space: nowrap; }
+.ship-meta { align-items: end; text-align: right; }
+.ship-meta small { color: #a98be8; font: 8px "IBM Plex Mono", monospace; text-transform: uppercase; }
+.ship-meta b { margin-top: 5px; color: #d7e3e3; font: 600 10px "IBM Plex Mono", monospace; }

@@ -42,7 +42,9 @@ export function drawHover(ctx, hoverTargets) {
 export function drawSelection(ctx, sel, hoverTargets) {
     if (!sel) return;
 
-    const target = hoverTargets.find(t => sel.kind === 'sun' ? t.kind === 'sun' : t.p === sel.p);
+    const target = hoverTargets.find(t =>
+        sel.kind === 'sun' ? t.kind === 'sun' :
+        sel.kind === 'base' ? t.kind === 'base' : t.p === sel.p);
     if (!target) return; // тело ещё не в кадре (луна скрыта зумом и т.п.)
 
     if (sel.kind === 'sun') return; // у солнца орбиты нет
@@ -50,6 +52,9 @@ export function drawSelection(ctx, sel, hoverTargets) {
     let orbit = null;
     if (sel.kind === 'planet') {
         orbit = { cx: 0, cy: 0, r: target.p.dist };
+    } else if (sel.kind === 'base') {
+        // база летает вокруг Луны Земли — орбита от Луны, не от солнца
+        orbit = { cx: target.orbitCx, cy: target.orbitCy, r: target.orbitR };
     } else {
         // луна ищется по имени: объекты лун в кадре и в дереве — разные ссылки
         const mh = target.moons.find(x => x.m.n === sel.m.n);
@@ -78,6 +83,15 @@ export function findBodyAt(hoverTargets, mouseX, mouseY) {
                 // луна: орбита вокруг своей планеты
                 return { kind: 'moon', name: mh.m.n, orbit: { cx: t.x, cy: t.y, r: mh.md }, p: t.p, m: mh.m };
             }
+        }
+
+        // база: орбита вокруг Луны Земли, радиус попадания как у лун
+        if (t.kind === 'base') {
+            const hitR = Math.max(t.r, MIN_HIT_MOON_PX / state.zoom);
+            if ((w.x - t.x) ** 2 + (w.y - t.y) ** 2 <= hitR * hitR) {
+                return { kind: 'base', name: t.name, orbit: { cx: t.orbitCx, cy: t.orbitCy, r: t.orbitR }, p: t.p, m: null };
+            }
+            continue;
         }
 
         const name = t.name || t.p.name;

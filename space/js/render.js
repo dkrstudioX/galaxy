@@ -50,12 +50,25 @@ export function renderScene(ctx) {
         const moonHits = drawPlanetMoons(ctx, x, y, p);
 
         // Луна Земли + орбитальная база — особый случай (hasBase у Земли)
+        let baseHit = null;
         if (p.hasBase) {
             const hit = drawEarthMoonAndBase(ctx, x, y);
-            if (hit) moonHits.push(hit);
+            if (hit) {
+                moonHits.push(hit.moon);
+                // База — отдельная цель выбора, как планета или луна.
+                baseHit = {
+                    kind: 'base',
+                    name: 'База LUNA-ORBIT',
+                    x: hit.base.bx, y: hit.base.by, r: hit.base.r,
+                    orbitCx: hit.moon.mx, orbitCy: hit.moon.my, orbitR: baseOrbitRadius,
+                    p, moons: []
+                };
+            }
         }
 
         hoverTargets.push({ kind: 'planet', p, x, y, moons: moonHits });
+        // база добавляется после планеты: рисуется поверх и проверяется первой
+        if (baseHit) hoverTargets.push(baseHit);
     });
 
     ctx.restore();
@@ -173,7 +186,7 @@ function drawPlanetMoons(ctx, x, y, p) {
  * Луна Земли + орбитальная база игрока. База — циановый маркер с пульсом
  * и подписью BASE; её орбита вокруг Луны показывается всегда (это не орбиты
  * планет, которые скрыты до наведения).
- * @returns {{m, md, mx, my}} хит Луны для hover
+ * @returns {{moon: {m, md, mx, my}, base: {bx, by, r}}} хиты Луны и базы
  */
 function drawEarthMoonAndBase(ctx, x, y) {
     const { zoom: z, simDays, time } = state;
@@ -222,7 +235,10 @@ function drawEarthMoonAndBase(ctx, x, y) {
     ctx.font = `bold ${Math.max(9, 10 / z)}px monospace`;
     ctx.fillText('BASE', bx + bs + 3 / z, by - 3 / z);
 
-    return { m: { n: 'Луна / Moon', r: 3, period: moonPeriod }, md: moonDist, mx, my };
+    return {
+        moon: { m: { n: 'Луна / Moon', r: 3, period: moonPeriod }, md: moonDist, mx, my },
+        base: { bx, by, r: bs }
+    };
 }
 
 /** Начать путь-окружность (без fill/stroke — их выбирает вызывающий). */

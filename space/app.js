@@ -321,12 +321,25 @@ function renderScene(ctx) {
         const moonHits = drawPlanetMoons(ctx, x, y, p);
 
         // Луна Земли + орбитальная база — особый случай (hasBase у Земли)
+        let baseHit = null;
         if (p.hasBase) {
             const hit = drawEarthMoonAndBase(ctx, x, y);
-            if (hit) moonHits.push(hit);
+            if (hit) {
+                moonHits.push(hit.moon);
+                // База — отдельная цель выбора, как планета или луна.
+                baseHit = {
+                    kind: 'base',
+                    name: 'База LUNA-ORBIT',
+                    x: hit.base.bx, y: hit.base.by, r: hit.base.r,
+                    orbitCx: hit.moon.mx, orbitCy: hit.moon.my, orbitR: baseOrbitRadius,
+                    p, moons: []
+                };
+            }
         }
 
         hoverTargets.push({ kind: 'planet', p, x, y, moons: moonHits });
+        // база добавляется после планеты: рисуется поверх и проверяется первой
+        if (baseHit) hoverTargets.push(baseHit);
     });
 
     ctx.restore();
@@ -444,7 +457,7 @@ function drawPlanetMoons(ctx, x, y, p) {
  * Луна Земли + орбитальная база игрока. База — циановый маркер с пульсом
  * и подписью BASE; её орбита вокруг Луны показывается всегда (это не орбиты
  * планет, которые скрыты до наведения).
- * @returns {{m, md, mx, my}} хит Луны для hover
+ * @returns {{moon: {m, md, mx, my}, base: {bx, by, r}}} хиты Луны и базы
  */
 function drawEarthMoonAndBase(ctx, x, y) {
     const { zoom: z, simDays, time } = state;
@@ -493,7 +506,10 @@ function drawEarthMoonAndBase(ctx, x, y) {
     ctx.font = `bold ${Math.max(9, 10 / z)}px monospace`;
     ctx.fillText('BASE', bx + bs + 3 / z, by - 3 / z);
 
-    return { m: { n: 'Луна / Moon', r: 3, period: moonPeriod }, md: moonDist, mx, my };
+    return {
+        moon: { m: { n: 'Луна / Moon', r: 3, period: moonPeriod }, md: moonDist, mx, my },
+        base: { bx, by, r: bs }
+    };
 }
 
 /** Начать путь-окружность (без fill/stroke — их выбирает вызывающий). */
@@ -547,7 +563,9 @@ function drawHover(ctx, hoverTargets) {
 function drawSelection(ctx, sel, hoverTargets) {
     if (!sel) return;
 
-    const target = hoverTargets.find(t => sel.kind === 'sun' ? t.kind === 'sun' : t.p === sel.p);
+    const target = hoverTargets.find(t =>
+        sel.kind === 'sun' ? t.kind === 'sun' :
+        sel.kind === 'base' ? t.kind === 'base' : t.p === sel.p);
     if (!target) return; // тело ещё не в кадре (луна скрыта зумом и т.п.)
 
     if (sel.kind === 'sun') return; // у солнца орбиты нет
@@ -555,6 +573,9 @@ function drawSelection(ctx, sel, hoverTargets) {
     let orbit = null;
     if (sel.kind === 'planet') {
         orbit = { cx: 0, cy: 0, r: target.p.dist };
+    } else if (sel.kind === 'base') {
+        // база летает вокруг Луны Земли — орбита от Луны, не от солнца
+        orbit = { cx: target.orbitCx, cy: target.orbitCy, r: target.orbitR };
     } else {
         // луна ищется по имени: объекты лун в кадре и в дереве — разные ссылки
         const mh = target.moons.find(x => x.m.n === sel.m.n);
@@ -583,6 +604,15 @@ function findBodyAt(hoverTargets, mouseX, mouseY) {
                 // луна: орбита вокруг своей планеты
                 return { kind: 'moon', name: mh.m.n, orbit: { cx: t.x, cy: t.y, r: mh.md }, p: t.p, m: mh.m };
             }
+        }
+
+        // база: орбита вокруг Луны Земли, радиус попадания как у лун
+        if (t.kind === 'base') {
+            const hitR = Math.max(t.r, MIN_HIT_MOON_PX / state.zoom);
+            if ((w.x - t.x) ** 2 + (w.y - t.y) ** 2 <= hitR * hitR) {
+                return { kind: 'base', name: t.name, orbit: { cx: t.orbitCx, cy: t.orbitCy, r: t.orbitR }, p: t.p, m: null };
+            }
+            continue;
         }
 
         const name = t.name || t.p.name;
@@ -895,6 +925,7 @@ function moonFromTree(planet, name) {
 /**
  * Выбрать объект (канвас или дерево): обновить state.selected, блок «Объект»
  * и подсветку в дереве. sel = null сбрасывает выбор.
+ * Виды: {kind:'sun'|'planet'|'moon'|'base', p, m}.
  */
 function selectBody(sel) {
     state.selected = sel;
@@ -908,7 +939,7 @@ function renderObjectInfo() {
     const sel = state.selected;
 
     if (!sel) {
-        box.innerHTML = '<div class="obj-empty">Кликните по солнцу, планете или луне на карте</div>';
+        box.innerHTML = '<div class="obj-empty">Кликните по солнцу, планете, луне или базе на карте</div>';
         return;
     }
 
@@ -931,6 +962,8 @@ function renderObjectInfo() {
             row('Радиус орбиты', orbitR + ' <em>ед.</em>') +
             row('Известных лун', moonTotals[p.name]) +
             row('На карте (крупные)', mapMoons.length);
+    } else if (sel.kind === 'base') {
+        html = baseInfoHTML();
     } else {
         const p = sel.p;
         const m = sel.m;
@@ -952,6 +985,85 @@ function row(k, v) {
     return '<div class="obj-row"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
 }
 
+/* ---------- База: купленные корабли из data/store.js ---------- */
+
+/**
+ * Блок «Объект» для базы: параметры орбиты и список купленных кораблей
+ * в формате списка «В продаже» из ангара (имя, масса, категория, цена).
+ * Данные — общие с админкой и ангаром (window.Store, ключ galaxy_admin_db_v1).
+ */
+function baseInfoHTML() {
+    const ships = readUserShips();
+
+    let html =
+        '<div class="obj-title"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
+            '<strong>База LUNA-ORBIT</strong></div>' +
+        '<div class="obj-kind">Орбитальная база · Луна</div>' +
+        '<div class="obj-rows">' +
+            row('Луна', 'Луна / Moon') +
+            row('Радиус орбиты', baseOrbitRadius + ' <em>ед.</em>') +
+            (ships.length ? row('Куплено кораблей', ships.length) : '') +
+        '</div>';
+
+    html += '<div class="obj-sub-title"><span>Купленные корабли</span>' +
+        (ships.length ? '<small>' + ships.length + ' ' + pluralRu(ships.length, ['позиция', 'позиции', 'позиций']) + '</small>' : '') +
+        '</div>';
+
+    if (!window.Store) {
+        html += '<div class="obj-note">Данные админки недоступны — проверьте подключение data/store.js</div>';
+    } else if (!ships.length) {
+        html += '<div class="obj-note">Купленных кораблей пока нет — оформите покупку в ангаре</div>';
+    } else {
+        html += '<div class="ship-list">' + ships.map(shipRowHTML).join('') + '</div>';
+    }
+    return html;
+}
+
+/**
+ * Строка купленного корабля — как строка «В продаже» в ангаре:
+ * иконка, имя, «Масса N кг», категория и цена покупки.
+ */
+function shipRowHTML(rec) {
+    let obj = null, cat = null, mass = 0;
+    try {
+        obj = Store.byId('objects', rec.shipId);
+        cat = Store.byId('categories', rec.categoryId) ||
+            (obj ? Store.byId('categories', obj.categoryId) : null);
+        mass = Store.massOf(obj);
+    } catch (e) { /* база повреждена — покажем запись без деталей */ }
+
+    const price = parseFloat(String(rec.price || '').replace(',', '.'));
+    const iconKey = (obj && obj.icon) || (cat && window.Icons ? Icons.forCategory(cat.name) : 'ship');
+    const iconSVG = window.Icons ? Icons.svg(iconKey, 18) : '';
+
+    return '<div class="ship-row">' +
+        '<span class="ship-icon">' + iconSVG + '</span>' +
+        '<span class="ship-copy"><strong>' + rec.name + '</strong>' +
+            '<span>' + (mass ? 'Масса ' + fmtRu(mass) + ' кг' : 'Масса не задана') + '</span></span>' +
+        '<span class="ship-meta"><small>' + (cat ? cat.name : '—') + '</small>' +
+            (price > 0 ? '<b>' + fmtRu(price) + ' ¤</b>' : '') + '</span>' +
+        '</div>';
+}
+
+/** Купленные корабли из общего хранилища; пусто, если база недоступна. */
+function readUserShips() {
+    try {
+        const ships = window.Store && Store.userShips();
+        return Array.isArray(ships) ? ships : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function fmtRu(n) { return n.toLocaleString('ru-RU'); }
+
+function pluralRu(n, forms) {
+    const d = n % 10, dd = n % 100;
+    if (d === 1 && dd !== 11) return forms[0];
+    if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return forms[1];
+    return forms[2];
+}
+
 /** Подсветить выбранный объект в дереве и раскрыть его планету. */
 function highlightTree() {
     const sel = state.selected;
@@ -963,6 +1075,8 @@ function highlightTree() {
     const li = Array.from(tree.children).find(el => el.dataset.name === sel.p.name);
     if (!li) return;
     li.classList.add('open');
+
+    if (sel.kind === 'base') return; // у базы нет строки в дереве — раскрываем только Землю
 
     if (sel.kind === 'planet') {
         li.classList.add('sel');

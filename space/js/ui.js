@@ -8,8 +8,8 @@
 
 import { state } from './state.js';
 import { formatSimDate } from './math.js';
-import { SUN_R } from './config.js';
-import { planets, moonTree, moonTotals, moonsByPlanet, moonDist } from './data.js';
+import { SUN_R, COLORS } from './config.js';
+import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, baseOrbitRadius } from './data.js';
 
 // Русские названия и подписи классов для блока «ОБЪЕКТ».
 const RU = {
@@ -115,6 +115,7 @@ function moonFromTree(planet, name) {
 /**
  * Выбрать объект (канвас или дерево): обновить state.selected, блок «Объект»
  * и подсветку в дереве. sel = null сбрасывает выбор.
+ * Виды: {kind:'sun'|'planet'|'moon'|'base', p, m}.
  */
 export function selectBody(sel) {
     state.selected = sel;
@@ -128,7 +129,7 @@ function renderObjectInfo() {
     const sel = state.selected;
 
     if (!sel) {
-        box.innerHTML = '<div class="obj-empty">Кликните по солнцу, планете или луне на карте</div>';
+        box.innerHTML = '<div class="obj-empty">Кликните по солнцу, планете, луне или базе на карте</div>';
         return;
     }
 
@@ -151,6 +152,8 @@ function renderObjectInfo() {
             row('Радиус орбиты', orbitR + ' <em>ед.</em>') +
             row('Известных лун', moonTotals[p.name]) +
             row('На карте (крупные)', mapMoons.length);
+    } else if (sel.kind === 'base') {
+        html = baseInfoHTML();
     } else {
         const p = sel.p;
         const m = sel.m;
@@ -172,6 +175,85 @@ function row(k, v) {
     return '<div class="obj-row"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
 }
 
+/* ---------- База: купленные корабли из data/store.js ---------- */
+
+/**
+ * Блок «Объект» для базы: параметры орбиты и список купленных кораблей
+ * в формате списка «В продаже» из ангара (имя, масса, категория, цена).
+ * Данные — общие с админкой и ангаром (window.Store, ключ galaxy_admin_db_v1).
+ */
+function baseInfoHTML() {
+    const ships = readUserShips();
+
+    let html =
+        '<div class="obj-title"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
+            '<strong>База LUNA-ORBIT</strong></div>' +
+        '<div class="obj-kind">Орбитальная база · Луна</div>' +
+        '<div class="obj-rows">' +
+            row('Луна', 'Луна / Moon') +
+            row('Радиус орбиты', baseOrbitRadius + ' <em>ед.</em>') +
+            (ships.length ? row('Куплено кораблей', ships.length) : '') +
+        '</div>';
+
+    html += '<div class="obj-sub-title"><span>Купленные корабли</span>' +
+        (ships.length ? '<small>' + ships.length + ' ' + pluralRu(ships.length, ['позиция', 'позиции', 'позиций']) + '</small>' : '') +
+        '</div>';
+
+    if (!window.Store) {
+        html += '<div class="obj-note">Данные админки недоступны — проверьте подключение data/store.js</div>';
+    } else if (!ships.length) {
+        html += '<div class="obj-note">Купленных кораблей пока нет — оформите покупку в ангаре</div>';
+    } else {
+        html += '<div class="ship-list">' + ships.map(shipRowHTML).join('') + '</div>';
+    }
+    return html;
+}
+
+/**
+ * Строка купленного корабля — как строка «В продаже» в ангаре:
+ * иконка, имя, «Масса N кг», категория и цена покупки.
+ */
+function shipRowHTML(rec) {
+    let obj = null, cat = null, mass = 0;
+    try {
+        obj = Store.byId('objects', rec.shipId);
+        cat = Store.byId('categories', rec.categoryId) ||
+            (obj ? Store.byId('categories', obj.categoryId) : null);
+        mass = Store.massOf(obj);
+    } catch (e) { /* база повреждена — покажем запись без деталей */ }
+
+    const price = parseFloat(String(rec.price || '').replace(',', '.'));
+    const iconKey = (obj && obj.icon) || (cat && window.Icons ? Icons.forCategory(cat.name) : 'ship');
+    const iconSVG = window.Icons ? Icons.svg(iconKey, 18) : '';
+
+    return '<div class="ship-row">' +
+        '<span class="ship-icon">' + iconSVG + '</span>' +
+        '<span class="ship-copy"><strong>' + rec.name + '</strong>' +
+            '<span>' + (mass ? 'Масса ' + fmtRu(mass) + ' кг' : 'Масса не задана') + '</span></span>' +
+        '<span class="ship-meta"><small>' + (cat ? cat.name : '—') + '</small>' +
+            (price > 0 ? '<b>' + fmtRu(price) + ' ¤</b>' : '') + '</span>' +
+        '</div>';
+}
+
+/** Купленные корабли из общего хранилища; пусто, если база недоступна. */
+function readUserShips() {
+    try {
+        const ships = window.Store && Store.userShips();
+        return Array.isArray(ships) ? ships : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function fmtRu(n) { return n.toLocaleString('ru-RU'); }
+
+function pluralRu(n, forms) {
+    const d = n % 10, dd = n % 100;
+    if (d === 1 && dd !== 11) return forms[0];
+    if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return forms[1];
+    return forms[2];
+}
+
 /** Подсветить выбранный объект в дереве и раскрыть его планету. */
 function highlightTree() {
     const sel = state.selected;
@@ -183,6 +265,8 @@ function highlightTree() {
     const li = Array.from(tree.children).find(el => el.dataset.name === sel.p.name);
     if (!li) return;
     li.classList.add('open');
+
+    if (sel.kind === 'base') return; // у базы нет строки в дереве — раскрываем только Землю
 
     if (sel.kind === 'planet') {
         li.classList.add('sel');
