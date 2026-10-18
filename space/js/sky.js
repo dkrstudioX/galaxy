@@ -18,6 +18,7 @@
 // =============================================================================
 
 import { state } from './state.js';
+import { makeRng } from './math.js';
 
 const BAND_ANGLE_DEG = 60;   // наклон полосы к горизонтали экрана
 const SEED = 20261018;       // сид: рисунок неба стабилен между загрузками
@@ -45,17 +46,6 @@ const GALAXY_LAYERS = [
     { k: 0.35, count: 450, size: [0.6, 1.2], alpha: [0.28, 0.70], twSpeed: 1.8, twAmp: 0.35 }
 ];
 const BRIGHT_STARS = 14;     // ярких звёзд в полосе (без имён)
-
-// mulberry32 — маленький сидированный ПСЧ.
-function makeRng(seed) {
-    let a = seed >>> 0;
-    return function () {
-        a = (a + 0x6D2B79F5) >>> 0;
-        let t = Math.imul(a ^ (a >>> 15), 1 | a);
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
 
 const rng = makeRng(SEED);
 const rnd = (a, b) => a + (b - a) * rng();

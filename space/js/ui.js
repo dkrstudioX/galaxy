@@ -152,6 +152,8 @@ function renderObjectInfo() {
             row('Радиус орбиты', orbitR + ' <em>ед.</em>') +
             row('Известных лун', moonTotals[p.name]) +
             row('На карте (крупные)', mapMoons.length);
+    } else if (sel.kind === 'asteroid') {
+        html = asteroidInfoHTML(sel.small);
     } else if (sel.kind === 'base') {
         html = baseInfoHTML();
     } else {
@@ -169,6 +171,19 @@ function renderObjectInfo() {
             (p.hasBase && m.n.indexOf('Луна') === 0 ? row('На орбите', 'База LUNA-ORBIT') : '');
     }
     box.innerHTML = html;
+}
+
+/** Блок «Объект» для малого тела главного пояса (Церера, Веста, Паллада, Гигея). */
+function asteroidInfoHTML(b) {
+    return '<div class="obj-title"><span class="dot" style="background:#cfcfcf"></span>' +
+            '<strong>' + b.name + '</strong></div>' +
+        '<div class="obj-kind">' + b.note + ' · Главный пояс</div>' +
+        row('Большая полуось', b.a + ' <em>а.е.</em>') +
+        row('Эксцентриситет', b.e) +
+        row('Период обращения', fmtPeriod(b.T)) +
+        row('Перигелий / афелий', (b.a * (1 - b.e)).toFixed(2) + ' / ' + (b.a * (1 + b.e)).toFixed(2) + ' <em>а.е.</em>') +
+        row('Диаметр', fmtRu(b.dia) + ' <em>км</em>') +
+        '<div class="obj-note">Главный пояс — главный источник метеоритов Земли</div>';
 }
 
 function row(k, v) {
@@ -259,7 +274,7 @@ function highlightTree() {
     const sel = state.selected;
     document.querySelectorAll('#lootTree .sel').forEach(el => el.classList.remove('sel'));
 
-    if (!sel || sel.kind === 'sun') return;
+    if (!sel || sel.kind === 'sun' || !sel.p) return; // у малых тел строки в дереве нет
 
     const tree = document.getElementById('lootTree');
     const li = Array.from(tree.children).find(el => el.dataset.name === sel.p.name);

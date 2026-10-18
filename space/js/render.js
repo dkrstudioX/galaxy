@@ -1,5 +1,6 @@
 // =============================================================================
-// render.js — отрисовка сцены на канвас: фон, солнце, планеты, луны, база.
+// render.js — отрисовка сцены на канвас: фон, малые тела (smallbodies.js),
+// солнце, планеты, луны, база.
 // Монохромный стиль: все тела — плоские круги, различаются яркостью заливки
 // и толщиной обводки (солнце > планеты > луны). Орбит на карте нет — их рисует
 // hover.js только при наведении. Дальний фон (небо) — отдельный слой sky.js.
@@ -11,7 +12,8 @@ import { state } from './state.js';
 import { orbitAngle } from './math.js';
 import { SUN_R, COLORS, STROKE } from './config.js';
 import { planets, moonsByPlanet, moonDist, moonPeriod, moonL0, baseOrbitRadius, basePeriod } from './data.js';
-import { stars, asteroids, visibleMoons } from './scene.js';
+import { stars, visibleMoons } from './scene.js';
+import { drawSmallBodies } from './smallbodies.js';
 import { drawSky } from './sky.js';
 
 /**
@@ -34,7 +36,10 @@ export function renderScene(ctx) {
     ctx.translate(-state.camX, -state.camY);
 
     drawStars(ctx, time);
-    drawAsteroids(ctx);
+
+    // Малые тела (пояс, ОЗА, троянцы, кометы, дальние пояса) — отдельный слой
+    // smallbodies.js: частицы рисует сам, именованные тела отдаёт как hover-цели.
+    hoverTargets.push(...drawSmallBodies(ctx));
 
     // Солнце — первая hover-цель (проверяется последней, т.к. планеты поверх)
     drawSun(ctx);
@@ -88,22 +93,6 @@ function drawStars(ctx, time) {
         const twinkle = 0.5 + 0.5 * Math.sin(time * 2 + s.b * 10);
         ctx.fillStyle = `rgba(255,255,255,${0.3 + twinkle * 0.7})`;
         ctx.fillRect(s.x, s.y, s.s, s.s);
-    });
-}
-
-/** Пояс астероидов между Марсом и Юпитером: движется по общему таймеру simDays. */
-function drawAsteroids(ctx) {
-    const { simDays } = state;
-    ctx.fillStyle = '#666';
-    asteroids.forEach(a => {
-        // как у планет: y с минусом — против часовой, как видно с севера эклиптики
-        const ang = orbitAngle(a.l0, a.period, simDays);
-        const x = Math.cos(ang) * a.d;
-        const y = -Math.sin(ang) * a.d;
-
-        ctx.beginPath();
-        ctx.arc(x, y, a.s, 0, Math.PI * 2);
-        ctx.fill();
     });
 }
 

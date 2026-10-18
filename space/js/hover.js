@@ -44,13 +44,17 @@ export function drawSelection(ctx, sel, hoverTargets) {
 
     const target = hoverTargets.find(t =>
         sel.kind === 'sun' ? t.kind === 'sun' :
-        sel.kind === 'base' ? t.kind === 'base' : t.p === sel.p);
+        sel.kind === 'base' ? t.kind === 'base' :
+        sel.small ? t.small === sel.small : t.p === sel.p);
     if (!target) return; // тело ещё не в кадре (луна скрыта зумом и т.п.)
 
     if (sel.kind === 'sun') return; // у солнца орбиты нет
 
     let orbit = null;
-    if (sel.kind === 'planet') {
+    if (sel.small) {
+        // малое тело: эллипс по собственным элементам орбиты (a, e, перигелий)
+        orbit = sel.small.orbit;
+    } else if (sel.kind === 'planet') {
         orbit = { cx: 0, cy: 0, r: target.p.dist };
     } else if (sel.kind === 'base') {
         // база летает вокруг Луны Земли — орбита от Луны, не от солнца
@@ -94,13 +98,16 @@ export function findBodyAt(hoverTargets, mouseX, mouseY) {
             continue;
         }
 
-        const name = t.name || t.p.name;
-        const bodyR = t.r || t.p.r;
+        const name = t.name || (t.p ? t.p.name : '');
+        const bodyR = t.r || (t.p ? t.p.r : 0);
         const hitR = Math.max(bodyR, MIN_HIT_PLANET_PX / state.zoom);
         if ((w.x - t.x) ** 2 + (w.y - t.y) ** 2 <= hitR * hitR) {
-            // планета: орбита вокруг солнца; у самого солнца орбиты нет
-            const orbit = t.kind === 'sun' ? null : { cx: 0, cy: 0, r: t.p.dist };
-            return { kind: t.kind, name, orbit, p: t.p, m: null };
+            // орбита: у малых тел — из их элементов (эллипс), у планет — вокруг
+            // солнца; у самого солнца орбиты нет
+            let orbit = null;
+            if (t.small) orbit = t.small.orbit;
+            else if (t.kind !== 'sun') orbit = { cx: 0, cy: 0, r: t.p.dist };
+            return { kind: t.kind, name, orbit, p: t.p || null, m: null, small: t.small || null };
         }
     }
     return null;
@@ -119,7 +126,12 @@ function drawOrbitOverlay(ctx, hover, color) {
     ctx.lineWidth = 1 / zoom;
     ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.beginPath();
-    ctx.arc(hover.orbit.cx, hover.orbit.cy, hover.orbit.r, 0, Math.PI * 2);
+    if (hover.orbit.rot !== undefined) {
+        // эллипс малого тела: центр, полуоси, поворот (мировые единицы)
+        ctx.ellipse(hover.orbit.cx, hover.orbit.cy, hover.orbit.a, hover.orbit.b, hover.orbit.rot, 0, Math.PI * 2);
+    } else {
+        ctx.arc(hover.orbit.cx, hover.orbit.cy, hover.orbit.r, 0, Math.PI * 2);
+    }
     ctx.stroke();
     ctx.setLineDash([]);
 

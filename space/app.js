@@ -56,7 +56,10 @@ const STROKE = {
 // =============================================================================
 // math.js — чистые функции: астрономическая математика и форматирование.
 // Не знают ни о канвасе, ни о состоянии — легко тестировать и переиспользовать.
+// Плюс маппинг астрономических единиц в условные (якоря AU_ANCHORS из data.js)
+// и решение уравнения Кеплера для эллиптических орбит малых тел.
 // =============================================================================
+
 
 
 
@@ -98,6 +101,73 @@ function screenToWorld(sx, sy, state) {
         x: state.camX + (sx - state.W / 2) / state.zoom,
         y: state.camY + (sy - state.H / 2) / state.zoom
     };
+}
+
+/** mulberry32 — маленький сидированный ПСЧ (сид -> функция [0..1)). */
+function makeRng(seed) {
+    let a = seed >>> 0;
+    return function () {
+        a = (a + 0x6D2B79F5) >>> 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+/**
+ * Астрономические единицы -> условные единицы карты: кусочно-линейно по
+ * якорям AU_ANCHORS (орбиты планет, границы пояса, дальние зоны). За
+ * последним якорем — линейное продолжение последнего отрезка.
+ * @param {number} au расстояние, а.е.
+ */
+function auToDist(au) {
+    const A = AU_ANCHORS;
+    if (au <= A[0][0]) {
+        const k = (A[1][1] - A[0][1]) / (A[1][0] - A[0][0]);
+        return Math.max(0, A[0][1] + (au - A[0][0]) * k);
+    }
+    for (let i = 1; i < A.length; i++) {
+        if (au <= A[i][0]) {
+            const [a0, d0] = A[i - 1], [a1, d1] = A[i];
+            return d0 + (d1 - d0) * (au - a0) / (a1 - a0);
+        }
+    }
+    const [a0, d0] = A[A.length - 2], [a1, d1] = A[A.length - 1];
+    return d1 + (au - a1) * (d1 - d0) / (a1 - a0);
+}
+
+/** Период обращения по третьему закону Кеплера (a в а.е.), сутки. */
+function periodFromA(a) {
+    return 365.256 * Math.pow(a, 1.5);
+}
+
+/**
+ * Позиция тела на эллиптической орбите из симуляционного времени: средняя
+ * аномалия -> уравнение Кеплера (итерации Ньютона) -> истинная аномалия.
+ * Правило знаков как у планет (y вниз, движение против часовой с севера
+ * эклиптики). При e = 0 совпадает с orbitAngle (m0 + peri = средняя долгота).
+ * @param {number} a    большая полуось, а.е.
+ * @param {number} e    эксцентриситет (0..0.99)
+ * @param {number} peri долгота перигелия, градусы
+ * @param {number} m0   средняя аномалия на J2000, градусы
+ * @param {number} T    период, сутки
+ * @param {number} t    симуляционное время, сутки от J2000
+ * @returns {{x: number, y: number, rAu: number}} единицы мира + радиус, а.е.
+ */
+function keplerPos(a, e, peri, m0, T, t) {
+    let turns = (m0 / 360 + t / T) % 1;
+    if (turns < 0) turns += 1;
+    const M = turns * 2 * Math.PI;
+
+    // стартовое приближение для высоких эксцентриситетов, затем итерации Ньютона
+    let E = M + e * Math.sin(M);
+    for (let i = 0; i < 8; i++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+
+    const nu = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
+    const rAu = a * (1 - e * Math.cos(E));
+    const th = nu + peri * Math.PI / 180;
+    const r = auToDist(rAu);
+    return { x: Math.cos(th) * r, y: -Math.sin(th) * r, rAu };
 }
 
 // ===== data.js =====
@@ -184,6 +254,69 @@ const moonTree = {
 // Известное общее число лун у каждой планеты (для счётчика «☾ N» в панели).
 const moonTotals = { Mercury: 0, Venus: 0, Earth: 1, Mars: 2, Jupiter: 95, Saturn: 146, Uranus: 28, Neptune: 16 };
 
+/* ---------- Малые тела (карта: smallbodies.js) ---------- */
+
+// Отображение астрономических единиц в условные единицы карты: кусочно-линейные
+// якоря — орбиты планет, границы главного пояса, дальние зоны. Пояс остаётся
+// на прежних радиусах 270–350 (якоря 2.2 и 3.5 а.е. подобраны под него).
+// Дальше 50 а.е. шкала сильно сжата (math.js auToDist продолжает линейно).
+const AU_ANCHORS = [
+    [0.387, 70], [0.723, 110], [1.0, 160], [1.524, 220],
+    [2.2, 270], [3.5, 350], [5.203, 380], [9.537, 520],
+    [19.19, 660], [30.07, 780], [40, 890], [50, 1000]
+];
+
+// Крупнейшие тела главного пояса: Церера (карликовая планета), Веста, Паллада,
+// Гигея. a — а.е., e — эксцентриситет, peri — долгота перигелия (град.),
+// m0 — средняя аномалия на J2000 (град., произвольная фаза карты),
+// dia — диаметр (км). Период считается по третьему закону Кеплера.
+const beltNotables = [
+    { n: 'Ceres',  ru: 'Церера',  a: 2.7675, e: 0.0785, peri: 73.6,  m0: 95,  dia: 939, type: 'dwarf' },
+    { n: 'Vesta',  ru: 'Веста',   a: 2.3615, e: 0.0887, peri: 151.2, m0: 210, dia: 525 },
+    { n: 'Pallas', ru: 'Паллада', a: 2.7727, e: 0.2313, peri: 310.0, m0: 42,  dia: 512 },
+    { n: 'Hygiea', ru: 'Гигея',   a: 3.1395, e: 0.1067, peri: 313.2, m0: 152, dia: 434 }
+];
+
+// Околоземные астероиды (реальные элементы; m0 — произвольная фаза карты).
+// Группы: amor — перигелий между орбитами Земли и Марса, орбиту Земли не
+// пересекают; apollo — пересекают орбиту Земли, a > 1 а.е.; aten — пересекают,
+// a < 1 а.е. Тутатис — «переходный»: афелий 4.1 а.е. — заходит в пояс.
+const neas = [
+    { n: 'Eros',      ru: 'Эрос',      group: 'amor',   a: 1.4582, e: 0.2226, peri: 178.9, m0: 250, dia: 16.8 },
+    { n: 'Amor',      ru: 'Амур',      group: 'amor',   a: 1.9197, e: 0.4351, peri: 26.7,  m0: 120, dia: 1.0 },
+    { n: 'Ganymed',   ru: 'Ганимед',   group: 'amor',   a: 2.6632, e: 0.5339, peri: 132.4, m0: 300, dia: 35 },
+    { n: 'Apollo',    ru: 'Аполлон',   group: 'apollo', a: 1.4704, e: 0.5599, peri: 285.7, m0: 60,  dia: 1.5 },
+    { n: 'Bennu',     ru: 'Бенну',     group: 'apollo', a: 1.1264, e: 0.2038, peri: 66.2,  m0: 101, dia: 0.49 },
+    { n: 'Itokawa',   ru: 'Итокава',   group: 'apollo', a: 1.3241, e: 0.2801, peri: 162.8, m0: 312, dia: 0.33 },
+    { n: 'Toutatis',  ru: 'Тутатис',   group: 'apollo', a: 2.5344, e: 0.6299, peri: 278.8, m0: 190, dia: 4.5 },
+    { n: 'Didymos',   ru: 'Дидим',     group: 'apollo', a: 1.6444, e: 0.3835, peri: 319.3, m0: 340, dia: 0.78 },
+    { n: 'Icarus',    ru: 'Икар',      group: 'apollo', a: 1.0780, e: 0.8265, peri: 31.5,  m0: 210, dia: 1.4 },
+    { n: 'Nereus',    ru: 'Нерей',     group: 'apollo', a: 1.4892, e: 0.3603, peri: 158.0, m0: 15,  dia: 0.33 },
+    { n: 'Aten',      ru: 'Атон',      group: 'aten',   a: 0.9668, e: 0.1826, peri: 147.5, m0: 280, dia: 1.1 },
+    { n: 'Apophis',   ru: 'Апофис',    group: 'aten',   a: 0.9224, e: 0.1914, peri: 126.4, m0: 60,  dia: 0.37 },
+    { n: 'Ra-Shalom', ru: 'Ра-Шалом',  group: 'aten',   a: 0.8322, e: 0.4364, peri: 356.0, m0: 130, dia: 2.3 },
+    { n: 'Cruithne',  ru: 'Круитни',   group: 'aten',   a: 0.9978, e: 0.5148, peri: 12.0,  m0: 220, dia: 5 }
+];
+
+// Именованные троянцы Юпитера: camp 4 — L4 (впереди Юпитера), 5 — L5 (позади);
+// dAng — смещение от центра облака (град.), dR — от радиуса орбиты Юпитера (ед.).
+const trojanNames = [
+    { n: 'Achilles',  ru: 'Ахиллес',   camp: 4, dAng: -3.2, dR: 6 },
+    { n: 'Agamemnon', ru: 'Агамемнон', camp: 4, dAng: 4.1,  dR: -5 },
+    { n: 'Hektor',    ru: 'Гектор',    camp: 5, dAng: -2.4, dR: 4 },
+    { n: 'Patroclus', ru: 'Патрокл',   camp: 5, dAng: 3.6,  dR: -7 }
+];
+
+// Кометы: реальные элементы. m0 подобраны так, чтобы сейчас (2026) кометы были
+// в интересной части орбиты: Галлея и Свифта—Таттла — в поясе на подходе,
+// Энке и Хейла—Боппа — у перигелия. shower — связанный метеорный поток.
+const comets = [
+    { n: '1P/Halley',        ru: 'Галлея',         a: 17.834, e: 0.9671, peri: 111.3, m0: 234, dia: 11, shower: 'Ориониды · Эта-Аквариды' },
+    { n: '2P/Encke',         ru: 'Энке',           a: 2.2151, e: 0.8483, peri: 187.6, m0: 323, dia: 4.8, shower: 'Тауриды' },
+    { n: '109P/Swift-Tuttle', ru: 'Свифта—Таттла', a: 26.09,  e: 0.9633, peri: 113.4, m0: 289, dia: 26, shower: 'Персеиды' },
+    { n: 'C/1995 O1',        ru: 'Хейла—Боппа',    a: 186.0,  e: 0.9951, peri: 130.6, m0: 0,   dia: 60, shower: null }
+];
+
 // ===== state.js =====
 // =============================================================================
 // state.js — единое изменяемое состояние приложения.
@@ -227,10 +360,11 @@ function resize(canvas) {
 
 // ===== scene.js =====
 // =============================================================================
-// scene.js — генерация фона сцены (звёзды, астероиды) и правило раскрытия лун.
-// Позиции тел здесь не считаются — это делает render.js каждый кадр из simDays.
+// scene.js — генерация фона сцены (звёзды) и правило раскрытия лун.
+// Малые тела (пояс астероидов, ОЗА, троянцы, кометы, дальние пояса) живут в
+// отдельном модуле smallbodies.js. Позиции тел здесь не считаются — это
+// делает render.js каждый кадр из simDays.
 // =============================================================================
-
 
 
 
@@ -247,34 +381,6 @@ for (let i = 0; i < 400; i++) {
     });
 }
 
-// --- Пояс астероидов ------------------------------------------------------------
-// Кольцо частиц между орбитами Марса и Юпитера. Каждый астероид — параметры
-// круговой орбиты (радиус d, долгота l0, период); позицию считает render.js
-// из simDays тем же таймером, что и планеты, поэтому пояс движется и ускоряется
-// вместе со всей системой.
-const MARS = planets.find(p => p.name === 'Mars');
-const JUPITER = planets.find(p => p.name === 'Jupiter');
-
-// Показатель закона «период от расстояния»: в этой карте dist условный,
-// а периоды реальные, поэтому берём его по якорям Марс → Юпитер (~3.37).
-const KEPLER_EXP = Math.log(JUPITER.period / MARS.period) / Math.log(JUPITER.dist / MARS.dist);
-
-/** Период обращения астероида на расстоянии d, сутки. */
-function beltPeriod(d) {
-    return MARS.period * Math.pow(d / MARS.dist, KEPLER_EXP);
-}
-
-const asteroids = [];
-for (let i = 0; i < 400; i++) {
-    const d = 270 + Math.random() * 80;
-    asteroids.push({
-        d,
-        l0: Math.random() * 360,                                // стартовая долгота, градусы
-        period: beltPeriod(d) * (0.98 + Math.random() * 0.04),  // разброс, чтобы пояс не был синхронным
-        s: 0.5 + Math.random() * 1.5                            // размер в пикселях мира
-    });
-}
-
 /**
  * Сколько лун планеты показывать при текущем зуме (Земля с Луной — отдельный
  * случай hasBase). Логарифмическая шкала: 1 луна при zoom=1, далее +1 за каждый
@@ -286,6 +392,144 @@ function visibleMoons() {
     if (state.zoom < 1.0) return 0;
     const MOON_ZOOM_STEP = 1.4;
     return 1 + Math.floor(Math.log(state.zoom) / Math.log(MOON_ZOOM_STEP));
+}
+
+// ===== smallbodies.js =====
+// =============================================================================
+// smallbodies.js — малые тела Солнечной системы отдельным слоем мира:
+// главный пояс (частицы + крупнейшие тела + щели Кирквуда), околоземные
+// астероиды (Атон/Аполлон/Амур), троянцы Юпитера (L4/L5), кометы, пояс
+// Койпера и облако Оорта.
+//
+// Каждое тело — сущность со своим типом (kind) и id: в будущем появится
+// добыча/уничтожение астероидов, поэтому генерация выполняется при каждом
+// запуске и детерминирована (сидированный ПСЧ) — пояс стабилен между
+// загрузками, а уничтоженные можно будет исключать по id.
+//
+// Позиции считаются каждый кадр из общего simDays — как у планет. Элементы
+// орбит реальные (a, e, долгота перигелия), карта — 2D-плоскость эклиптики.
+// =============================================================================
+
+
+
+
+
+
+// --- Главный пояс: закон Кеплера от якорей Марс → Юпитер ---------------------
+const MARS = planets.find(p => p.name === 'Mars');
+const JUPITER = planets.find(p => p.name === 'Jupiter');
+const KEPLER_EXP = Math.log(JUPITER.period / MARS.period) / Math.log(JUPITER.dist / MARS.dist);
+
+/** Период обращения астероида на расстоянии d (условные единицы), сутки. */
+function beltPeriod(d) {
+    return MARS.period * Math.pow(d / MARS.dist, KEPLER_EXP);
+}
+
+// --- Главный пояс: частицы ----------------------------------------------------
+const BELT_MIN = 270, BELT_MAX = 350;    // прежние границы (≈ 2.2–3.5 а.е.)
+const BELT_COUNT = 400;
+const BELT_SEED = 20261018;
+
+// Щели Кирквуда — резонансы с Юпитером 2.50 / 2.82 / 2.95 / 3.27 а.е.:
+// [радиус (а.е.), глубина провала, ширина (ед.)]. Плотность частиц в щели падает.
+const BELT_GAPS = [
+    [2.50, 0.85, 3.6],
+    [2.82, 0.80, 3.0],
+    [2.95, 0.80, 3.0],
+    [3.27, 0.70, 3.2]
+].map(([au, depth, w]) => ({ r: auToDist(au), depth, w }));
+
+/** Плотность пояса в точке d — произведение провалов около резонансов. */
+function beltDensity(d) {
+    let p = 1;
+    for (const g of BELT_GAPS) p *= 1 - g.depth * Math.exp(-Math.pow((d - g.r) / g.w, 2));
+    return p;
+}
+
+// Частицы пояса. Генерация детерминированная и происходит при каждом запуске:
+// пояс есть всегда, элементы адресуемы по id (задел под добычу/уничтожение).
+const beltRng = makeRng(BELT_SEED);
+const asteroids = [];
+for (let i = 0; i < BELT_COUNT; i++) {
+    let d = BELT_MIN;
+    for (let tries = 0; tries < 40; tries++) {
+        d = BELT_MIN + beltRng() * (BELT_MAX - BELT_MIN);
+        if (beltRng() < beltDensity(d)) break;
+    }
+    asteroids.push({
+        id: 'belt-' + i,
+        kind: 'asteroid',
+        d,
+        l0: beltRng() * 360,                                   // стартовая долгота
+        period: beltPeriod(d) * (0.98 + beltRng() * 0.04),     // лёгкий разброс периодов
+        s: 0.5 + beltRng() * 1.5                               // размер, пиксели мира
+    });
+}
+
+/** Дескриптор эллипса орбиты для hover/выбора: центр, полуоси, поворот. */
+function orbitEllipse(aAu, e, periDeg) {
+    const A = auToDist(aAu);
+    const p = periDeg * Math.PI / 180;
+    return {
+        cx: -A * e * Math.cos(p),          // центр — от солнца в сторону, обратную перигелию
+        cy: A * e * Math.sin(p),
+        a: A,
+        b: A * Math.sqrt(1 - e * e),
+        rot: -p
+    };
+}
+
+// --- Главный пояс: крупнейшие тела ---------------------------------------------
+// Церера (карликовая планета), Веста, Паллада, Гигея — заметнее частиц пояса
+// (ярче, крупнее, с обводкой) и выбираются кликом, как планеты.
+const notables = beltNotables.map(b => ({
+    id: 'notable-' + b.n,
+    kind: 'asteroid',
+    name: b.ru + ' / ' + b.n,
+    note: b.type === 'dwarf' ? 'Карликовая планета' : 'Крупный астероид',
+    a: b.a, e: b.e, peri: b.peri, m0: b.m0, dia: b.dia,
+    T: periodFromA(b.a),
+    r: b.type === 'dwarf' ? 3.2 : 2.6,
+    x: 0, y: 0,
+    orbit: orbitEllipse(b.a, b.e, b.peri)
+}));
+
+/**
+ * Нарисовать малые тела в мировой системе координат (вызывается из render.js
+ * после звёзд). Возвращает hoverTargets именованных тел.
+ * @returns {Array} цели для hover/выбора
+ */
+function drawSmallBodies(ctx) {
+    const { simDays, zoom } = state;
+    const targets = [];
+
+    // Частицы пояса
+    ctx.fillStyle = '#6e6e6e';
+    asteroids.forEach(a => {
+        const ang = orbitAngle(a.l0, a.period, simDays);
+        ctx.beginPath();
+        ctx.arc(Math.cos(ang) * a.d, -Math.sin(ang) * a.d, a.s, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // Крупнейшие тела пояса — заметные точки с обводкой, выбираются
+    notables.forEach(b => {
+        const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
+        b.x = pos.x;
+        b.y = pos.y;
+
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, b.r, 0, Math.PI * 2);
+        ctx.fillStyle = '#cfcfcf';
+        ctx.fill();
+        ctx.strokeStyle = '#efefef';
+        ctx.lineWidth = STROKE.moon / zoom;
+        ctx.stroke();
+
+        targets.push({ kind: 'asteroid', name: b.name, x: pos.x, y: pos.y, r: b.r, moons: [], small: b });
+    });
+
+    return targets;
 }
 
 // ===== sky.js =====
@@ -307,6 +551,7 @@ function visibleMoons() {
 // Положения объектов задаются в координатах полосы: u — вдоль оси (-1..1),
 // v — поперёк, в долях длины L = hypot(W, H) — размера экрана.
 // =============================================================================
+
 
 
 
@@ -336,17 +581,6 @@ const GALAXY_LAYERS = [
     { k: 0.35, count: 450, size: [0.6, 1.2], alpha: [0.28, 0.70], twSpeed: 1.8, twAmp: 0.35 }
 ];
 const BRIGHT_STARS = 14;     // ярких звёзд в полосе (без имён)
-
-// mulberry32 — маленький сидированный ПСЧ.
-function makeRng(seed) {
-    let a = seed >>> 0;
-    return function () {
-        a = (a + 0x6D2B79F5) >>> 0;
-        let t = Math.imul(a ^ (a >>> 15), 1 | a);
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
 
 const rng = makeRng(SEED);
 const rnd = (a, b) => a + (b - a) * rng();
@@ -616,13 +850,15 @@ function buildSky() {
 
 // ===== render.js =====
 // =============================================================================
-// render.js — отрисовка сцены на канвас: фон, солнце, планеты, луны, база.
+// render.js — отрисовка сцены на канвас: фон, малые тела (smallbodies.js),
+// солнце, планеты, луны, база.
 // Монохромный стиль: все тела — плоские круги, различаются яркостью заливки
 // и толщиной обводки (солнце > планеты > луны). Орбит на карте нет — их рисует
 // hover.js только при наведении. Дальний фон (небо) — отдельный слой sky.js.
 //
 // Возвращает массив hoverTargets — позиции всех тел для hit-теста наведения.
 // =============================================================================
+
 
 
 
@@ -651,7 +887,10 @@ function renderScene(ctx) {
     ctx.translate(-state.camX, -state.camY);
 
     drawStars(ctx, time);
-    drawAsteroids(ctx);
+
+    // Малые тела (пояс, ОЗА, троянцы, кометы, дальние пояса) — отдельный слой
+    // smallbodies.js: частицы рисует сам, именованные тела отдаёт как hover-цели.
+    hoverTargets.push(...drawSmallBodies(ctx));
 
     // Солнце — первая hover-цель (проверяется последней, т.к. планеты поверх)
     drawSun(ctx);
@@ -705,22 +944,6 @@ function drawStars(ctx, time) {
         const twinkle = 0.5 + 0.5 * Math.sin(time * 2 + s.b * 10);
         ctx.fillStyle = `rgba(255,255,255,${0.3 + twinkle * 0.7})`;
         ctx.fillRect(s.x, s.y, s.s, s.s);
-    });
-}
-
-/** Пояс астероидов между Марсом и Юпитером: движется по общему таймеру simDays. */
-function drawAsteroids(ctx) {
-    const { simDays } = state;
-    ctx.fillStyle = '#666';
-    asteroids.forEach(a => {
-        // как у планет: y с минусом — против часовой, как видно с севера эклиптики
-        const ang = orbitAngle(a.l0, a.period, simDays);
-        const x = Math.cos(ang) * a.d;
-        const y = -Math.sin(ang) * a.d;
-
-        ctx.beginPath();
-        ctx.arc(x, y, a.s, 0, Math.PI * 2);
-        ctx.fill();
     });
 }
 
@@ -922,13 +1145,17 @@ function drawSelection(ctx, sel, hoverTargets) {
 
     const target = hoverTargets.find(t =>
         sel.kind === 'sun' ? t.kind === 'sun' :
-        sel.kind === 'base' ? t.kind === 'base' : t.p === sel.p);
+        sel.kind === 'base' ? t.kind === 'base' :
+        sel.small ? t.small === sel.small : t.p === sel.p);
     if (!target) return; // тело ещё не в кадре (луна скрыта зумом и т.п.)
 
     if (sel.kind === 'sun') return; // у солнца орбиты нет
 
     let orbit = null;
-    if (sel.kind === 'planet') {
+    if (sel.small) {
+        // малое тело: эллипс по собственным элементам орбиты (a, e, перигелий)
+        orbit = sel.small.orbit;
+    } else if (sel.kind === 'planet') {
         orbit = { cx: 0, cy: 0, r: target.p.dist };
     } else if (sel.kind === 'base') {
         // база летает вокруг Луны Земли — орбита от Луны, не от солнца
@@ -972,13 +1199,16 @@ function findBodyAt(hoverTargets, mouseX, mouseY) {
             continue;
         }
 
-        const name = t.name || t.p.name;
-        const bodyR = t.r || t.p.r;
+        const name = t.name || (t.p ? t.p.name : '');
+        const bodyR = t.r || (t.p ? t.p.r : 0);
         const hitR = Math.max(bodyR, MIN_HIT_PLANET_PX / state.zoom);
         if ((w.x - t.x) ** 2 + (w.y - t.y) ** 2 <= hitR * hitR) {
-            // планета: орбита вокруг солнца; у самого солнца орбиты нет
-            const orbit = t.kind === 'sun' ? null : { cx: 0, cy: 0, r: t.p.dist };
-            return { kind: t.kind, name, orbit, p: t.p, m: null };
+            // орбита: у малых тел — из их элементов (эллипс), у планет — вокруг
+            // солнца; у самого солнца орбиты нет
+            let orbit = null;
+            if (t.small) orbit = t.small.orbit;
+            else if (t.kind !== 'sun') orbit = { cx: 0, cy: 0, r: t.p.dist };
+            return { kind: t.kind, name, orbit, p: t.p || null, m: null, small: t.small || null };
         }
     }
     return null;
@@ -997,7 +1227,12 @@ function drawOrbitOverlay(ctx, hover, color) {
     ctx.lineWidth = 1 / zoom;
     ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.beginPath();
-    ctx.arc(hover.orbit.cx, hover.orbit.cy, hover.orbit.r, 0, Math.PI * 2);
+    if (hover.orbit.rot !== undefined) {
+        // эллипс малого тела: центр, полуоси, поворот (мировые единицы)
+        ctx.ellipse(hover.orbit.cx, hover.orbit.cy, hover.orbit.a, hover.orbit.b, hover.orbit.rot, 0, Math.PI * 2);
+    } else {
+        ctx.arc(hover.orbit.cx, hover.orbit.cy, hover.orbit.r, 0, Math.PI * 2);
+    }
     ctx.stroke();
     ctx.setLineDash([]);
 
@@ -1348,6 +1583,8 @@ function renderObjectInfo() {
             row('Радиус орбиты', orbitR + ' <em>ед.</em>') +
             row('Известных лун', moonTotals[p.name]) +
             row('На карте (крупные)', mapMoons.length);
+    } else if (sel.kind === 'asteroid') {
+        html = asteroidInfoHTML(sel.small);
     } else if (sel.kind === 'base') {
         html = baseInfoHTML();
     } else {
@@ -1365,6 +1602,19 @@ function renderObjectInfo() {
             (p.hasBase && m.n.indexOf('Луна') === 0 ? row('На орбите', 'База LUNA-ORBIT') : '');
     }
     box.innerHTML = html;
+}
+
+/** Блок «Объект» для малого тела главного пояса (Церера, Веста, Паллада, Гигея). */
+function asteroidInfoHTML(b) {
+    return '<div class="obj-title"><span class="dot" style="background:#cfcfcf"></span>' +
+            '<strong>' + b.name + '</strong></div>' +
+        '<div class="obj-kind">' + b.note + ' · Главный пояс</div>' +
+        row('Большая полуось', b.a + ' <em>а.е.</em>') +
+        row('Эксцентриситет', b.e) +
+        row('Период обращения', fmtPeriod(b.T)) +
+        row('Перигелий / афелий', (b.a * (1 - b.e)).toFixed(2) + ' / ' + (b.a * (1 + b.e)).toFixed(2) + ' <em>а.е.</em>') +
+        row('Диаметр', fmtRu(b.dia) + ' <em>км</em>') +
+        '<div class="obj-note">Главный пояс — главный источник метеоритов Земли</div>';
 }
 
 function row(k, v) {
@@ -1455,7 +1705,7 @@ function highlightTree() {
     const sel = state.selected;
     document.querySelectorAll('#lootTree .sel').forEach(el => el.classList.remove('sel'));
 
-    if (!sel || sel.kind === 'sun') return;
+    if (!sel || sel.kind === 'sun' || !sel.p) return; // у малых тел строки в дереве нет
 
     const tree = document.getElementById('lootTree');
     const li = Array.from(tree.children).find(el => el.dataset.name === sel.p.name);
