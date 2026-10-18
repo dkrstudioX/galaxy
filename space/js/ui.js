@@ -12,8 +12,8 @@
 import { state } from './state.js';
 import { formatSimDate, clamp } from './math.js';
 import { SUN_R, COLORS, MIN_ZOOM, MAX_ZOOM } from './config.js';
-import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, baseOrbitRadius } from './data.js';
-import { bases, basesAt } from './bases.js';
+import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, moonOrbitRadius, baseOrbitRadius } from './data.js';
+import { bases, basesAt, baseRadiusRange } from './bases.js';
 
 // Русские названия и подписи классов для блока «ОБЪЕКТ».
 const RU = {
@@ -264,7 +264,7 @@ function renderObjectInfo() {
         const p = sel.p;
         const m = sel.m;
         const idx = (moonsByPlanet[p.name] || []).findIndex(x => x.n === m.n);
-        const md = idx >= 0 ? p.r + 12 + idx * 7 : moonDist;
+        const md = idx >= 0 ? moonOrbitRadius(p, idx) : moonDist;
         html =
             '<div class="obj-title"><span class="dot" style="background:' + (m.c || '#a8a8a8') + '"></span>' +
                 '<strong>' + m.n + '</strong></div>' +
@@ -413,7 +413,9 @@ function wireObjectCard(box) {
         // Режим уже активен (хост мог переехать к ближайшему телу) — отменяем его,
         // иначе начинаем выбор орбиты у этой планеты/луны.
         state.baseMode = state.baseMode ? null : { kind, planet, moon };
-        state.baseRadius = 60;
+        // Стартовый радиус 60 — но в коридоре хоста (орбита не пересекает тела).
+        const rg = state.baseMode ? baseRadiusRange(state.baseMode) : null;
+        state.baseRadius = rg ? Math.min(rg.max, Math.max(rg.min, 60)) : 60;
         renderObjectInfo();   // надпись кнопки: «Создать базу» <-> «Отмена»
     });
 
@@ -427,7 +429,9 @@ function wireObjectCard(box) {
             const rec = bases.find(b => b.id === mvBtn.dataset.moveId);
             if (!rec) return;
             state.baseMode = { kind: rec.hostKind, planet: rec.planet, moon: rec.moon || null, moveId: rec.id };
-            state.baseRadius = rec.orbitRadius;
+            // Стартуем с текущего радиуса базы, но в коридоре хоста.
+            const rg = baseRadiusRange(state.baseMode);
+            state.baseRadius = Math.min(rg.max, Math.max(rg.min, rec.orbitRadius));
         }
         renderObjectInfo();   // надпись кнопки: «Переместить базу» <-> «Отмена»
     });

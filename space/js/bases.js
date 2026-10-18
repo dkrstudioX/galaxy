@@ -6,9 +6,11 @@
 // планеты/луны включает режим выбора орбиты — радиус берётся от курсора,
 // клик подтверждает (input.js). У созданной базы в карточке есть кнопка
 // «Переместить базу» — тот же режим; клик переносит запись на выбранную
-// орбиту (хост при этом выбирается по правилу ближайшего тела). Период
-// обращения — как у Луны: одни сутки на радиусе baseOrbitRadius, дальше по
-// закону Кеплера.
+// орбиту (хост при этом выбирается по правилу ближайшего тела). Радиус орбиты
+// зажат в коридор baseRadiusRange: от поверхности хозяина до поверхности
+// ближайшего соседа (луны планеты или планеты луны) — орбита не пересекает
+// небесные тела. Период обращения — как у Луны: одни сутки на радиусе
+// baseOrbitRadius, дальше по закону Кеплера.
 //
 // Хранение — ОТДЕЛЬНЫЙ ключ localStorage («galaxy_space_bases_v1»): данные
 // админки/ангара (window.Store) не задействованы. Пока это только создание
@@ -21,18 +23,51 @@
 import { state } from './state.js';
 import { screenToWorld } from './math.js';
 import { COLORS } from './config.js';
-import { baseOrbitRadius, basePeriod } from './data.js';
+import { planets, moonsByPlanet, moonDist, baseOrbitRadius, basePeriod, moonOrbitRadius } from './data.js';
 
 const STORAGE_KEY = 'galaxy_space_bases_v1';
 
-// Пределы радиуса орбиты новой базы (единицы мира): ближе нельзя — налезет
-// на само тело, дальше — теряется на фоне системы.
-export const BASE_MIN_R = 14;
+// Абсолютный потолок радиуса орбиты базы (единицы мира): дальше она теряется
+// на фоне системы. Нижняя граница и потолок по соседям — в baseRadiusRange().
 export const BASE_MAX_R = 300;
+
+// Запас между орбитой базы и поверхностью тел: хозяина и соседей (единицы мира).
+const BASE_CLEAR = 4;
 
 /** Период обращения базы на радиусе r: как у Луны, дальше — по Кеплеру. */
 export function basePeriodAt(r) {
     return basePeriod * Math.pow(r / baseOrbitRadius, 1.5);
+}
+
+/**
+ * Допустимый коридор радиуса орбиты для хоста: от поверхности хозяина до
+ * поверхности ближайшего соседа — лун у планеты (все их орбиты-кольца, даже
+ * невидимые при текущем зуме) или самой планеты у луны. Так орбита базы
+ * никогда не пересекает небесные тела, а не только «не налезает на хозяина».
+ * @param {{kind: string, planet: string, moon: ?string}} host
+ * @returns {{min: number, max: number}} границы радиуса, единицы мира
+ */
+export function baseRadiusRange(host) {
+    const p = planets.find(q => q.name === host.planet);
+    if (!p) return { min: BASE_CLEAR, max: BASE_MAX_R };
+
+    if (host.kind === 'moon') {
+        const list = moonsByPlanet[host.planet] || [];
+        const idx = list.findIndex(m => m.n === host.moon);
+        // Луна Земли рисуется отдельным блоком (render.js): своя дистанция и радиус
+        const mr = idx >= 0 ? list[idx].r : 3;
+        const md = idx >= 0 ? moonOrbitRadius(p, idx) : moonDist;
+        const min = mr + BASE_CLEAR;
+        return { min, max: Math.max(min, Math.min(BASE_MAX_R, md - p.r - BASE_CLEAR)) };
+    }
+
+    let max = BASE_MAX_R;
+    (moonsByPlanet[p.name] || []).forEach((m, i) => {
+        max = Math.min(max, moonOrbitRadius(p, i) - m.r - BASE_CLEAR);
+    });
+    if (p.name === 'Earth') max = Math.min(max, moonDist - 3 - BASE_CLEAR); // Луна Земли (r=3, render.js)
+    const min = p.r + BASE_CLEAR;
+    return { min, max: Math.max(min, max) };
 }
 
 /** Прочитать базы из localStorage; битые данные не роняют карту. */
@@ -73,19 +108,20 @@ function nextName() {
     return 'BASE-' + (max + 1);
 }
 
-/** Радиус орбиты: округлён до десятых и зажат в пределы [BASE_MIN_R, BASE_MAX_R]. */
-function radiusOf(r) {
-    return Math.round(Math.min(BASE_MAX_R, Math.max(BASE_MIN_R, r)) * 10) / 10;
+/** Радиус орбиты: округлён до десятых и зажат в коридор хоста (baseRadiusRange). */
+function radiusOf(r, host) {
+    const { min, max } = baseRadiusRange(host);
+    return Math.round(Math.min(Math.max(r, min), max) * 10) / 10;
 }
 
 /**
  * Создать базу на орбите радиуса r у планеты/луны; запись сразу пишется в
  * localStorage. Карточку/список обновляет вызывающий код (input.js).
  * @param {{kind: string, planet: string, moon: ?string}} host
- * @param {number} r радиус орбиты, единицы мира (клампится)
+ * @param {number} r радиус орбиты, единицы мира (клампится в коридор хоста)
  */
 export function createBase(host, r) {
-    const orbitRadius = radiusOf(r);
+    const orbitRadius = radiusOf(r, host);
     const rec = {
         id: 'base-' + Date.now().toString(36),
         name: nextName(),
@@ -114,7 +150,7 @@ export function moveBase(rec, host, r) {
     rec.hostKind = host.kind;
     rec.planet = host.planet;
     rec.moon = host.moon || null;
-    rec.orbitRadius = radiusOf(r);
+    rec.orbitRadius = radiusOf(r, host);
     rec.period = basePeriodAt(rec.orbitRadius);
     saveBases();
     return rec;

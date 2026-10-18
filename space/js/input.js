@@ -12,7 +12,7 @@ import { MIN_ZOOM, MAX_ZOOM, MIN_SPEED, MAX_SPEED } from './config.js';
 import { planets } from './data.js';
 import { findBodyAt } from './hover.js';
 import { selectBody, refreshObjectCard } from './ui.js';
-import { createBase, moveBase, bases, BASE_MIN_R, BASE_MAX_R } from './bases.js';
+import { createBase, moveBase, bases, baseRadiusRange } from './bases.js';
 
 /**
  * Зум к точке экрана: мировая точка под (ax, ay) остаётся под ней после
@@ -236,7 +236,8 @@ function updateBaseRadius(x, y) {
         state.baseMode = { ...mode, kind: best.kind, planet: best.planet, moon: best.moon };
     }
     const hp = hostPosOf(state.baseMode);   // радиус — от живого положения хоста
-    state.baseRadius = Math.min(BASE_MAX_R, Math.max(BASE_MIN_R,
+    const rg = baseRadiusRange(state.baseMode);   // коридор: не пересекать тела
+    state.baseRadius = Math.min(rg.max, Math.max(rg.min,
         hp ? Math.hypot(w.x - hp.x, w.y - hp.y) : bd));
 }
 

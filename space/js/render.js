@@ -11,7 +11,7 @@
 import { state } from './state.js';
 import { orbitAngle } from './math.js';
 import { SUN_R, COLORS, STROKE } from './config.js';
-import { planets, moonsByPlanet, moonDist, moonPeriod, moonL0, baseOrbitRadius, basePeriod } from './data.js';
+import { planets, moonsByPlanet, moonDist, moonPeriod, moonL0, baseOrbitRadius, basePeriod, moonOrbitRadius } from './data.js';
 import { stars, visibleMoons } from './scene.js';
 import { drawSmallBodies } from './smallbodies.js';
 import { drawBases } from './bases.js';
@@ -183,7 +183,7 @@ function drawPlanetMoons(ctx, x, y, p) {
 
     for (let i = 0; i < shown; i++) {
         const m = pmoons[i];
-        const md = p.r + 12 + i * 7; // радиус орбиты луны от планеты
+        const md = moonOrbitRadius(p, i); // радиус орбиты луны от планеты
         const mAng = orbitAngle(m.phase, m.period, simDays);
         const mx = x + Math.cos(mAng) * md;
         const my = y - Math.sin(mAng) * md;
