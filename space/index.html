@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Solar System - Realistic</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; touch-action: none; font-family: monospace; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #ui {
+            position: fixed; top: 10px; left: 10px; color: #0ff;
+            font-size: 14px; z-index: 10;
+            background: rgba(0,0,0,0.7); padding: 8px; border-radius: 4px;
+            pointer-events: none; line-height: 1.6;
+        }
+        #controls {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px; z-index: 10;
+        }
+        .btn {
+            background: rgba(0,20,40,0.8); color: #0ff; border: 1px solid #0ff;
+            padding: 10px 20px; font-family: monospace; font-size: 14px;
+            cursor: pointer; border-radius: 4px; transition: all 0.3s;
+            text-transform: uppercase;
+        }
+        .btn:hover { background: rgba(0,255,255,0.2); }
+        .btn.active { background: rgba(0,255,255,0.3); border-color: #fff; color: #fff; box-shadow: 0 0 10px #0ff; }
+
+        /* ===== Панель ресурсов (Tokyo Night / чёрный) ===== */
+        #sidePanel {
+            position: fixed; top: 10px; right: 10px; z-index: 10;
+            display: flex; align-items: flex-start; gap: 6px;
+        }
+        #panelBody {
+            width: 264px; height: 400px;
+            background: rgba(13, 14, 24, 0.94);
+            border: 1px solid #24283b; border-radius: 6px;
+            box-shadow: 0 0 22px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.04);
+            color: #c0caf5; font-size: 12px;
+            overflow-y: auto; padding: 10px 10px 14px;
+            scrollbar-width: thin; scrollbar-color: #2f344d #10111a;
+        }
+        #panelBody::-webkit-scrollbar { width: 9px; }
+        #panelBody::-webkit-scrollbar-track { background: #10111a; border-radius: 5px; }
+        #panelBody::-webkit-scrollbar-thumb {
+            background: #2f344d; border-radius: 5px; border: 2px solid #10111a;
+        }
+        #panelBody::-webkit-scrollbar-thumb:hover { background: #414868; }
+        .panel-title {
+            position: sticky; top: -10px; margin: -10px -10px 8px; padding: 9px 10px 7px;
+            background: linear-gradient(180deg, #16161e 88%, rgba(22,22,30,0));
+            color: #7aa2f7; font-weight: bold; letter-spacing: .12em; font-size: 11px;
+            border-bottom: 1px solid #24283b;
+        }
+        .panel-title small { float: right; color: #565f89; font-weight: normal; }
+        .tree, .tree ul { list-style: none; margin: 0; padding: 0; }
+        .planet > .node {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 6px; border-radius: 4px; cursor: pointer; user-select: none;
+        }
+        .planet > .node:hover { background: rgba(122, 162, 247, .10); }
+        .planet .caret {
+            width: 10px; color: #bb9af7; transition: transform .15s;
+            display: inline-block; font-size: 10px;
+        }
+        .planet.open > .node .caret { transform: rotate(90deg); }
+        .planet .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+        .planet .pname { color: #7dcfff; }
+        .planet .cnt { margin-left: auto; color: #565f89; font-size: 10px; }
+        .loot { display: none; padding: 1px 0 5px 26px !important; }
+        .planet.open > .loot { display: block; }
+        .loot li {
+            padding: 2px 6px; color: #e0af68; border-radius: 3px;
+            display: flex; justify-content: space-between; gap: 8px;
+        }
+        .loot li:hover { background: rgba(224, 175, 104, .08); }
+        .loot li i { font-style: normal; color: #565f89; font-size: 10px; }
+        .loot li::before { content: "☾"; color: #7dcfff; margin-right: 6px; }
+        #panelToggle { padding: 10px 8px; }
+        #sidePanel.collapsed #panelBody { display: none; }
+    </style>
+</head>
+<body>
+<div id="ui">
+    SOL SYSTEM<br>
+    BASE: LUNA-ORBIT<br>
+    ZOOM: <span id="z">1.0x</span><br>
+    SPEED: <span id="speed">1x</span><br>
+    DATE: <span id="date">—</span><br>
+    TIME: +<span id="days">0.0000</span> days
+</div>
+
+<div id="controls">
+    <button class="btn" id="slowBtn">Медленнее</button>
+    <button class="btn active" id="normalBtn">Нормально</button>
+    <button class="btn" id="fastBtn">Быстрее</button>
+</div>
+
+<div id="sidePanel">
+    <div id="panelBody">
+        <div class="panel-title">ЛУНЫ СИСТЕМЫ <small>MOON MAP</small></div>
+        <ul class="tree" id="lootTree"></ul>
+    </div>
+    <button class="btn" id="panelToggle" title="Развернуть / свернуть">◀</button>
+</div>
+
+<canvas id="c"></canvas>
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+const zEl = document.getElementById('z');
+const speedEl = document.getElementById('speed');
+const daysEl = document.getElementById('days');
+const dateEl = document.getElementById('date');
+
+let W, H;
+function resize() {
+    W = c.width = window.innerWidth;
+    H = c.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Камера
+let camX = 0, camY = 0, zoom = 1;
+
+// Масштаб времени: 1x = реальное время (1 секунда экрана = 1 секунда симуляции).
+// «Быстрее»/«Медленнее» меняют множитель с шагом x2 / :2, «Нормально» возвращает 1x.
+let timeScale = 1;
+
+// === СИМУЛЯЦИОННОЕ ВРЕМЯ ===
+// Эпоха J2000 (2000-01-01 12:00 UTC). simDays — прошедшие сутки, дробные.
+// От этого же значения считаются углы планет, поэтому счётчик дней и движение
+// по орбитам всегда согласованы: угол = L0 + 360° * simDays / период.
+const J2000_MS = Date.UTC(2000, 0, 1, 12, 0, 0);
+const MS_PER_DAY = 86400000;
+let simDays = (Date.now() - J2000_MS) / MS_PER_DAY; // старт с реальной текущей даты
+const startSimDays = simDays;
+
+// Планеты: реальные сидерические периоды (сутки) и средние долготы на J2000 (градусы)
+const planets = [
+    { name: 'Mercury', color: '#b5b5b5', r: 4,  dist: 70,  period: 87.969,   l0: 252.251, type: 'rocky' },
+    { name: 'Venus',   color: '#e8cda0', r: 7,  dist: 110, period: 224.701,  l0: 181.980, type: 'rocky' },
+    { name: 'Earth',   color: '#4488ff', r: 8,  dist: 160, period: 365.256,  l0: 100.464, type: 'earth', hasBase: true },
+    { name: 'Mars',    color: '#c1440e', r: 5,  dist: 220, period: 686.980,  l0: 355.453, type: 'rocky' },
+    { name: 'Jupiter', color: '#c88b3a', r: 22, dist: 380, period: 4332.589, l0: 34.396,  type: 'gas' },
+    { name: 'Saturn',  color: '#e8d191', r: 18, dist: 520, period: 10759.22, l0: 49.954,  type: 'gas', rings: true },
+    { name: 'Uranus',  color: '#7de8e8', r: 12, dist: 660, period: 30685.4,  l0: 313.238, type: 'ice' },
+    { name: 'Neptune', color: '#3f54ba', r: 12, dist: 780, period: 60189.0,  l0: 304.880, type: 'ice' }
+];
+
+// Луна: сидерический период 27.32 суток, база делает виток за условные 1 сутки
+const moonDist = 22;
+const moonPeriod = 27.321661;
+const moonL0 = 218.32;
+const baseOrbitRadius = 10;
+const basePeriod = 1;
+
+// === ЛУНЫ ДРУГИХ ПЛАНЕТ ===
+// Главные луны: период (сутки), радиус отрисовки, цвет, стартовая фаза.
+// У Юпитера/Сатурна их десятки — на канвасе показываем несколько,
+// в зависимости от зума (см. visibleMoons()).
+const moonsByPlanet = {
+    Mars: [
+        { n: 'Phobos',   period: 0.3189, r: 1.5, c: '#9c8f84', phase: 40 },
+        { n: 'Deimos',   period: 1.2624, r: 1.3, c: '#b3a89e', phase: 150 }
+    ],
+    Jupiter: [
+        { n: 'Io',       period: 1.769,  r: 2.3, c: '#d8c26a', phase: 70 },
+        { n: 'Europa',   period: 3.551,  r: 2.0, c: '#cbb8a0', phase: 190 },
+        { n: 'Ganymede', period: 7.155,  r: 2.7, c: '#9a8f85', phase: 300 },
+        { n: 'Callisto', period: 16.689, r: 2.5, c: '#7d746c', phase: 20 }
+    ],
+    Saturn: [
+        { n: 'Mimas',    period: 0.942,  r: 1.5, c: '#b8bcc2', phase: 110 },
+        { n: 'Enceladus',period: 1.370,  r: 1.7, c: '#d9dee3', phase: 250 },
+        { n: 'Rhea',     period: 4.518,  r: 1.9, c: '#a8adb5', phase: 330 },
+        { n: 'Titan',    period: 15.945, r: 2.9, c: '#c79b5a', phase: 80 }
+    ],
+    Uranus: [
+        { n: 'Miranda',  period: 1.413,  r: 1.4, c: '#a9b3b8', phase: 210 },
+        { n: 'Ariel',    period: 2.520,  r: 1.7, c: '#b6c0c4', phase: 20 },
+        { n: 'Titania',  period: 8.706,  r: 2.1, c: '#9aa5ab', phase: 140 },
+        { n: 'Oberon',   period: 13.463, r: 2.0, c: '#8b969c', phase: 260 }
+    ],
+    Neptune: [
+        { n: 'Proteus',  period: 1.122,  r: 1.5, c: '#8f9aa3', phase: 310 },
+        { n: 'Triton',   period: 5.877,  r: 2.3, c: '#c3cdd4', phase: 100 }
+    ]
+};
+
+// Сколько лун видно при текущем зуме (Земля с Луной — отдельный блок hasBase)
+function visibleMoons() {
+    if (zoom >= 3.5) return 4;
+    if (zoom >= 2.5) return 3;
+    if (zoom >= 1.7) return 2;
+    if (zoom >= 1.0) return 1;
+    return 0;
+}
+
+// Звёзды фона
+const stars = [];
+for(let i=0; i<400; i++) {
+    stars.push({
+        x: (Math.random() - 0.5) * 4000,
+        y: (Math.random() - 0.5) * 4000,
+        s: Math.random() * 1.5,
+        b: Math.random()
+    });
+}
+
+// Астероиды
+const asteroids = [];
+for(let i=0; i<400; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = 270 + Math.random() * 80;
+    asteroids.push({ x: Math.cos(a)*d, y: Math.sin(a)*d, s: 0.5+Math.random()*1.5 });
+}
+
+// Управление тачем
+let touch1 = null, touch2 = null;
+let lastDist = 0, lastZoom = 1;
+let isDragging = false, dragStartX = 0, dragStartY = 0, camStartX = 0, camStartY = 0;
+
+c.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const touches = e.touches;
+    if(touches.length === 1) {
+        touch1 = touches[0];
+        isDragging = true;
+        dragStartX = touch1.clientX;
+        dragStartY = touch1.clientY;
+        camStartX = camX;
+        camStartY = camY;
+    } else if(touches.length === 2) {
+        touch1 = touches[0]; touch2 = touches[1];
+        isDragging = false;
+        const dx = touch2.clientX - touch1.clientX;
+        const dy = touch2.clientY - touch1.clientY;
+        lastDist = Math.sqrt(dx*dx + dy*dy);
+        lastZoom = zoom;
+    }
+}, { passive: false });
+
+c.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const touches = e.touches;
+    if(touches.length === 1 && isDragging) {
+        const t = touches[0];
+        camX = camStartX + (t.clientX - dragStartX) / zoom;
+        camY = camStartY + (t.clientY - dragStartY) / zoom;
+    } else if(touches.length === 2) {
+        const t1 = touches[0], t2 = touches[1];
+        const dx = t2.clientX - t1.clientX;
+        const dy = t2.clientY - t1.clientY;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        zoom = lastZoom * (dist / lastDist);
+        zoom = Math.max(0.3, Math.min(5, zoom));
+    }
+}, { passive: false });
+
+c.addEventListener('touchend', e => {
+    if(e.touches.length < 2) touch2 = null;
+    if(e.touches.length === 0) { touch1 = null; isDragging = false; }
+});
+
+c.addEventListener('wheel', e => {
+    e.preventDefault();
+    zoom *= e.deltaY > 0 ? 0.9 : 1.1;
+    zoom = Math.max(0.3, Math.min(5, zoom));
+}, { passive: false });
+
+// === ПАНОРАМИРОВАНИЕ ПРАВОЙ КНОПОЙ МЫШИ ===
+// Удерживайте правую кнопку — карта следует за курсором (удобно на большом зуме).
+let mouseDragging = false, mouseStartX = 0, mouseStartY = 0, camStartMX = 0, camStartMY = 0;
+
+c.addEventListener('mousedown', e => {
+    if(e.button !== 2) return;
+    mouseDragging = true;
+    mouseStartX = e.clientX;
+    mouseStartY = e.clientY;
+    camStartMX = camX;
+    camStartMY = camY;
+    c.style.cursor = 'grabbing';
+});
+
+window.addEventListener('mousemove', e => {
+    if(!mouseDragging) return;
+    camX = camStartMX + (e.clientX - mouseStartX) / zoom;
+    camY = camStartMY + (e.clientY - mouseStartY) / zoom;
+});
+
+window.addEventListener('mouseup', e => {
+    if(e.button !== 2) return;
+    mouseDragging = false;
+    c.style.cursor = '';
+});
+
+// отключаем системное контекстное меню, чтобы правая кнопка работала как панорамирование
+c.addEventListener('contextmenu', e => e.preventDefault());
+
+// === КНОПКИ СКОРОСТИ ===
+// «Быстрее» удваивает скорость, «Медленнее» делит пополам, «Нормально» = реальное время.
+const slowBtn = document.getElementById('slowBtn');
+const normalBtn = document.getElementById('normalBtn');
+const fastBtn = document.getElementById('fastBtn');
+
+const MIN_SPEED = 1 / 1024;
+const MAX_SPEED = 1048576; // хватает, чтобы при 1x-реальном времени увидеть движение планет
+
+function updateSpeedUI() {
+    normalBtn.classList.toggle('active', timeScale === 1);
+    speedEl.textContent = (Math.round(timeScale * 10000) / 10000) + 'x';
+}
+
+slowBtn.addEventListener('click', () => {
+    timeScale = Math.max(MIN_SPEED, timeScale / 2);
+    updateSpeedUI();
+});
+
+fastBtn.addEventListener('click', () => {
+    timeScale = Math.min(MAX_SPEED, timeScale * 2);
+    updateSpeedUI();
+});
+
+normalBtn.addEventListener('click', () => {
+    timeScale = 1;
+    updateSpeedUI();
+});
+
+updateSpeedUI();
+
+// === РИСОВАНИЕ ПЛАНЕТЫ ===
+function drawPlanet(x, y, r, color, type, sunX, sunY) {
+    const angleToSun = Math.atan2(sunY - y, sunX - x);
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angleToSun);
+
+    const grad = ctx.createRadialGradient(-r*0.3, 0, 0, 0, 0, r);
+    grad.addColorStop(0, lighten(color, 40));
+    grad.addColorStop(0.7, color);
+    grad.addColorStop(1, darken(color, 60));
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath();
+    ctx.arc(0, 0, r, Math.PI/2, Math.PI*1.5);
+    ctx.fill();
+
+    if(type === 'earth') {
+        ctx.fillStyle = '#2d5016';
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.arc(-r*0.2, -r*0.1, r*0.4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(r*0.3, r*0.2, r*0.3, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        const atmo = ctx.createRadialGradient(0, 0, r, 0, 0, r*1.3);
+        atmo.addColorStop(0, 'rgba(100,180,255,0)');
+        atmo.addColorStop(0.5, 'rgba(100,180,255,0.2)');
+        atmo.addColorStop(1, 'rgba(100,180,255,0)');
+        ctx.fillStyle = atmo;
+        ctx.beginPath();
+        ctx.arc(0, 0, r*1.3, 0, Math.PI*2);
+        ctx.fill();
+    } else if(type === 'gas') {
+        ctx.globalAlpha = 0.3;
+        for(let i=-r; i<r; i+=r*0.2) {
+            ctx.fillStyle = i%2===0 ? lighten(color, 20) : darken(color, 20);
+            ctx.fillRect(-r, i, r*2, r*0.15);
+        }
+        ctx.globalAlpha = 1;
+    } else if(type === 'rocky') {
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = darken(color, 30);
+        for(let i=0; i<5; i++) {
+            const cx = (Math.random()-0.5)*r*1.5;
+            const cy = (Math.random()-0.5)*r*1.5;
+            if(cx*cx+cy*cy < r*r) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, r*0.15, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    ctx.restore();
+}
+
+function lighten(hex, amt) {
+    const num = parseInt(hex.slice(1), 16);
+    const r = Math.min(255, (num>>16) + amt);
+    const g = Math.min(255, ((num>>8)&0xff) + amt);
+    const b = Math.min(255, (num&0xff) + amt);
+    return `rgb(${r},${g},${b})`;
+}
+
+function darken(hex, amt) {
+    const num = parseInt(hex.slice(1), 16);
+    const r = Math.max(0, (num>>16) - amt);
+    const g = Math.max(0, ((num>>8)&0xff) - amt);
+    const b = Math.max(0, (num&0xff) - amt);
+    return `rgb(${r},${g},${b})`;
+}
+
+// Угол тела на орбите из симуляционного времени: L0 + 360° * t / T
+function orbitAngle(l0, period, t) {
+    return (l0 + 360 * t / period) * Math.PI / 180;
+}
+
+function formatSimDate(t) {
+    const d = new Date(J2000_MS + t * MS_PER_DAY);
+    const p = n => String(n).padStart(2, '0');
+    return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) +
+           ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
+}
+
+// === ГЛАВНЫЙ ЦИКЛ ===
+let time = 0;
+let lastFrame = performance.now();
+function draw() {
+    // dt в секундах реального времени; симуляция продвигается на dt * timeScale
+    const nowMs = performance.now();
+    const dt = Math.min(0.1, (nowMs - lastFrame) / 1000);
+    lastFrame = nowMs;
+
+    simDays += dt / MS_PER_DAY * 1000 * timeScale; // dt(сек) -> сутки
+    time += dt * timeScale;
+
+    ctx.fillStyle = '#020205';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.translate(W/2, H/2);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-camX, -camY);
+
+    // Звёзды фона
+    stars.forEach(s => {
+        const twinkle = 0.5 + 0.5*Math.sin(time*2 + s.b*10);
+        ctx.fillStyle = `rgba(255,255,255,${0.3 + twinkle*0.7})`;
+        ctx.fillRect(s.x, s.y, s.s, s.s);
+    });
+
+    // Сетка
+    ctx.strokeStyle = '#0f0f1a';
+    ctx.lineWidth = 1/zoom;
+    for(let i=1; i<=20; i++) {
+        ctx.beginPath();
+        ctx.arc(0, 0, i*50, 0, Math.PI*2);
+        ctx.stroke();
+    }
+
+    // Астероиды
+    ctx.fillStyle = '#666';
+    asteroids.forEach(a => {
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, a.s, 0, Math.PI*2);
+        ctx.fill();
+    });
+
+    // Орбиты
+    planets.forEach(p => {
+        ctx.strokeStyle = '#333355';
+        ctx.lineWidth = 1/zoom;
+        ctx.setLineDash([3/zoom, 3/zoom]);
+        ctx.beginPath();
+        ctx.arc(0, 0, p.dist, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    });
+
+    // === СОЛНЦЕ ===
+    const sunPulse = 1 + 0.02*Math.sin(time*3);
+
+    const corona = ctx.createRadialGradient(0, 0, 20, 0, 0, 80*sunPulse);
+    corona.addColorStop(0, 'rgba(255,200,50,0.4)');
+    corona.addColorStop(0.3, 'rgba(255,150,0,0.2)');
+    corona.addColorStop(1, 'rgba(255,100,0,0)');
+    ctx.fillStyle = corona;
+    ctx.beginPath();
+    ctx.arc(0, 0, 80*sunPulse, 0, Math.PI*2);
+    ctx.fill();
+
+    const mid = ctx.createRadialGradient(0, 0, 15, 0, 0, 40);
+    mid.addColorStop(0, 'rgba(255,220,100,0.8)');
+    mid.addColorStop(1, 'rgba(255,180,50,0)');
+    ctx.fillStyle = mid;
+    ctx.beginPath();
+    ctx.arc(0, 0, 40, 0, Math.PI*2);
+    ctx.fill();
+
+    const core = ctx.createRadialGradient(-5, -5, 0, 0, 0, 22);
+    core.addColorStop(0, '#fff8e0');
+    core.addColorStop(0.5, '#ffdd44');
+    core.addColorStop(1, '#ff9500');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(0, 0, 22, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255,200,50,0.3)';
+    ctx.lineWidth = 2/zoom;
+    for(let i=0; i<8; i++) {
+        const a = (i/8)*Math.PI*2 + time*0.5;
+        const len = 25 + 5*Math.sin(time*4 + i);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a)*22, Math.sin(a)*22);
+        ctx.lineTo(Math.cos(a)*len, Math.sin(a)*len);
+        ctx.stroke();
+    }
+
+    // === ПЛАНЕТЫ ===
+    planets.forEach(p => {
+        // Угол строго из simDays: движение по орбите и счётчик дней — один таймер
+        const ang = orbitAngle(p.l0, p.period, simDays);
+        const x = Math.cos(ang) * p.dist;
+        const y = -Math.sin(ang) * p.dist; // против часовой, как видно с севера эклиптики
+
+        if(p.rings) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(0.4);
+            ctx.scale(1, 0.3);
+
+            ctx.strokeStyle = 'rgba(210,180,140,0.4)';
+            ctx.lineWidth = 4/zoom;
+            ctx.beginPath();
+            ctx.arc(0, 0, p.r*2.2, 0, Math.PI*2);
+            ctx.stroke();
+
+            ctx.strokeStyle = 'rgba(230,200,160,0.6)';
+            ctx.lineWidth = 3/zoom;
+            ctx.beginPath();
+            ctx.arc(0, 0, p.r*1.7, 0, Math.PI*2);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        drawPlanet(x, y, p.r, p.color, p.type, 0, 0);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = `${Math.max(10, 11/zoom)}px monospace`;
+        ctx.fillText(p.name, x + p.r + 4/zoom, y + 4/zoom);
+
+        // === ЛУНЫ ПЛАНЕТЫ (количество растёт с зумом) ===
+        const pmoons = moonsByPlanet[p.name] || [];
+        const shown = Math.min(visibleMoons(), pmoons.length);
+        for(let i = 0; i < shown; i++) {
+            const m = pmoons[i];
+            const md = p.r + 12 + i * 7;
+            const mAng = orbitAngle(m.phase, m.period, simDays);
+            const mx = x + Math.cos(mAng) * md;
+            const my = y - Math.sin(mAng) * md;
+
+            // орбита луны — пунктиром, при достаточном приближении
+            if(zoom >= 1.4) {
+                ctx.strokeStyle = '#3a3a55';
+                ctx.lineWidth = 0.5/zoom;
+                ctx.setLineDash([2/zoom, 2/zoom]);
+                ctx.beginPath();
+                ctx.arc(x, y, md, 0, Math.PI*2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            const mg = ctx.createRadialGradient(mx-1, my-1, 0, mx, my, m.r);
+            mg.addColorStop(0, lighten(m.c, 45));
+            mg.addColorStop(1, darken(m.c, 55));
+            ctx.fillStyle = mg;
+            ctx.beginPath();
+            ctx.arc(mx, my, m.r, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.beginPath();
+            ctx.arc(mx, my, m.r, Math.PI/2, Math.PI*1.5);
+            ctx.fill();
+
+            if(zoom >= 1.7) {
+                ctx.fillStyle = '#9aa3b5';
+                ctx.font = `${Math.max(8, 8/zoom)}px monospace`;
+                ctx.fillText(m.n, mx + m.r + 3/zoom, my + 3/zoom);
+            }
+        }
+
+        // === ЛУНА И БАЗА ===
+        if(p.hasBase) {
+            const mAng = orbitAngle(moonL0, moonPeriod, simDays);
+            const mx = x + Math.cos(mAng) * moonDist;
+            const my = y - Math.sin(mAng) * moonDist;
+
+            ctx.strokeStyle = '#444466';
+            ctx.lineWidth = 0.5/zoom;
+            ctx.setLineDash([2/zoom, 2/zoom]);
+            ctx.beginPath();
+            ctx.arc(x, y, moonDist, 0, Math.PI*2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            const moonGrad = ctx.createRadialGradient(mx-1, my-1, 0, mx, my, 3);
+            moonGrad.addColorStop(0, '#dddddd');
+            moonGrad.addColorStop(1, '#666666');
+            ctx.fillStyle = moonGrad;
+            ctx.beginPath();
+            ctx.arc(mx, my, 3, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.beginPath();
+            ctx.arc(mx, my, 3, Math.PI/2, Math.PI*1.5);
+            ctx.fill();
+
+            const bAng = orbitAngle(0, basePeriod, simDays);
+            const bx = mx + Math.cos(bAng) * baseOrbitRadius;
+            const by = my - Math.sin(bAng) * baseOrbitRadius;
+
+            ctx.strokeStyle = '#00ffff44';
+            ctx.lineWidth = 0.5/zoom;
+            ctx.setLineDash([1/zoom, 1/zoom]);
+            ctx.beginPath();
+            ctx.arc(mx, my, baseOrbitRadius, 0, Math.PI*2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            const bs = 4/zoom;
+
+            const baseGlow = ctx.createRadialGradient(bx, by, 0, bx, by, bs*2);
+            baseGlow.addColorStop(0, 'rgba(0,255,255,0.6)');
+            baseGlow.addColorStop(1, 'rgba(0,255,255,0)');
+            ctx.fillStyle = baseGlow;
+            ctx.beginPath();
+            ctx.arc(bx, by, bs*2, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.fillStyle = '#00ffff';
+            ctx.fillRect(bx-bs/2, by-bs/2, bs, bs);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1/zoom;
+            ctx.strokeRect(bx-bs/2, by-bs/2, bs, bs);
+
+            const pulse = (Math.sin(time*4) + 1) * 0.5;
+            ctx.strokeStyle = `rgba(0,255,255,${0.5 - pulse*0.5})`;
+            ctx.lineWidth = 1/zoom;
+            ctx.beginPath();
+            ctx.arc(bx, by, bs + pulse*4, 0, Math.PI*2);
+            ctx.stroke();
+
+            ctx.fillStyle = '#00ffff';
+            ctx.font = `bold ${Math.max(9, 10/zoom)}px monospace`;
+            ctx.fillText('BASE', bx + bs + 3/zoom, by - 3/zoom);
+        }
+    });
+
+    ctx.restore();
+
+    // Счётчик дней привязан к орбитальному движению: тот же simDays,
+    // что задаёт углы планет. Показывает прошедшее время с загрузки страницы.
+    daysEl.textContent = (simDays - startSimDays).toFixed(4);
+    dateEl.textContent = formatSimDate(simDays);
+
+    zEl.textContent = zoom.toFixed(2) + 'x';
+
+    requestAnimationFrame(draw);
+}
+
+draw();
+
+// === ПАНЕЛЬ: дерево «планета → луны» ===
+// Главные луны (в скобках — реальный сидерический период) + известное общее число.
+const moonTree = {
+    Mercury: [],
+    Venus:   [],
+    Earth:   [['Луна / Moon', '27.32 d']],
+    Mars:    [['Phobos', '0.32 d'], ['Deimos', '1.26 d']],
+    Jupiter: [['Io', '1.77 d'], ['Europa', '3.55 d'], ['Ganymede', '7.15 d'], ['Callisto', '16.69 d']],
+    Saturn:  [['Mimas', '0.94 d'], ['Enceladus', '1.37 d'], ['Rhea', '4.52 d'], ['Titan', '15.95 d']],
+    Uranus:  [['Miranda', '1.41 d'], ['Ariel', '2.52 d'], ['Titania', '8.71 d'], ['Oberon', '13.46 d']],
+    Neptune: [['Proteus', '1.12 d'], ['Triton', '5.88 d']]
+};
+const moonTotals = { Mercury: 0, Venus: 0, Earth: 1, Mars: 2, Jupiter: 95, Saturn: 146, Uranus: 28, Neptune: 16 };
+
+const treeEl = document.getElementById('lootTree');
+planets.forEach(p => {
+    const li = document.createElement('li');
+    li.className = 'planet';
+    const moons = moonTree[p.name] || [];
+    li.innerHTML =
+        '<div class="node">' +
+            '<span class="caret">▶</span>' +
+            '<span class="dot" style="background:' + p.color + '"></span>' +
+            '<span class="pname">' + p.name + '</span>' +
+            '<span class="cnt">☾ ' + moonTotals[p.name] + '</span>' +
+        '</div>' +
+        '<ul class="loot">' +
+            moons.map(([n, t]) => '<li>' + n + '<i>' + t + '</i></li>').join('') +
+        '</ul>';
+    li.querySelector('.node').addEventListener('click', () => li.classList.toggle('open'));
+    treeEl.appendChild(li);
+});
+
+const sidePanel = document.getElementById('sidePanel');
+const panelToggle = document.getElementById('panelToggle');
+panelToggle.addEventListener('click', () => {
+    sidePanel.classList.toggle('collapsed');
+    panelToggle.textContent = sidePanel.classList.contains('collapsed') ? '◀' : '▶';
+    panelToggle.title = sidePanel.classList.contains('collapsed') ? 'Развернуть' : 'Свернуть';
+});
+</script>
+</body>
+</html>
