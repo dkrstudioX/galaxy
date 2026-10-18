@@ -239,6 +239,12 @@ function updateBaseRadius(x, y) {
     const rg = baseRadiusRange(state.baseMode);   // коридор: не пересекать тела
     state.baseRadius = Math.min(rg.max, Math.max(rg.min,
         hp ? Math.hypot(w.x - hp.x, w.y - hp.y) : bd));
+    // Сторона орбиты — направление от центра хозяина к курсору: перенос
+    // поставит базу с этой стороны, создание появится тут же (mode.ang).
+    if (hp) {
+        const dx = w.x - hp.x, dy = w.y - hp.y;
+        if (Math.hypot(dx, dy) > 1e-6) state.baseMode.ang = Math.atan2(-dy, dx);
+    }
 }
 
 /** Клик в режиме выбора орбиты: создать базу или перенести существующую. */
@@ -250,12 +256,12 @@ function confirmBase(x, y) {
     if (mode.moveId) {             // перенос: та же запись на новой орбите
         const rec = bases.find(b => b.id === mode.moveId);
         if (!rec) { refreshObjectCard(); return; }
-        moveBase(rec, mode, state.baseRadius);
+        moveBase(rec, mode, state.baseRadius, mode.ang);   // и со стороны курсора
         const p = planets.find(q => q.name === rec.planet);
         selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
         return;
     }
-    const rec = createBase(mode, state.baseRadius);
+    const rec = createBase(mode, state.baseRadius, mode.ang);
     const p = planets.find(q => q.name === rec.planet);
     selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
 }

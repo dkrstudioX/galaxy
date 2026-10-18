@@ -829,7 +829,10 @@ function drawSmallBodies(ctx) {
 // планеты/луны включает режим выбора орбиты — радиус берётся от курсора,
 // клик подтверждает (input.js). У созданной базы в карточке есть кнопка
 // «Переместить базу» — тот же режим; клик переносит запись на выбранную
-// орбиту (хост при этом выбирается по правилу ближайшего тела). Радиус орбиты
+// орбиту (хост при этом выбирается по правилу ближайшего тела). При переносе
+// база встаёт со стороны курсора: направление от центра хозяина к курсору
+// становится её положением на орбите и в превью, и в записи (phase0); новая
+// база тоже появляется с этой стороны, а не в случайной точке. Радиус орбиты
 // зажат в коридор baseRadiusRange: от поверхности хозяина до поверхности
 // ближайшего соседа (луны планеты или планеты луны) — орбита не пересекает
 // небесные тела. Период обращения — как у Луны: одни сутки на радиусе
@@ -938,13 +941,29 @@ function radiusOf(r, host) {
 }
 
 /**
+ * Фаза базы (phase0) так, чтобы прямо сейчас (state.simDays) она стояла на
+ * направлении ang от центра хоста: phase0 = ang − 2π·t/период. null — угол не
+ * задан (курсор в самом центре тела): создание берёт случайную точку, перенос
+ * оставляет прежнюю сторону орбиты.
+ */
+function phaseFor(ang, period) {
+    if (typeof ang !== 'number' || !isFinite(ang)) return null;
+    const twoPi = Math.PI * 2;
+    return ((ang - twoPi * state.simDays / period) % twoPi + twoPi) % twoPi;
+}
+
+/**
  * Создать базу на орбите радиуса r у планеты/луны; запись сразу пишется в
  * localStorage. Карточку/список обновляет вызывающий код (input.js).
  * @param {{kind: string, planet: string, moon: ?string}} host
  * @param {number} r радиус орбиты, единицы мира (клампится в коридор хоста)
+ * @param {?number} ang угол от центра хоста к курсору (радианы): база появится
+ *   с этой стороны; не задан — случайная точка орбиты
  */
-function createBase(host, r) {
+function createBase(host, r, ang) {
     const orbitRadius = radiusOf(r, host);
+    const period = basePeriodAt(orbitRadius);
+    const phase = phaseFor(ang, period);
     const rec = {
         id: 'base-' + Date.now().toString(36),
         name: nextName(),
@@ -952,8 +971,8 @@ function createBase(host, r) {
         planet: host.planet,
         moon: host.moon || null,
         orbitRadius,
-        period: basePeriodAt(orbitRadius),
-        phase0: Math.random() * Math.PI * 2,
+        period,
+        phase0: phase === null ? Math.random() * Math.PI * 2 : phase,
         created: new Date().toISOString()
     };
     bases.push(rec);
@@ -963,18 +982,24 @@ function createBase(host, r) {
 
 /**
  * Переместить созданную базу на орбиту радиуса r у планеты/луны (хост выбирает
- * режим на карте, в том числе по правилу ближайшего тела). Период пересчитывается,
- * запись сразу пишется в localStorage; карточку обновляет вызывающий код (input.js).
+ * режим на карте, в том числе по правилу ближайшего тела). База встаёт со
+ * стороны курсора: направление ang от центра хоста становится её положением на
+ * орбите. Период пересчитывается, запись сразу пишется в localStorage;
+ * карточку обновляет вызывающий код (input.js).
  * @param {Object} rec запись базы
  * @param {{kind: string, planet: string, moon: ?string}} host
  * @param {number} r радиус орбиты, единицы мира (клампится)
+ * @param {?number} ang угол от центра хоста к курсору (радианы); не задан —
+ *   сторона орбиты у базы сохраняется
  */
-function moveBase(rec, host, r) {
+function moveBase(rec, host, r, ang) {
     rec.hostKind = host.kind;
     rec.planet = host.planet;
     rec.moon = host.moon || null;
     rec.orbitRadius = radiusOf(r, host);
     rec.period = basePeriodAt(rec.orbitRadius);
+    const phase = phaseFor(ang, rec.period);
+    if (phase !== null) rec.phase0 = phase;
     saveBases();
     return rec;
 }
@@ -1005,7 +1030,10 @@ function drawBases(ctx, hostPos) {
         if (!hp) return;   // хост не в кадре (например, луна скрыта зумом)
         const orbitR = moving ? state.baseRadius : b.orbitRadius;
         const period = moving ? basePeriodAt(orbitR) : b.period;
-        const ang = b.phase0 + 2 * Math.PI * simDays / period;
+        // Перенос рисуется со стороны курсора (mode.ang считает input.js по
+        // позиции над картой) — база встанет туда же после подтверждения.
+        let ang = b.phase0 + 2 * Math.PI * simDays / period;
+        if (moving && typeof mode.ang === 'number') ang = mode.ang;
         b.x = hp.x + Math.cos(ang) * orbitR;
         b.y = hp.y - Math.sin(ang) * orbitR;
 
@@ -1077,14 +1105,23 @@ function drawBasePreview(ctx, hostPos) {
     ctx.setLineDash([]);
 
     const w = screenToWorld(state.mouseX, state.mouseY, state);
-    const dx = w.x - hp.x, dy = w.y - hp.y;
-    const d = Math.hypot(dx, dy) || 1;
+    // луч — направление будущего положения базы: угол от центра хоста к
+    // курсору (mode.ang; до первого движения над картой — по позиции мыши)
+    let ux, uy;
+    if (typeof mode.ang === 'number') {
+        ux = Math.cos(mode.ang);
+        uy = -Math.sin(mode.ang);
+    } else {
+        const dx = w.x - hp.x, dy = w.y - hp.y, d = Math.hypot(dx, dy) || 1;
+        ux = dx / d;
+        uy = dy / d;
+    }
 
     ctx.strokeStyle = 'rgba(0,255,255,0.25)';
     ctx.lineWidth = 0.5 / zoom;
     ctx.beginPath();
     ctx.moveTo(hp.x, hp.y);
-    ctx.lineTo(hp.x + dx / d * r, hp.y + dy / d * r);
+    ctx.lineTo(hp.x + ux * r, hp.y + uy * r);
     ctx.stroke();
 
     const l1 = 'Орбита: ' + Math.round(r) + ' ед.';
@@ -2080,6 +2117,12 @@ function updateBaseRadius(x, y) {
     const rg = baseRadiusRange(state.baseMode);   // коридор: не пересекать тела
     state.baseRadius = Math.min(rg.max, Math.max(rg.min,
         hp ? Math.hypot(w.x - hp.x, w.y - hp.y) : bd));
+    // Сторона орбиты — направление от центра хозяина к курсору: перенос
+    // поставит базу с этой стороны, создание появится тут же (mode.ang).
+    if (hp) {
+        const dx = w.x - hp.x, dy = w.y - hp.y;
+        if (Math.hypot(dx, dy) > 1e-6) state.baseMode.ang = Math.atan2(-dy, dx);
+    }
 }
 
 /** Клик в режиме выбора орбиты: создать базу или перенести существующую. */
@@ -2091,12 +2134,12 @@ function confirmBase(x, y) {
     if (mode.moveId) {             // перенос: та же запись на новой орбите
         const rec = bases.find(b => b.id === mode.moveId);
         if (!rec) { refreshObjectCard(); return; }
-        moveBase(rec, mode, state.baseRadius);
+        moveBase(rec, mode, state.baseRadius, mode.ang);   // и со стороны курсора
         const p = planets.find(q => q.name === rec.planet);
         selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
         return;
     }
-    const rec = createBase(mode, state.baseRadius);
+    const rec = createBase(mode, state.baseRadius, mode.ang);
     const p = planets.find(q => q.name === rec.planet);
     selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
 }
