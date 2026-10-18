@@ -52,8 +52,8 @@ export function drawSelection(ctx, sel, hoverTargets) {
 
     let orbit = null;
     if (sel.small) {
-        // малое тело: эллипс по собственным элементам орбиты (a, e, перигелий)
-        orbit = sel.small.orbit;
+        // малое тело: орбита по сэмплированным элементам (poly), у троянцев — круг
+        orbit = sel.small.poly ? { poly: sel.small.poly } : sel.small.orbit;
     } else if (sel.kind === 'planet') {
         orbit = { cx: 0, cy: 0, r: target.p.dist };
     } else if (sel.kind === 'base') {
@@ -105,7 +105,7 @@ export function findBodyAt(hoverTargets, mouseX, mouseY) {
             // орбита: у малых тел — из их элементов (эллипс), у планет — вокруг
             // солнца; у самого солнца орбиты нет
             let orbit = null;
-            if (t.small) orbit = t.small.orbit;
+            if (t.small) orbit = t.small.poly ? { poly: t.small.poly } : t.small.orbit;
             else if (t.kind !== 'sun') orbit = { cx: 0, cy: 0, r: t.p.dist };
             return { kind: t.kind, name, orbit, p: t.p || null, m: null, small: t.small || null };
         }
@@ -126,7 +126,12 @@ function drawOrbitOverlay(ctx, hover, color) {
     ctx.lineWidth = 1 / zoom;
     ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.beginPath();
-    if (hover.orbit.rot !== undefined) {
+    if (hover.orbit.poly) {
+        // малое тело: сэмплированная петля — эллипс по (a, e) врёт вне линейных зон
+        const p = hover.orbit.poly;
+        ctx.moveTo(p[0], p[1]);
+        for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]);
+    } else if (hover.orbit.rot !== undefined) {
         // эллипс малого тела: центр, полуоси, поворот (мировые единицы)
         ctx.ellipse(hover.orbit.cx, hover.orbit.cy, hover.orbit.a, hover.orbit.b, hover.orbit.rot, 0, Math.PI * 2);
     } else {

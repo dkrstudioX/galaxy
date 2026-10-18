@@ -160,6 +160,8 @@ function renderObjectInfo() {
         html = neaInfoHTML(sel.small);
     } else if (sel.kind === 'trojan') {
         html = trojanInfoHTML(sel.small);
+    } else if (sel.kind === 'comet') {
+        html = cometInfoHTML(sel.small);
     } else if (sel.kind === 'base') {
         html = sel.local ? newBaseInfoHTML(sel.local) : baseInfoHTML();
     } else {
@@ -212,6 +214,26 @@ function trojanInfoHTML(b) {
             row('Либрация', '±5° за ~150 лет') +
         '</div>' +
         '<div class="obj-note">Реликтовое вещество ранней Солнечной системы</div>';
+}
+
+const COMET_SRC = { oort: 'облако Оорта', kuiper: 'пояс Койпера' };
+
+/** Блок «Объект» для кометы. */
+function cometInfoHTML(b) {
+    const years = b.T / 365.256;
+    return '<div class="obj-title"><span class="dot" style="background:#f0f0f0"></span>' +
+            '<strong>' + b.name + '</strong></div>' +
+        '<div class="obj-kind">Комета · ' + (years < 200 ? 'короткопериодическая' : 'долгопериодическая') + '</div>' +
+        '<div class="obj-rows">' +
+            row('Большая полуось', b.a.toFixed(1) + ' <em>а.е.</em>') +
+            row('Эксцентриситет', b.e.toFixed(4)) +
+            row('Период обращения', fmtPeriod(b.T)) +
+            row('Перигелий / афелий', b.q.toFixed(2) + ' / ' + b.Q.toFixed(1) + ' <em>а.е.</em>') +
+            row('Источник', COMET_SRC[b.src] || '—') +
+            (b.shower ? row('Метеорный поток', b.shower) : '') +
+            row('Ядро', b.dia + ' <em>км</em>') +
+        '</div>' +
+        '<div class="obj-note">Хвост направлен от Солнца и ярче всего у перигелия</div>';
 }
 
 /** Блок «Объект» для малого тела главного пояса (Церера, Веста, Паллада, Гигея). */

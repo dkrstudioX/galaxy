@@ -14,8 +14,8 @@
 // =============================================================================
 
 import { state } from './state.js';
-import { makeRng, auToDist, keplerPos, periodFromA, orbitAngle } from './math.js';
-import { planets, beltNotables, neas, trojanNames } from './data.js';
+import { makeRng, auToDist, keplerPos, periodFromA, orbitAngle, clamp } from './math.js';
+import { planets, beltNotables, neas, trojanNames, comets } from './data.js';
 import { STROKE } from './config.js';
 
 // --- Главный пояс: закон Кеплера от якорей Марс → Юпитер ---------------------
@@ -98,15 +98,32 @@ export const notables = beltNotables.map(b => ({
 }));
 
 // --- Околоземные астероиды (ОЗА) ----------------------------------------------
-/** Малое тело карты: общие поля для hover и карточек (элементы, эллипс, тип). */
+/**
+ * Точки орбиты для подсветки (hover/выбор): маппинг а.е.→единицы нелинеен,
+ * поэтому «эллипс по (a, e)» верен лишь в линейных зонах шкалы. Надёжнее
+ * сэмплировать положения по тем же элементам, что и движение.
+ * @returns {number[]} плоский массив x0, y0, x1, y1, … (мир, замкнутая петля)
+ */
+function orbitPoly(a, e, peri, T) {
+    const pts = [];
+    for (let k = 0; k <= 96; k++) {
+        const pos = keplerPos(a, e, peri, 0, T, k * T / 96);
+        pts.push(pos.x, pos.y);
+    }
+    return pts;
+}
+
+/** Малое тело карты: общие поля для hover и карточек (элементы, орбита, тип). */
 function smallBody(id, kind, name, src, r, extra) {
+    const T = periodFromA(src.a);
     return Object.assign({
         id, kind, name,
         a: src.a, e: src.e, peri: src.peri, m0: src.m0, dia: src.dia,
-        T: periodFromA(src.a),
+        T,
         q: src.a * (1 - src.e), Q: src.a * (1 + src.e),
         r, x: 0, y: 0,
-        orbit: orbitEllipse(src.a, src.e, src.peri)
+        orbit: orbitEllipse(src.a, src.e, src.peri),
+        poly: orbitPoly(src.a, src.e, src.peri, T)
     }, extra || {});
 }
 
@@ -177,6 +194,76 @@ export const trojanBodies = trojanNames.map(t => ({
     orbit: { cx: 0, cy: 0, r: JUPITER.dist }
 }));
 
+// --- Пояс Койпера и облако Оорта ------------------------------------------------
+// Разреженная пыль без имён (не выбирается). Койпер — 30–50 а.е. в радиусах
+// карты (auToDist), Оорт — сфера 1300–1800 единиц. Точки рисуются
+// прямоугольниками (дешевле дуг) с минимальным экранным размером 1.1 px;
+// точки вне кадра отбрасываются по полудиагонали, полоса — целиком.
+const DUST_SEED = 20261018;
+const dustRng = makeRng(DUST_SEED);
+
+/** Собрать кольцо пыли: мировые позиции, границы радиусов и группы по цвету. */
+function makeDustRing(list) {
+    let rMin = Infinity, rMax = 0;
+    const map = new Map();
+    for (const p of list) {
+        p.x = Math.cos(p.ang) * p.r;
+        p.y = -Math.sin(p.ang) * p.r;
+        if (p.r < rMin) rMin = p.r;
+        if (p.r > rMax) rMax = p.r;
+        let g = map.get(p.col);
+        if (!g) { g = { col: p.col, points: [] }; map.set(p.col, g); }
+        g.points.push(p);
+    }
+    return { rMin, rMax, groups: [...map.values()] };
+}
+
+const kuiperDust = makeDustRing(Array.from({ length: 600 }, () => {
+    const al = 0.22 + dustRng() * 0.23;
+    return {
+        ang: dustRng() * Math.PI * 2,
+        r: auToDist(30 + dustRng() * 20),              // 30–50 а.е.
+        s: 0.8 + dustRng() * 1.0,
+        col: 'rgba(150,150,150,' + al.toFixed(2) + ')'
+    };
+}));
+
+const oortDust = makeDustRing(Array.from({ length: 350 }, () => {
+    const al = 0.16 + dustRng() * 0.18;
+    return {
+        ang: dustRng() * Math.PI * 2,
+        r: 1300 + dustRng() * 500,                     // 1300–1800 ед.
+        s: 0.8 + dustRng() * 1.0,
+        col: 'rgba(150,150,150,' + al.toFixed(2) + ')'
+    };
+}));
+
+/** Нарисовать кольцо пыли: полоса или точка вне кадра — пропускаются; fillStyle
+ *  переключается по цветовым группам (иначе на 950 точек — 950 переключений). */
+function drawDustRing(ctx, ring, zoom) {
+    const half = Math.hypot(state.W, state.H) / 2 / zoom + 2;
+    const camD = Math.hypot(state.camX, state.camY);
+    if (camD + half < ring.rMin || camD - half > ring.rMax) return;  // вся полоса вне кадра
+
+    const minS = 1.1 / zoom;
+    const h2 = half * half;
+    for (const g of ring.groups) {
+        ctx.fillStyle = g.col;
+        for (const p of g.points) {
+            if ((p.x - state.camX) ** 2 + (p.y - state.camY) ** 2 > h2) continue;
+            const s = Math.max(p.s, minS);
+            ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+        }
+    }
+}
+
+// --- Кометы ---------------------------------------------------------------------
+// Ядро, кома и хвост, направленный от Солнца. Длина хвоста — в экранных
+// пикселях: (26 + 46·pf)·tailK / zoom, где pf = q/r — близость к перигелию.
+export const cometBodies = comets.map(c =>
+    smallBody('comet-' + c.n, 'comet', c.ru + ' / ' + c.n, c, 1.4,
+        { shower: c.shower, src: c.src, tailK: c.tailK }));
+
 /**
  * Нарисовать малые тела в мировой системе координат (вызывается из render.js
  * после звёзд). Возвращает hoverTargets именованных тел.
@@ -185,6 +272,10 @@ export const trojanBodies = trojanNames.map(t => ({
 export function drawSmallBodies(ctx) {
     const { simDays, zoom } = state;
     const targets = [];
+
+    // Дальняя пыль фоном: пояс Койпера и облако Оорта (под всеми телами)
+    drawDustRing(ctx, kuiperDust, zoom);
+    drawDustRing(ctx, oortDust, zoom);
 
     // Частицы пояса
     ctx.fillStyle = '#6e6e6e';
@@ -260,6 +351,52 @@ export function drawSmallBodies(ctx) {
         ctx.stroke();
 
         targets.push({ kind: 'trojan', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
+    });
+
+    // Кометы: ядро, кома и хвост, направленный от Солнца
+    cometBodies.forEach(b => {
+        const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
+        b.x = pos.x;
+        b.y = pos.y;
+
+        const pf = clamp(b.q / Math.max(pos.rAu, 0.001), 0, 1);  // близость к перигелию
+        const len = (26 + 46 * pf) * b.tailK / zoom;             // хвост в пикселях экрана
+        const d = Math.hypot(pos.x, pos.y) || 1;
+        const dx = pos.x / d, dy = pos.y / d;                    // от Солнца
+
+        // хвост: сужающийся треугольник вдоль антисолнечного луча
+        const w0 = 1.6 / zoom;
+        const tipX = pos.x + dx * len, tipY = pos.y + dy * len;
+        const grad = ctx.createLinearGradient(pos.x, pos.y, tipX, tipY);
+        grad.addColorStop(0, 'rgba(230,230,230,0.42)');
+        grad.addColorStop(0.55, 'rgba(225,225,225,0.15)');
+        grad.addColorStop(1, 'rgba(220,220,220,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(pos.x - dy * w0, pos.y + dx * w0);
+        ctx.lineTo(pos.x + dy * w0, pos.y - dx * w0);
+        ctx.lineTo(tipX, tipY);
+        ctx.closePath();
+        ctx.fill();
+
+        // кома — радиальное свечение вокруг ядра
+        const comaR = 9 / zoom;
+        const coma = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, comaR);
+        coma.addColorStop(0, 'rgba(235,235,235,0.5)');
+        coma.addColorStop(0.5, 'rgba(220,220,220,0.16)');
+        coma.addColorStop(1, 'rgba(220,220,220,0)');
+        ctx.fillStyle = coma;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, comaR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // ядро
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, b.r, 0, Math.PI * 2);
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fill();
+
+        targets.push({ kind: 'comet', name: b.name, x: pos.x, y: pos.y, r: b.r, moons: [], small: b });
     });
 
     return targets;
