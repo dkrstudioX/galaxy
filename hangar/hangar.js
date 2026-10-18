@@ -315,6 +315,44 @@
     return state.tradeMode === 'buy' ? shopObjectConsole(currentShop()) : cargoConsole(currentCargo());
   }
 
+  /* Колонка 1 магазина: сведения о выбранном корабле (по умолчанию — первый). */
+  function shipPanelHTML() {
+    if (!window.Store) return '<div class="trade-empty">Данные не загружены</div>';
+    var rec = activeUserShip();
+    var ship = rec ? Store.byId('objects', rec.shipId) : null;
+    if (!ship) return '<div class="trade-empty">Кораблей ещё нет — купите в магазине</div>';
+
+    var cat = Store.byId('categories', ship.categoryId);
+    var props = Store.categoryProps(ship.categoryId).map(function (p) {
+      var raw = String((ship.values && ship.values[p.id]) || p.value || '').trim();
+      return { name: p.name, value: /^\d+([.,]\d+)?$/.test(raw) ? fmt(Number(raw.replace(',', '.'))) : raw };
+    }).filter(function (p) { return p.value; });
+
+    var rows = props.map(function (p) {
+      return '<div class="ship-row"><span>' + p.name + '</span><b>' + p.value + '</b></div>';
+    }).join('');
+
+    var slots = (ship.slots || []).map(function (s) {
+      var slot = Store.byId('slots', s.slotId);
+      var names = (s.contents || []).map(function (c) {
+        var it = Store.byId('objects', c.itemId);
+        return it ? it.name : '—';
+      });
+      return '<div class="ship-slot"><b>' + (slot ? slot.name : 'слот') + '</b><span>' +
+        (names.length ? names.join(', ') : 'пусто') + '</span></div>';
+    }).join('');
+
+    var sub = [];
+    if (rec.price) sub.push('куплен за ' + fmt(Number(rec.price)) + ' ¤');
+    if (rec.boughtAt) sub.push(new Date(rec.boughtAt).toLocaleDateString('ru-RU'));
+
+    return '<span class="ship-sub">' + (cat ? Store.categoryPath(cat.id) : '') + '</span>' +
+      '<strong class="ship-title">' + ship.name + '</strong>' +
+      '<span class="ship-sub">' + sub.join(' · ') + '</span>' +
+      '<div class="ship-rows">' + rows + '</div>' +
+      '<span class="ship-sub">Слоты · ' + (ship.slots || []).length + '</span>' + slots;
+  }
+
   function renderShop() {
     var filtered = filteredItems();
     var selected = currentShop();
@@ -333,6 +371,13 @@
       }).join('')
       : '<div class="list-empty">' + (shopItems.length ? 'В этой категории пока нет объектов' : 'В базе админки пока нет объектов') + '</div>';
     document.getElementById('shopConsole').innerHTML = shopConsoleHTML();
+    var shipInfo = document.getElementById('shipInfo');
+    if (shipInfo) shipInfo.innerHTML = shipPanelHTML();
+    var shipMeta = document.getElementById('shipPanelMeta');
+    if (shipMeta) {
+      var shipsTotal = userShipRecords().length;
+      shipMeta.textContent = shipsTotal ? shipsTotal + ' в ангаре' : 'нет кораблей';
+    }
     document.getElementById('cargoList').innerHTML = initialCargo.map(function (it) {
       return itemRowHTML(it, state.selectedCargo === it.id, 'select-cargo');
     }).join('');
