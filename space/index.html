@@ -359,14 +359,14 @@ function drawPlanet(x, y, r, color, type, sunX, sunY) {
 
     ctx.fillStyle = '#c9c9c9';
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.arc(0, 0, r, 0, Math.PI*2);
     ctx.fill();
 
     // тонкая видимая обводка планеты (тоньше, чем у солнца, толще, чем у лун)
     ctx.strokeStyle = '#efefef';
     ctx.lineWidth = 1.2/zoom;
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.arc(0, 0, r, 0, Math.PI*2);
     ctx.stroke();
 
     ctx.restore();
