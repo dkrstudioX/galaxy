@@ -290,23 +290,38 @@ function visibleMoons() {
 
 // ===== sky.js =====
 // =============================================================================
-// sky.js — дальний фон карты: Млечный Путь, галактика Андромеды, туманности.
+// sky.js — задний план карты: Млечный Путь, галактика Андромеды, туманности.
 //
 // Полностью отдельный слой, не связанный с игрой (солнце, планеты, луны, база, пояс
-// астероидов, симуляция времени): рисуется в экранных координатах, камера и
-// зум на него не влияют — как бесконечно далёкое небо. Собирается один раз
-// в offscreen-canvas и кэшируется; на кадр остаётся одна drawImage.
+// астероидов, симуляция времени): рисуется в экранных координатах.
+// Глубокое небо собирается один раз в offscreen-canvas с запасом по краям
+// (overscan) и блитится со смещением и масштабом: при панорамировании небо
+// «отстаёт» от мира (параллакс с насыщением), при зуме слегка «наезжает».
+// Содержимое кэша при этом не пересобирается — только положение блита.
 //
 // Геометрия: полоса Млечного Пути наклонена к плоскости карты (эклиптике)
 // на ~60° — как наклон галактической плоскости к эклиптике в реальности.
 // Положения объектов задаются в координатах полосы: u — вдоль оси (-1..1),
-// v — поперёк, в долях длины L = hypot(W, H).
+// v — поперёк, в долях длины L = hypot(W, H) — размера экрана.
 // =============================================================================
 
 
 
 const BAND_ANGLE_DEG = 60;   // наклон полосы к горизонтали экрана
 const SEED = 20261018;       // сид: рисунок неба стабилен между загрузками
+
+// --- Реакция на камеру (глубокое небо) ----------------------------------------
+// Небо смещается в ту же сторону, что мир на экране, но всего на ~4% —
+// классический параллакс, «фон отстаёт». Ограничение насыщением: панорама
+// бесконечная, а кэш конечный — так края экрана никогда не оголяются, и небо
+// ведёт себя как бесконечно далёкое. Зум слегка «наезжает» на небо.
+const PARALLAX_K = 0.04;     // доля смещения камеры, пока смещение мало
+const MAX_SHIFT = 0.05;      // предельное смещение (доля размера экрана по оси)
+const SIGN = -1;             // знак: небо едет туда же, куда мир при росте camX
+const ZOOM_K = 0.03;         // реакция на зум: столько на каждое удвоение
+const MIN_SCALE = 0.94;      // пределы масштаба неба в блите
+const MAX_SCALE = 1.15;
+const OVERSCAN = 0.10;       // запас кэша по краям (доля размера экрана)
 
 // mulberry32 — маленький сидированный ПСЧ.
 function makeRng(seed) {
@@ -392,33 +407,62 @@ const skyMagellanic = [
 let skyCanvas = null;
 let skyW = 0, skyH = 0;
 
-/** Экранная точка по координатам полосы (u вдоль, v поперёк, доли L). */
-function bandPoint(u, v, W, H) {
+/** Экранная точка по координатам полосы: центр (cx, cy), масштаб L. */
+function bandPoint(u, v, cx, cy, L) {
     const a = BAND_ANGLE_DEG * Math.PI / 180;
-    const L = Math.hypot(W, H);
     return {
-        x: W / 2 + Math.cos(a) * u * L / 2 - Math.sin(a) * v * L,
-        y: H / 2 + Math.sin(a) * u * L / 2 + Math.cos(a) * v * L
+        x: cx + Math.cos(a) * u * L / 2 - Math.sin(a) * v * L,
+        y: cy + Math.sin(a) * u * L / 2 + Math.cos(a) * v * L
     };
+}
+
+/** Смещение неба от камеры: доля PARALLAX_K с насыщением на MAX_SHIFT. */
+function skyShift() {
+    const maxX = MAX_SHIFT * state.W, maxY = MAX_SHIFT * state.H;
+    return {
+        x: SIGN * maxX * Math.tanh(PARALLAX_K * state.camX / maxX),
+        y: SIGN * maxY * Math.tanh(PARALLAX_K * state.camY / maxY)
+    };
+}
+
+/** Масштаб неба от зума: каждое удвоение добавляет ZOOM_K, с ограничением. */
+function skyScale() {
+    let s = Math.pow(2, ZOOM_K * Math.log2(state.zoom));
+    if (s < MIN_SCALE) s = MIN_SCALE;
+    if (s > MAX_SCALE) s = MAX_SCALE;
+    return s;
 }
 
 /** Нарисовать дальний фон в экранных координатах (вызывается из render.js). */
 function drawSky(ctx) {
     if (!skyCanvas || skyW !== state.W || skyH !== state.H) buildSky();
-    ctx.drawImage(skyCanvas, 0, 0);
+
+    // Блит кэша со смещением/масштабом. Запас OVERSCAN заведомо больше
+    // максимального смещения (MAX_SHIFT) и разницы масштаба (MIN_SCALE),
+    // поэтому экран всегда накрыт целиком — пустых полос у краёв не бывает.
+    const scale = skyScale();
+    const sh = skyShift();
+    const bw = skyCanvas.width * scale, bh = skyCanvas.height * scale;
+    ctx.drawImage(skyCanvas, (state.W - bw) / 2 + sh.x, (state.H - bh) / 2 + sh.y, bw, bh);
 }
 
-/** Собрать слой неба в offscreen-canvas текущего размера окна. */
+/** Собрать слой неба в offscreen-canvas с запасом по краям. */
 function buildSky() {
     const W = state.W, H = state.H;
-    const L = Math.hypot(W, H);
+    const BW = Math.round(W * (1 + 2 * OVERSCAN));   // кэш с запасом
+    const BH = Math.round(H * (1 + 2 * OVERSCAN));
     skyW = W;
     skyH = H;
     skyCanvas = document.createElement('canvas');
-    skyCanvas.width = W;
-    skyCanvas.height = H;
+    skyCanvas.width = BW;
+    skyCanvas.height = BH;
     const g = skyCanvas.getContext('2d');
-    const pt = (u, v) => bandPoint(u, v, W, H);
+
+    // Масштаб объектов — от размера ЭКРАНА (вид не меняется из-за запаса),
+    // центр — центр кэша (при блите он совпадает с центром экрана).
+    const L = Math.hypot(W, H);
+    const cx = BW / 2, cy = BH / 2;
+    const pt = (u, v) => bandPoint(u, v, cx, cy, L);
 
     // Мягкое пятно: радиальный градиент от центра к полностью прозрачному краю.
     const blob = (x, y, r, col, alpha) => {
