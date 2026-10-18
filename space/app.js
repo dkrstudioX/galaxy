@@ -290,7 +290,8 @@ function visibleMoons() {
 
 // ===== sky.js =====
 // =============================================================================
-// sky.js — задний план карты: Млечный Путь, галактика Андромеды, туманности.
+// sky.js — задний план карты: Млечный Путь, галактика Андромеды, туманности
+// и звёзды нашей галактики.
 //
 // Полностью отдельный слой, не связанный с игрой (солнце, планеты, луны, база, пояс
 // астероидов, симуляция времени): рисуется в экранных координатах.
@@ -298,6 +299,8 @@ function visibleMoons() {
 // (overscan) и блитится со смещением и масштабом: при панорамировании небо
 // «отстаёт» от мира (параллакс с насыщением), при зуме слегка «наезжает».
 // Содержимое кэша при этом не пересобирается — только положение блита.
+// Звёзды галактики — два бесконечных тайлящихся слоя с собственным параллаксом
+// и мерцанием, рисуются каждый кадр поверх кэша.
 //
 // Геометрия: полоса Млечного Пути наклонена к плоскости карты (эклиптике)
 // на ~60° — как наклон галактической плоскости к эклиптике в реальности.
@@ -322,6 +325,17 @@ const ZOOM_K = 0.03;         // реакция на зум: столько на 
 const MIN_SCALE = 0.94;      // пределы масштаба неба в блите
 const MAX_SCALE = 1.15;
 const OVERSCAN = 0.10;       // запас кэша по краям (доля размера экрана)
+
+// --- Звёзды галактики -----------------------------------------------------------
+// Два бесконечных слоя (тайл размером с экран, обёртка mod): у каждого свой
+// параллакс k — какую долю экранного пути мира проходит слой (мир = 1.0,
+// глубокое небо ≈ 0.04). Дальние звёзды почти стоят, средние заметно плывут.
+const STAR_SEED = 20261018;  // сид слоёв звёзд
+const GALAXY_LAYERS = [
+    { k: 0.10, count: 700, size: [0.5, 1.0], alpha: [0.18, 0.55], twSpeed: 1.3, twAmp: 0.25 },
+    { k: 0.35, count: 450, size: [0.6, 1.2], alpha: [0.28, 0.70], twSpeed: 1.8, twAmp: 0.35 }
+];
+const BRIGHT_STARS = 14;     // ярких звёзд в полосе (без имён)
 
 // mulberry32 — маленький сидированный ПСЧ.
 function makeRng(seed) {
@@ -370,12 +384,24 @@ for (let i = 0; i < 40; i++) {
 
 // Звёздная пыль внутри полосы: треугольное распределение по v — гуще к оси.
 const skyStars = [];
-for (let i = 0; i < 520; i++) {
+for (let i = 0; i < 900; i++) {
     skyStars.push({
         u: rnd(-1.08, 1.08),
         v: (rng() + rng() + rng() - 1.5) / 1.5 * 0.07,
-        s: rnd(0.4, 1.2),
-        a: rnd(0.12, 0.5),
+        s: rnd(0.4, 1.4),
+        a: rnd(0.12, 0.55),
+        tint: rng()
+    });
+}
+
+// Яркие звёзды полосы — заметные точки с маленьким ореолом (безымянные).
+const brightStars = [];
+for (let i = 0; i < BRIGHT_STARS; i++) {
+    brightStars.push({
+        u: rnd(-0.9, 0.9),
+        v: rnd(-0.05, 0.05),
+        r: rnd(0.8, 1.4),     // размер ядра, px
+        halo: rnd(4, 7),      // радиус ореола, px
         tint: rng()
     });
 }
@@ -401,6 +427,24 @@ const skyMagellanic = [
     { u: -0.40, v: 0.100, r: 0.018, a: 0.05 },
     { u: -0.50, v: 0.115, r: 0.011, a: 0.04 }
 ];
+
+// Слои звёзд галактики: позиции в долях экрана [0..1) — тайл всегда
+// соответствует текущему размеру окна, при resize узор перекладывается.
+const starRng = makeRng(STAR_SEED);
+const galaxyLayers = GALAXY_LAYERS.map(cfg => {
+    const stars = [];
+    for (let i = 0; i < cfg.count; i++) {
+        stars.push({
+            x: starRng(),
+            y: starRng(),
+            s: cfg.size[0] + (cfg.size[1] - cfg.size[0]) * starRng(),
+            a: cfg.alpha[0] + (cfg.alpha[1] - cfg.alpha[0]) * starRng(),
+            ph: starRng() * Math.PI * 2,
+            tint: starRng()
+        });
+    }
+    return { k: cfg.k, twSpeed: cfg.twSpeed, twAmp: cfg.twAmp, stars };
+});
 
 // --- Отрисовка ------------------------------------------------------------------
 
@@ -444,6 +488,37 @@ function drawSky(ctx) {
     const sh = skyShift();
     const bw = skyCanvas.width * scale, bh = skyCanvas.height * scale;
     ctx.drawImage(skyCanvas, (state.W - bw) / 2 + sh.x, (state.H - bh) / 2 + sh.y, bw, bh);
+
+    drawGalaxyStars(ctx);
+}
+
+/**
+ * Звёзды галактики: бесконечные слои с параллаксом и мерцанием.
+ * Тайл размером с экран, обёртка mod + копии у краёв — панорама не ограничена.
+ */
+function drawGalaxyStars(ctx) {
+    const { W, H, camX, camY, zoom, time } = state;
+    galaxyLayers.forEach(layer => {
+        // экранный путь слоя — доля k от пути мира (мир панорамируется 1:1 к курсору)
+        const ox = -camX * layer.k * zoom;
+        const oy = -camY * layer.k * zoom;
+        layer.stars.forEach(s => {
+            const px0 = ((s.x * W + ox) % W + W) % W;
+            const py0 = ((s.y * H + oy) % H + H) % H;
+            const tw = 1 - layer.twAmp * (0.5 + 0.5 * Math.sin(time * layer.twSpeed + s.ph));
+            const col = s.tint < 0.08 ? '255,210,170' : (s.tint > 0.92 ? '170,200,255' : '255,255,255');
+            ctx.fillStyle = 'rgba(' + col + ',' + (s.a * tw).toFixed(3) + ')';
+            for (let i = -1; i <= 1; i++) {
+                const px = px0 + i * W;
+                if (px < -2 || px > W + 2) continue;
+                for (let j = -1; j <= 1; j++) {
+                    const py = py0 + j * H;
+                    if (py < -2 || py > H + 2) continue;
+                    ctx.fillRect(px, py, s.s, s.s);
+                }
+            }
+        });
+    });
 }
 
 /** Собрать слой неба в offscreen-canvas с запасом по краям. */
@@ -492,6 +567,16 @@ function buildSky() {
         g.fillStyle = 'rgba(' + col + ',' + s.a + ')';
         g.fillRect(p.x, p.y, s.s, s.s);
     });
+
+    // Яркие звёзды полосы: мягкий ореол + яркое ядро.
+    brightStars.forEach(bs => {
+        const p = pt(bs.u, bs.v);
+        const col = bs.tint < 0.15 ? [255, 220, 180] : (bs.tint > 0.85 ? [190, 215, 255] : [245, 248, 255]);
+        blob(p.x, p.y, bs.halo, col, 0.35);
+        g.fillStyle = 'rgba(' + col[0] + ',' + col[1] + ',' + col[2] + ',0.9)';
+        g.fillRect(p.x - bs.r / 2, p.y - bs.r / 2, bs.r, bs.r);
+    });
+
     skyNebulae.forEach(n => {
         // Три смещённых пятна — у туманности неровная форма.
         for (let k = 0; k < 3; k++) {
