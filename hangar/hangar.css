@@ -570,6 +570,15 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 .slot-tile:hover { border-color: rgba(143, 245, 227, .5); background: rgba(143, 245, 227, .08); }
 .slot-tile.empty { border-style: dashed; color: rgba(120, 160, 170, .32); cursor: default; }
 .slot-tile.empty:hover { border-color: rgba(120, 160, 170, .32); background: rgba(8, 18, 24, .5); }
+/* Пустой слот, под который есть товары: клик открывает их категорию в магазине. */
+.slot-tile.empty.has-goods { cursor: pointer; }
+.slot-tile.empty.has-goods::after {
+  content: "+"; position: absolute; right: 4px; bottom: 2px;
+  font: 10px "IBM Plex Mono"; color: rgba(143, 245, 227, .5);
+}
+.slot-tile.empty.has-goods:hover {
+  border-color: rgba(143, 245, 227, .5); background: rgba(143, 245, 227, .08); color: rgba(143, 245, 227, .7);
+}
 .slot-tile .slot-qty { position: absolute; right: 4px; bottom: 3px; font: 8px "IBM Plex Mono"; color: #cfe9e3; }
 .slot-tip { position: fixed; z-index: 80; min-width: 140px; max-width: 240px; padding: 10px 12px; border: 1px solid rgba(143, 245, 227, .35); background: rgba(6, 14, 20, .97); box-shadow: 0 14px 32px rgba(0, 0, 0, .55); pointer-events: none; }
 .slot-tip h4 { margin: 0 0 8px; font: 9px "IBM Plex Mono"; letter-spacing: .1em; text-transform: uppercase; color: #8ff5e3; }

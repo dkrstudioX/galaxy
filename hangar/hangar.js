@@ -48,6 +48,7 @@
     if (!window.Store) return [];
     return Store.objects().map(function (o) {
       var cat = Store.byId('categories', o.categoryId);
+      var slot = o.slotId ? Store.byId('slots', o.slotId) : null;
       var props = Store.categoryProps(o.categoryId).map(function (p) {
         return { name: p.name, value: (o.values && o.values[p.id]) || p.value || '' };
       }).filter(function (p) { return p.value; });
@@ -63,6 +64,8 @@
         price: Store.priceBuy(o),
         sale: Store.priceSale(o),
         isShip: Store.categoryIsShip(o.categoryId),
+        slotId: o.slotId || '',
+        slotName: slot ? slot.name : '',
         props: props
       };
     });
@@ -459,7 +462,11 @@
     return '<div class="slot-grid">' + ship.slots.map(function (s, i) {
       var contents = s.contents || [];
       var first = contents.length && window.Store ? Store.byId('objects', contents[0].itemId) : null;
-      return '<button class="slot-tile' + (contents.length ? '' : ' empty') + '" data-action="open-slot" ' +
+      /* Пустой слот с подходящими товарами ведёт в магазин на их категорию. */
+      var goods = contents.length ? 0 : slotGoods(s.slotId).length;
+      var cls = 'slot-tile' + (contents.length ? '' : ' empty') + (goods ? ' has-goods' : '');
+      var hint = goods ? ' title="Открыть совместимые товары: ' + goods + '"' : '';
+      return '<button class="' + cls + '" data-action="open-slot" ' + hint +
         'data-ship="' + shipId + '" data-index="' + i + '">' +
         (first ? iconMarkup(first.icon, 22) : '') +
         (contents.length > 1 ? '<span class="slot-qty">×' + contents.length + '</span>' : '') +
@@ -469,7 +476,12 @@
   function slotTipHTML(ship, index) {
     var contents = slotContentsList(ship, index);
     var name = slotTitle(ship, index);
-    if (!contents.length) return '<h4>' + name + '</h4><small>Слот пуст</small>';
+    if (!contents.length) {
+      var rec = slotRecord(ship, index);
+      var goods = rec ? slotGoods(rec.slotId).length : 0;
+      return '<h4>' + name + '</h4><small>' +
+        (goods ? 'Слот пуст · нажмите — откроются совместимые товары' : 'Слот пуст') + '</small>';
+    }
     var cells = contents.slice(0, 4).map(function (c) {
       var it = window.Store ? Store.byId('objects', c.itemId) : null;
       return '<span class="tip-cell">' + iconMarkup(it ? it.icon : 'grid', 16) + '</span>';
@@ -501,6 +513,48 @@
     if (!slotContentsList(ship, index).length) return;
     modal.innerHTML = slotModalHTML(ship, index);
     modal.hidden = false;
+  }
+
+  /* Товары, которые вставляются в слот этого шаблона. */
+  function slotGoods(slotId) {
+    if (!slotId) return [];
+    return shopItems.filter(function (it) { return !it.isShip && it.slotId === slotId; });
+  }
+
+  /* Самая глубокая категория, общая для всех позиций: её и открываем в магазине. */
+  function commonCategoryId(items) {
+    var chains = [];
+    items.forEach(function (it) {
+      var chain = window.Store ? Store.categoryChain(it.categoryId) : [];
+      if (chain.length) chains.push(chain);
+    });
+    if (!chains.length) return '';
+    var common = chains[0];
+    for (var i = 1; i < chains.length && common.length; i++) {
+      var n = 0;
+      while (n < common.length && n < chains[i].length && common[n].id === chains[i][n].id) n++;
+      common = common.slice(0, n);
+    }
+    return common.length ? common[common.length - 1].id : '';
+  }
+
+  /* Пустой слот: открываем в магазине товары под него — категорию и её подкатегорию. */
+  function openSlotGoods(ship, index) {
+    var rec = slotRecord(ship, index);
+    var items = rec ? slotGoods(rec.slotId) : [];
+    if (!items.length) return false;
+    var chain = window.Store ? Store.categoryChain(commonCategoryId(items)) : [];
+    if (!chain.length) return false;
+    state.tab = 'shop';
+    state.category = chain[0].id;
+    state.subcategory = chain.length > 1 ? chain[chain.length - 1].id : '';
+    state.selectedShop = items[0].id;
+    state.tradeMode = 'buy';
+    state.amount = 1;
+    state.ownedShipId = '';
+    state.notice = slotTitle(ship, index) + ': ' + items.length + ' ' +
+      plural(items.length, ['совместимый товар', 'совместимых товара', 'совместимых товаров']);
+    return true;
   }
 
   function closeSlotModal() {
@@ -907,8 +961,15 @@
     }
     else if (action === 'open-slot') {
       var tile = el;
-      openSlotModal(tile.getAttribute('data-ship'), Number(tile.getAttribute('data-index')));
-      return;
+      var slotShip = window.Store ? Store.byId('objects', tile.getAttribute('data-ship')) : null;
+      var slotIndex = Number(tile.getAttribute('data-index'));
+      if (!slotShip) return;
+      /* Заполненный слот показывает содержимое, пустой — открывает подходящие товары. */
+      if (slotContentsList(slotShip, slotIndex).length) {
+        openSlotModal(slotShip.id, slotIndex);
+        return;
+      }
+      if (!openSlotGoods(slotShip, slotIndex)) return;
     }
     else if (action === 'close-slot') {
       closeSlotModal();
