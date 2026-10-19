@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Galaxy — вход</title>
-<link rel="stylesheet" href="css/portal.css">
+<link rel="stylesheet" href="css/portal.css?v=20261019">
 </head>
 <body>
 <div class="nebula" aria-hidden="true"></div>
@@ -21,63 +21,67 @@
 
 <main class="portal-wrap">
   <section class="glass-panel">
-    <span class="frame" aria-hidden="true"></span>
-    <span class="sheen" aria-hidden="true"></span>
-    <span class="edge edge-t" aria-hidden="true"></span>
-    <span class="edge edge-b" aria-hidden="true"></span>
+    <div class="panel-head">
+      <div><span>GLX</span><strong>Главная</strong></div>
+      <small>Galaxy project</small>
+    </div>
 
-    <p class="eyebrow">Galaxy Project · Центр управления</p>
-    <h1 class="portal-title">GALAXY</h1>
-    <p class="portal-sub">Настройте вселенную в админке — объекты, категории, слоты — или запустите новую партию.</p>
+    <div class="panel-body">
+      <p class="eyebrow">Центр управления</p>
+      <h1 class="portal-title">GALAXY</h1>
+      <p class="portal-sub">Настройте вселенную в админке — объекты, категории, слоты — или запустите новую партию.</p>
 
-    <nav class="portal-menu">
-      <a class="portal-card portal-card--admin" href="admin.html">
-        <span class="card-icon" aria-hidden="true">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        </span>
-        <span class="card-body">
-          <span class="card-title">Админка</span>
-          <span class="card-desc">Объекты, категории, свойства и слоты</span>
-        </span>
-        <span class="card-cta">Открыть <span class="card-arrow" aria-hidden="true">→</span></span>
-      </a>
+      <nav class="portal-menu" aria-label="Разделы">
+        <a class="portal-card portal-card--admin" href="admin/admin.html">
+          <span class="card-index" aria-hidden="true">01</span>
+          <span class="card-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </span>
+          <span class="card-body">
+            <span class="card-title">Админка</span>
+            <span class="card-desc">Объекты, категории, свойства и слоты</span>
+          </span>
+          <span class="card-cta">Открыть <span class="card-arrow" aria-hidden="true">→</span></span>
+        </a>
 
-      <a class="portal-card portal-card--game" href="space/index.html">
-        <span class="card-icon" aria-hidden="true">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9"></circle>
-            <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"></polygon>
-          </svg>
-        </span>
-        <span class="card-body">
-          <span class="card-title">Новая игра</span>
-          <span class="card-desc">Карта солнечной системы: планеты, луны и база</span>
-          <span class="card-badge">в разработке</span>
-        </span>
-        <span class="card-cta">Открыть <span class="card-arrow" aria-hidden="true">→</span></span>
-      </a>
+        <a class="portal-card portal-card--game" href="space/index.html">
+          <span class="card-index" aria-hidden="true">02</span>
+          <span class="card-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"></circle>
+              <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"></polygon>
+            </svg>
+          </span>
+          <span class="card-body">
+            <span class="card-title">Новая игра <span class="card-badge">в разработке</span></span>
+            <span class="card-desc">Карта солнечной системы: планеты, луны и база</span>
+          </span>
+          <span class="card-cta">Открыть <span class="card-arrow" aria-hidden="true">→</span></span>
+        </a>
 
-      <a class="portal-card portal-card--hangar" href="hangar/index.html">
-        <span class="card-icon" aria-hidden="true">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 20V9l9-6 9 6v11M7 20v-8h10v8"></path>
-            <path d="M9 16h6M9 12h6"></path>
-          </svg>
-        </span>
-        <span class="card-body">
-          <span class="card-title">Ангар</span>
-          <span class="card-desc">База Helios-7: магазин, грузы и ресурсы</span>
-        </span>
-        <span class="card-cta">Открыть <span class="card-arrow" aria-hidden="true">→</span></span>
-      </a>
-    </nav>
+        <a class="portal-card portal-card--hangar" href="hangar/index.html">
+          <span class="card-index" aria-hidden="true">03</span>
+          <span class="card-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 20V9l9-6 9 6v11M7 20v-8h10v8"></path>
+              <path d="M9 16h6M9 12h6"></path>
+            </svg>
+          </span>
+          <span class="card-body">
+            <span class="card-title">Ангар</span>
+            <span class="card-desc">База Helios-7: магазин, грузы и ресурсы</span>
+          </span>
+          <span class="card-cta">Открыть <span class="card-arrow" aria-hidden="true">→</span></span>
+        </a>
+      </nav>
+    </div>
 
     <footer class="portal-foot">
       <span>Данные хранятся локально, в этом браузере</span>
-      <span class="status-row" style="margin:0"><span class="pulse" aria-hidden="true"></span> система активна</span>
+      <span class="status-row"><span class="pulse" aria-hidden="true"></span> система активна</span>
     </footer>
   </section>
 </main>

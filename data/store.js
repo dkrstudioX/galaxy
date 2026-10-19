@@ -2,7 +2,7 @@
    Всё хранится только локально, в localStorage браузера. Никаких серверов и Node.js.
 
    Потребители:
-   - admin.html      — полный доступ (чтение и запись);
+   - admin/admin.html — полный доступ (чтение и запись);
    - hangar/index.html — только чтение: категории, слоты, объекты.
 
    Публичный API — window.Store, см. в конце файла. */
@@ -12,7 +12,7 @@
   var KEY = 'galaxy_admin_db_v1';
 
   /* Стартовый баланс: он же в демо-наборе. */
-  var DEFAULT_CREDITS = 1000;
+  var DEFAULT_CREDITS = 3500000;
 
   var db = null;
 
@@ -42,7 +42,7 @@
     var out = blank();
     if (!isObj(data)) return out;
 
-    /* Баланс хранится вместе с базой; пусто/мусор — стартовые 1000 ¤. */
+    /* Баланс хранится вместе с базой; пусто/мусор — стартовые 3 500 000 ¤. */
     var rawCredits = str(data.credits).trim();
     var credits = rawCredits ? Math.floor(Number(rawCredits.replace(',', '.'))) : DEFAULT_CREDITS;
     out.credits = isFinite(credits) && credits >= 0 ? credits : DEFAULT_CREDITS;
@@ -508,6 +508,8 @@
 
   /* Набор для быстрого старта: всё держится на массе.
      Масса — обычное свойство категорий («Масса»), у каждого объекта своё значение.
+     Три корневые категории: «Оборудование», «Ресурсы», «Корабли».
+     «Топливо» вложено в ресурсы, «Расходники» — в оборудование.
      Шесть классов кораблей по три, двадцать добытых ресурсов, топливо в баках
      на 1/5/10 тонн, по десять лазеров, пулемётов и щитов, добывающее и
      перерабатывающее оборудование, радары со сканерами и грузовые отсеки.
@@ -586,22 +588,7 @@
     var slotHold5 = addSlot('Трюм 5 т', '5000', 'cargo');
     var slotHold10 = addSlot('Трюм 10 т', '10000', 'cargo');
 
-    /* ---------- Категории ---------- */
-
-    var catShips = addCat('Корабли', [durability.id, speed.id, massProp.id], null, true, 'ship');
-    var catLiners = addCat('Линкоры', [], catShips, false, 'ship');
-    var catFrigates = addCat('Фрегаты', [], catShips, false, 'ship');
-    var catCorvettes = addCat('Корветы', [], catShips, false, 'rocket');
-    var catInterceptors = addCat('Перехватчики', [], catShips, false, 'rocket');
-    var catShuttles = addCat('Шаттлы', [], catShips, false, 'rocket');
-    var catFreighters = addCat('Грузовозы', [], catShips, false, 'hangar');
-
-    var catResources = addCat('Ресурсы', [massProp.id], null, false, 'gem');
-    var catOres = addCat('Руды', [], catResources, false, 'crate');
-    var catMinerals = addCat('Минералы', [], catResources, false, 'gem');
-
-    var catFuel = addCat('Топливо', [massProp.id], null, false, 'fuel');
-    var catFuelTanks = addCat('Топливные баки', [], catFuel, false, 'fuel');
+    /* ---------- Категории: три корня — оборудование, ресурсы, корабли ---------- */
 
     var catEquipment = addCat('Оборудование', [massProp.id], null, false, 'tool');
     var catLasers = addCat('Лазеры', [damage.id, power.id], catEquipment, false, 'bolt');
@@ -612,9 +599,22 @@
     var catRefining = addCat('Переработка', [refineSpeed.id], catEquipment, false, 'tool');
     var catSensors = addCat('Радары и сканеры', [scanRange.id], catEquipment, false, 'radar');
     var catHolds = addCat('Грузовые отсеки', [holdCapacity.id], catEquipment, false, 'crate');
+    var catConsumables = addCat('Расходники', [], catEquipment, false, 'tool');
 
-    var catOther = addCat('Прочее', [massProp.id], null, false, 'box');
-    var catConsumables = addCat('Расходники', [], catOther, false, 'tool');
+    var catResources = addCat('Ресурсы', [massProp.id], null, false, 'gem');
+    var catOres = addCat('Руды', [], catResources, false, 'crate');
+    var catMinerals = addCat('Минералы', [], catResources, false, 'gem');
+
+    var catFuel = addCat('Топливо', [massProp.id], catResources, false, 'fuel');
+    var catFuelTanks = addCat('Топливные баки', [], catFuel, false, 'fuel');
+
+    var catShips = addCat('Корабли', [durability.id, speed.id, massProp.id], null, true, 'ship');
+    var catLiners = addCat('Линкоры', [], catShips, false, 'ship');
+    var catFrigates = addCat('Фрегаты', [], catShips, false, 'ship');
+    var catCorvettes = addCat('Корветы', [], catShips, false, 'rocket');
+    var catInterceptors = addCat('Перехватчики', [], catShips, false, 'rocket');
+    var catShuttles = addCat('Шаттлы', [], catShips, false, 'rocket');
+    var catFreighters = addCat('Грузовозы', [], catShips, false, 'hangar');
 
     /* ---------- Ресурсы: двадцать добытых позиций ---------- */
 
@@ -779,9 +779,8 @@
       shipRefs[spec.name] = ship;
     });
 
-    /* Пятнадцать кораблей уже куплены — стартовый ангар пользователя. */
-    var boughtShips = ['Гром', 'Молот', 'Цитадель', 'Сокол', 'Клинок', 'Страж', 'Оса', 'Шершень',
-      'Вихрь', 'Стриж', 'Комета', 'Игла', 'Челнок', 'Курьер', 'Баржа'];
+    /* Один корабль уже куплен — стартовый ангар пользователя. */
+    var boughtShips = ['Гром'];
     boughtShips.forEach(function (name, index) {
       var ship = shipRefs[name];
       if (!ship) return;

@@ -8,3 +8,7 @@ Desktop.ini
 # Editor
 .vscode/
 .idea/
+
+# Одноразовые проверочные скрипты
+space/scratch-check.mjs
+space/js/_bases_tail.js
