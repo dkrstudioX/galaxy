@@ -510,14 +510,15 @@
      Масса — обычное свойство категорий («Масса»), у каждого объекта своё значение.
      Три корневые категории: «Оборудование», «Ресурсы», «Корабли».
      «Топливо» вложено в ресурсы, «Расходники» — в оборудование.
-     Шесть классов кораблей по три, двадцать добытых ресурсов, топливо в баках
-     на 1/5/10 тонн, по десять лазеров, пулемётов и щитов, добывающее и
-     перерабатывающее оборудование, радары со сканерами и грузовые отсеки.
+     Шесть кораблей — по одному на класс, все начального уровня (слабые
+     характеристики и низкая цена), но с полным набором слотов своего класса.
+     Двадцать добытых ресурсов, топливо в баках на 1/5/10 тонн, по десять лазеров,
+     пулемётов и щитов, добывающее и перерабатывающее оборудование,
+     радары со сканерами и грузовые отсеки.
      Свойство «Редкость» намеренно не используется. */
   function demoData() {
     var d = blank();
     d.credits = DEFAULT_CREDITS;
-    var byName = {};
 
     function addProp(name, value) { var p = { id: uid(), name: name, value: value }; d.props.push(p); return p; }
     function addSlot(name, capacity, kind) {
@@ -557,7 +558,6 @@
         slotId: slot ? slot.id : null, slots: []
       };
       d.objects.push(item);
-      byName[name] = item;
       return item;
     }
 
@@ -699,88 +699,66 @@
     addItem('Набор запчастей', catConsumables, '6', [], null, '380', 'tool');
     addItem('Аптечка', catConsumables, '3', [], null, '420', 'tool');
 
-    /* ---------- Корабли: шесть классов по три ---------- */
+    /* ---------- Корабли: шесть классов — по одному стартовому кораблю ---------- */
 
+    /* Раскладка класса: [шаблон слота, сколько таких]. У стартового корабля
+       на месте все крепления и трюмы класса — они просто пустые. */
+    function layout(parts) {
+      var out = [];
+      parts.forEach(function (pair) {
+        for (var n = 0; n < pair[1]; n++) out.push({ slotId: pair[0].id, contents: [] });
+      });
+      return out;
+    }
+
+    /* Стартовые корабли: слабые характеристики и низкая цена — первые машины
+       в своей категории, но с полным набором слотов класса.
+       Цена растёт от шаттла к линкору: 350 → 600, продажа — на 110–180 меньше. */
     var shipSpecs = [
-      /* Линкоры: тяжёлые, медленные, дорогие */
-      { name: 'Гром', cat: catLiners, hp: '5200', sp: '11', mass: '18000', price: '990',
-        slots: [[slotTurret], [slotTurret], [slotTurret], [slotTurret], [slotGun],
-          [slotShield], [slotShield], [slotEngine], [slotRadar],
-          [slotHold5, [['Железная руда', 100], ['Медная руда', 50]]]] },
-      { name: 'Молот', cat: catLiners, hp: '6100', sp: '9', mass: '22000', price: '950',
-        slots: [[slotTurret], [slotTurret], [slotTurret], [slotTurret], [slotTurret], [slotGun],
-          [slotShield], [slotShield], [slotShield], [slotEngine], [slotRadar], [slotHold5]] },
-      { name: 'Цитадель', cat: catLiners, hp: '4800', sp: '12', mass: '16000', price: '900',
-        slots: [[slotTurret], [slotTurret], [slotTurret], [slotGun], [slotGun],
-          [slotShield], [slotShield], [slotEngine], [slotRadar], [slotHold5]] },
+      /* Линкор: четыре орудийные башни, два пулемёта, два щита, трюм 5 т */
+      { name: 'Гром', cat: catLiners, hp: '2200', sp: '10', mass: '12000', buy: '600', sale: '420',
+        layout: [[slotTurret, 4], [slotGun, 2], [slotShield, 2], [slotEngine, 1],
+          [slotRadar, 1], [slotHold5, 1]] },
 
-      /* Фрегаты: универсалы */
-      { name: 'Сокол', cat: catFrigates, hp: '2100', sp: '22', mass: '4200', price: '700',
-        slots: [[slotTurret], [slotTurret], [slotGun], [slotShield], [slotEngine], [slotRadar], [slotHold1]] },
-      { name: 'Клинок', cat: catFrigates, hp: '1900', sp: '25', mass: '3600', price: '650',
-        slots: [[slotTurret], [slotTurret], [slotGun], [slotShield], [slotEngine], [slotRadar], [slotHold1]] },
-      { name: 'Страж', cat: catFrigates, hp: '2400', sp: '19', mass: '5100', price: '750',
-        slots: [[slotTurret], [slotTurret], [slotGun], [slotGun], [slotShield], [slotEngine], [slotRadar], [slotHold1]] },
+      /* Фрегат: универсал — башни, пулемёты, щит, радар, трюм 1 т */
+      { name: 'Сокол', cat: catFrigates, hp: '900', sp: '22', mass: '3200', buy: '450', sale: '320',
+        layout: [[slotTurret, 2], [slotGun, 2], [slotShield, 1], [slotEngine, 1],
+          [slotRadar, 1], [slotHold1, 1]] },
 
-      /* Корветы: быстрые и маневренные */
-      { name: 'Оса', cat: catCorvettes, hp: '1200', sp: '30', mass: '1800', price: '500',
-        slots: [[slotTurret], [slotTurret], [slotGun], [slotGun], [slotShield], [slotEngine], [slotHold1]] },
-      { name: 'Шершень', cat: catCorvettes, hp: '980', sp: '34', mass: '1400', price: '450',
-        slots: [[slotTurret], [slotGun], [slotGun], [slotGun], [slotShield], [slotEngine], [slotHold1]] },
-      { name: 'Вихрь', cat: catCorvettes, hp: '1100', sp: '32', mass: '1600', price: '480',
-        slots: [[slotTurret], [slotTurret], [slotGun], [slotGun], [slotShield], [slotEngine], [slotHold1]] },
+      /* Корвет: быстрый — две башни, пулемёт, щит, радар и трюм 1 т */
+      { name: 'Оса', cat: catCorvettes, hp: '620', sp: '30', mass: '1700', buy: '410', sale: '290',
+        layout: [[slotTurret, 2], [slotGun, 1], [slotShield, 1], [slotEngine, 1],
+          [slotRadar, 1], [slotHold1, 1]] },
 
-      /* Перехватчики: максимум скорости */
-      { name: 'Стриж', cat: catInterceptors, hp: '620', sp: '52', mass: '420', price: '350',
-        slots: [[slotTurret], [slotTurret], [slotGun], [slotEngine], [slotRadar]] },
-      { name: 'Комета', cat: catInterceptors, hp: '540', sp: '58', mass: '360', price: '360',
-        slots: [[slotTurret], [slotGun], [slotGun], [slotEngine], [slotRadar]] },
-      { name: 'Игла', cat: catInterceptors, hp: '480', sp: '62', mass: '300', price: '380',
-        slots: [[slotGun], [slotGun], [slotEngine], [slotRadar]] },
+      /* Перехватчик: две башни, пулемёт, двигатель и радар, без трюма и щита */
+      { name: 'Стриж', cat: catInterceptors, hp: '380', sp: '48', mass: '460', buy: '380', sale: '260',
+        layout: [[slotTurret, 2], [slotGun, 1], [slotEngine, 1], [slotRadar, 1]] },
 
-      /* Шаттлы: лёгкие грузовики */
-      { name: 'Челнок', cat: catShuttles, hp: '380', sp: '28', mass: '240', price: '350',
-        slots: [[slotGun], [slotEngine], [slotHold1]] },
-      { name: 'Курьер', cat: catShuttles, hp: '420', sp: '34', mass: '300', price: '380',
-        slots: [[slotGun], [slotEngine], [slotHold1]] },
-      { name: 'Паром', cat: catShuttles, hp: '520', sp: '20', mass: '600', price: '360',
-        slots: [[slotGun], [slotShield], [slotEngine], [slotHold1]] },
+      /* Шаттл: лёгкий возчик — пулемёт, щит, радар и два трюма по 1 т */
+      { name: 'Челнок', cat: catShuttles, hp: '260', sp: '26', mass: '320', buy: '350', sale: '240',
+        layout: [[slotGun, 1], [slotShield, 1], [slotEngine, 1], [slotRadar, 1],
+          [slotHold1, 2]] },
 
-      /* Грузовозы: промышленники с добычей и переработкой */
-      { name: 'Баржа', cat: catFreighters, hp: '2600', sp: '8', mass: '12000', price: '970',
-        slots: [[slotGun], [slotShield], [slotEngine], [slotEngine],
-          [slotHold10, [['Титановая руда', 200], ['Вольфрамовая руда', 100], ['Медная руда', 50],
-            ['Никелевая руда', 40], ['Боксит', 30], ['Кварцевая руда', 20]]],
-          [slotHold5, [['Железная руда', 100]]]] },
-      { name: 'Мамонт', cat: catFreighters, hp: '3400', sp: '6', mass: '16000', price: '950',
-        slots: [[slotGun], [slotGun], [slotShield], [slotEngine], [slotEngine],
-          [slotHold10, [['Кварцевая руда', 300]]], [slotHold10]] },
-      { name: 'Тягач', cat: catFreighters, hp: '2200', sp: '10', mass: '9000', price: '850',
-        slots: [[slotGun], [slotShield], [slotEngine], [slotMining], [slotRefinery], [slotHold5]] }
+      /* Грузовоз: два двигателя, добыча с переработкой, трюмы 10 и 5 т */
+      { name: 'Баржа', cat: catFreighters, hp: '1400', sp: '8', mass: '7000', buy: '520', sale: '380',
+        layout: [[slotGun, 1], [slotShield, 1], [slotEngine, 2], [slotRadar, 1],
+          [slotMining, 1], [slotRefinery, 1], [slotHold10, 1], [slotHold5, 1]] }
     ];
 
     var shipRefs = {};
     shipSpecs.forEach(function (spec) {
-      var p = prices(spec.price);
       var ship = {
         id: uid(), name: spec.name, categoryId: spec.cat.id, parentCategoryId: spec.cat.parentId || '',
         values: vals([[durability, spec.hp], [speed, spec.sp], [massProp, spec.mass]]),
-        price_buy: p.buy, price_sale: p.sale, icon: 'ship', slotId: null,
-        slots: spec.slots.map(function (e) {
-          return {
-            slotId: e[0].id,
-            contents: (e[1] || []).map(function (ci) {
-              return { itemId: byName[ci[0]].id, qty: String(ci[1]) };
-            })
-          };
-        })
+        price_buy: spec.buy, price_sale: spec.sale, icon: 'ship', slotId: null,
+        slots: layout(spec.layout)
       };
       d.objects.push(ship);
       shipRefs[spec.name] = ship;
     });
 
-    /* Один корабль уже куплен — стартовый ангар пользователя. */
-    var boughtShips = ['Гром'];
+    /* Один корабль уже куплен — стартовый ангар пользователя: самый дешёвый шаттл. */
+    var boughtShips = ['Челнок'];
     boughtShips.forEach(function (name, index) {
       var ship = shipRefs[name];
       if (!ship) return;
