@@ -276,7 +276,6 @@ body {
   color: transparent;
   filter: drop-shadow(0 0 16px rgba(170, 136, 246, 0.25));
 }
-.title-sm { font-size: clamp(24px, 4vw, 32px); letter-spacing: 0.12em; }
 .portal-sub {
   margin: 12px 0 22px;
   color: var(--muted);
@@ -428,13 +427,6 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
-
-/* ---------- Заглушка игры (game.html) ---------- */
-
-.panel-center { text-align: center; }
-.panel-center .portal-sub { margin-left: auto; margin-right: auto; }
-.panel-center .portal-card { text-align: left; }
-.panel-center .status-row { justify-content: center; margin: 0 0 22px; }
 
 /* ---------- Узкие экраны и анимации ---------- */
 
