@@ -88,17 +88,16 @@
   /* Слева — категории, справа — объекты выбранной категории (с подкатегориями). */
   var selectedCategory = '';
 
-  /* Объекты выбранной категории: корневая — вместе с подкатегориями, подкатегория — точное совпадение. */
+  /* Объекты выбранной категории вместе со всеми вложенными подкатегориями
+     на любую глубину (дерево не ограничено двумя уровнями). */
   function objectsIn(categoryId) {
     if (!categoryId) return Store.objects();
     var cat = Store.byId('categories', categoryId);
     if (!cat) return [];
-    if (!cat.parentId) {
-      return Store.objects().filter(function (o) {
-        return o.categoryId === cat.id || o.parentCategoryId === cat.id;
-      });
-    }
-    return Store.objects().filter(function (o) { return o.categoryId === cat.id; });
+    var ids = {};
+    ids[cat.id] = true;
+    Store.categoryDescendants(cat.id).forEach(function (c) { ids[c.id] = true; });
+    return Store.objects().filter(function (o) { return ids[o.categoryId]; });
   }
 
   function categoryRow(id, label, depth, iconKey, isShip) {
@@ -125,21 +124,29 @@
       panel.appendChild(categoryRow(cat.id, cat.name, 1, cat.icon || Icons.forCategory(cat.name), Store.categoryIsShip(cat.id)));
     });
 
-    /* Подкатегории: для выбранной категории (или родителя выбранной подкатегории). */
+    /* Подкатегории выбранной ветки — на всю глубину, с отступом по уровню. */
     var selected = selectedCategory ? Store.byId('categories', selectedCategory) : null;
-    var rootId = selected ? (selected.parentId || selected.id) : '';
-    if (!rootId) return panel;
+    var chain = selected ? Store.categoryChain(selected.id) : [];
+    var root = chain.length ? chain[0] : null;
+    if (!root) return panel;
 
-    var kids = Store.childCategories(rootId);
-    if (!kids.length) {
+    var rows = [];
+    (function walk(parentId, depth) {
+      Store.childCategories(parentId).forEach(function (cat) {
+        rows.push({ cat: cat, depth: depth });
+        walk(cat.id, depth + 1);
+      });
+    })(root.id, 2);
+
+    if (!rows.length) {
       panel.appendChild(h('div', { class: 'cat-panel-title cat-panel-sub', text: 'Подкатегории' }));
       panel.appendChild(h('div', { class: 'cat-panel-empty', text: 'У этой категории нет подкатегорий' }));
       return panel;
     }
 
     panel.appendChild(h('div', { class: 'cat-panel-title cat-panel-sub', text: 'Подкатегории' }));
-    kids.forEach(function (cat) {
-      panel.appendChild(categoryRow(cat.id, cat.name, 2, cat.icon || Icons.forCategory(cat.name), Store.categoryIsShip(cat.id)));
+    rows.forEach(function (row) {
+      panel.appendChild(categoryRow(row.cat.id, row.cat.name, row.depth, row.cat.icon || Icons.forCategory(row.cat.name), Store.categoryIsShip(row.cat.id)));
     });
     return panel;
   }

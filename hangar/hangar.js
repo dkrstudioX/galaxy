@@ -157,13 +157,26 @@
     for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
     return null;
   }
-  /* Объект подходит, если выбрана его подкатегория или её родитель (1-й уровень). */
-  function inCategory(item, categoryId) {
-    if (categoryId === 'all') return true;
-    return item.categoryId === categoryId || item.parentCategoryId === categoryId;
+  /* Категория подходит объекту, если он в ней самой или в любой её подкатегории
+     на любую глубину: дерево категорий не ограничено двумя уровнями
+     («Ресурсы» → «Топливо» → «Топливные баки»). */
+  var subtreeCache = {};
+  function subtreeIds(categoryId) {
+    if (!subtreeCache[categoryId]) {
+      var set = {};
+      if (window.Store) Store.categoryDescendants(categoryId).forEach(function (c) { set[c.id] = true; });
+      subtreeCache[categoryId] = set;
+    }
+    return subtreeCache[categoryId];
   }
+  function inSubtree(itemCategoryId, categoryId) {
+    if (categoryId === 'all') return true;
+    if (!itemCategoryId) return false;
+    return itemCategoryId === categoryId || !!subtreeIds(categoryId)[itemCategoryId];
+  }
+  function inCategory(item, categoryId) { return inSubtree(item.categoryId, categoryId); }
 
-  /* Подкатегории выбранной ветки: id, имя и сколько объектов в каждой. */
+  /* Подкатегории выбранной ветки: id, имя и сколько объектов в каждой (с вложенными). */
   function buildSubcategories(rootId) {
     if (!window.Store || !rootId || rootId === 'all') return [];
     return Store.childCategories(rootId).map(function (cat) {
@@ -171,7 +184,7 @@
         id: cat.id,
         label: cat.name,
         icon: cat.icon || iconForCategory(cat.name),
-        count: shopItems.filter(function (it) { return it.categoryId === cat.id; }).length
+        count: shopItems.filter(function (it) { return inSubtree(it.categoryId, cat.id); }).length
       };
     });
   }
@@ -179,7 +192,7 @@
   function filteredItems() {
     return shopItems.filter(function (it) {
       if (!inCategory(it, state.category)) return false;
-      if (state.subcategory && it.categoryId !== state.subcategory) return false;
+      if (state.subcategory && !inSubtree(it.categoryId, state.subcategory)) return false;
       return true;
     });
   }
