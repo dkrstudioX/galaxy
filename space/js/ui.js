@@ -1,6 +1,7 @@
 // =============================================================================
 // ui.js — DOM-интерфейс: HUD-показатели (зум/скорость/дата), боковые блоки
-// «СОЛНЕЧНАЯ СИСТЕМА» (дерево планет/лун), «ОБЪЕКТ» (информация о выбранном) и
+// «СОЛНЕЧНАЯ СИСТЕМА» (дерево планет/лун), «ОБЪЕКТ» (информация о выбранном;
+// появляется только с выбором — шапка блока носит имя выбранного) и
 // «МАЛЫЕ ТЕЛА» (группы малых тел: полёт камеры и выбор по клику).
 // Выбор делается кликом по канвасу (selectBody вызывает input.js), по
 // элементу дерева или по строке блока малых тел. Шапка каждого блока
@@ -116,6 +117,9 @@ export function buildSidePanel() {
     document.querySelectorAll('#sidePanel .panel-head').forEach(head => {
         head.addEventListener('click', () => head.parentElement.classList.toggle('collapsed'));
     });
+
+    // Блок «02 Объект» появляется только с выбором: на старте его нет вовсе.
+    renderObjectInfo();
 }
 
 /* ---------- Блок «03 Малые тела»: группы-источники метеоритов Земли ---------- */
@@ -229,10 +233,13 @@ export function selectBody(sel) {
     highlightTree();
 }
 
-/** Заполнить блок «Объект» данными выбранного тела. */
+/** Заполнить блок «Объект» данными выбранного тела. Без выбора блока нет вовсе,
+ *  а его шапка носит имя выбранного — то же, что заголовок карточки. */
 function renderObjectInfo() {
     const box = document.getElementById('objectInfo');
     const sel = state.selected;
+
+    document.getElementById('objectBlock').classList.toggle('hidden', !sel);
 
     if (!sel) {
         box.innerHTML = '<div class="obj-empty">Кликните по солнцу, планете, луне или базе на карте</div>';
@@ -287,6 +294,11 @@ function renderObjectInfo() {
     }
     box.innerHTML = html;
     wireObjectCard(box);
+
+    // Имя в шапке блока — как заголовок карточки (у базы — «База …», у планеты —
+    // «Земля / Earth»): один источник текста, шапка и карточка не разойдутся.
+    const title = box.querySelector('.obj-title strong');
+    document.getElementById('objectName').textContent = title ? title.textContent : 'Объект';
 }
 
 const NEA_GROUPS = { amor: 'Амур', apollo: 'Аполлон', aten: 'Атон' };

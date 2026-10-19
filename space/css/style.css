@@ -91,6 +91,8 @@ canvas { display: block; width: 100vw; height: 100vh; }
 }
 
 .panel-block { display: flex; flex-direction: column; min-height: 0; }
+/* блок без содержимого (например, «Объект» без выбранного) не рисуется вовсе */
+.panel-block.hidden { display: none; }
 .panel-block .panel-body { overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(120, 160, 170, .35) transparent; }
 .panel-block .panel-body::-webkit-scrollbar { width: 8px; }
 .panel-block .panel-body::-webkit-scrollbar-track { background: transparent; }
@@ -110,6 +112,9 @@ canvas { display: block; width: 100vw; height: 100vh; }
     padding: 3px 5px; border: 1px solid #574580;
 }
 .panel-head strong { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .09em; }
+/* имя выбранного в шапке «02»: длинное имя режется «…», шапка не растёт */
+#objectBlock .panel-head div { min-width: 0; }
+#objectBlock .panel-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-head small { color: #637a7a; font: 9px "IBM Plex Mono", monospace; text-transform: uppercase; }
 .panel-head .caret { transition: transform .15s ease; color: #637a7a; font-size: 9px; }
 .panel-block.collapsed .panel-head { border-bottom-color: transparent; }
