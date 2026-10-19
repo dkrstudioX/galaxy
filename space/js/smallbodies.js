@@ -4,10 +4,13 @@
 // астероиды (Атон/Аполлон/Амур), троянцы Юпитера (L4/L5), кометы, пояс
 // Койпера и облако Оорта.
 //
-// Именованные тела семейств (крупнейшие тела пояса, ОЗА по классам, троянцы
-// L4/L5, кометы) группируются при отдалении общим механизмом scene.js
-// groupPlan: помещается visibleCount() тел семейства, хвост схлопывается в
-// тело-представителя с подписью в две строки (см. drawSmallBodies).
+// Именованные тела (крупнейшие тела пояса, именованные ОЗА, троянцы L4/L5,
+// кометы) слипаются по экранному расстоянию общим правилом scene.js
+// clusterBodies: smallBodyList() отдаёт их позиции в кадр, а drawSmallBodies
+// рисует точками только показанные (id — в наборе shown); имена слипшихся
+// уходят в подпись группы у тела-представителя (её рисует render.js общей
+// drawGroupLabel). Безымянные досыпанные ОЗА, частицы пояса, облака троянцев и
+// пыль дальних поясов в правило не входят: их не выбирают.
 //
 // Каждое тело — сущность со своим типом (kind) и id: в будущем появится
 // добыча/уничтожение астероидов, поэтому генерация выполняется при каждом
@@ -22,7 +25,6 @@ import { state } from './state.js';
 import { makeRng, auToDist, keplerPos, periodFromA, orbitAngle, clamp } from './math.js';
 import { planets, beltNotables, neas, trojanNames, comets } from './data.js';
 import { STROKE } from './config.js';
-import { groupPlan, visibleCount } from './scene.js';
 
 // --- Главный пояс: закон Кеплера от якорей Марс → Юпитер ---------------------
 const MARS = planets.find(p => p.name === 'Mars');
@@ -273,27 +275,74 @@ export const cometBodies = comets.map(c =>
         { shower: c.shower, src: c.src, tailK: c.tailK, ru: c.ru }));
 
 /**
- * Нарисовать малые тела в мировой системе координат (вызывается из render.js
- * после звёзд). Именованные тела семейств группируются при отдалении тем же
- * механизмом, что луны планет (scene.js groupPlan, шкала visibleCount):
- * показанные тела — точки и hover-цели, хвост семейства схлопывается в
- * тело-представителя, и подпись группы уходит в groups — render.js рисует её
- * общей drawGroupLabel. Безымянные досыпанные ОЗА — вне групп: их не выбирают.
- * @returns {{targets: Array, groups: Array}} targets — hover-цели (как раньше);
- *   groups — { x, y, group } подписи групп у тел-представителей
+ * Позиции всех именованных малых тел кадра — для общего правила слипания
+ * (scene.js clusterBodies): крупнейшие тела пояса, именованные ОЗА, троянцы и
+ * кометы. Безымянные (частицы пояса, досыпанные ОЗА, облака троянцев, пыль
+ * дальних поясов) сюда не входят: их не выбирают и в подписи они не попадают.
+ * Движение — то же, что в drawSmallBodies: у троянцев синхронно с Юпитером
+ * плюс либрация, у остальных — элементы Кеплера из data.js. Позиции кладутся в
+ * сами записи тел (b.x, b.y) — ими же рисует drawSmallBodies.
+ * @returns {Array} записи { id, kind, small, r, x, y, label } — label для подписи
  */
-export function drawSmallBodies(ctx) {
+export function smallBodyList() {
+    const { simDays } = state;
+    const jupAng = orbitAngle(JUPITER.l0, JUPITER.period, simDays);
+    const list = [];
+
+    function add(b, kind) {
+        list.push({ id: b.id, kind, small: b, r: b.r, x: b.x, y: b.y, label: b.ru || b.name });
+    }
+
+    notables.forEach(b => {
+        const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
+        b.x = pos.x;
+        b.y = pos.y;
+        add(b, 'asteroid');
+    });
+
+    neaBodies.forEach(b => {
+        const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
+        b.x = pos.x;
+        b.y = pos.y;
+        b.rAu = pos.rAu;   // кометам и ОЗА — для хвоста/подписи
+        if (b.name) add(b, 'nea');
+    });
+
+    trojanBodies.forEach(b => {
+        const ang = jupAng + b.camp * Math.PI / 3
+            + (b.dAng + trojanLib(simDays, b.camp)) * Math.PI / 180;
+        const rr = JUPITER.dist + b.dR;
+        b.x = Math.cos(ang) * rr;
+        b.y = -Math.sin(ang) * rr;
+        add(b, 'trojan');
+    });
+
+    cometBodies.forEach(b => {
+        const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
+        b.x = pos.x;
+        b.y = pos.y;
+        b.rAu = pos.rAu;
+        add(b, 'comet');
+    });
+
+    return list;
+}
+
+/**
+ * Нарисовать малые тела в мировой системе координат (вызывается из render.js
+ * после звёзд). Пыль и частицы пояса рисуются всегда, именованные тела —
+ * только показанные общим правилом слипания (scene.js clusterBodies):
+ * показанные становятся точками и hover-целями, а имена слипшихся уходят в
+ * подпись группы у тела-представителя (её рисует render.js общей
+ * drawGroupLabel). Позиции именованных тел считает smallBodyList — render.js
+ * зовёт его в начале кадра, здесь они уже готовы.
+ * @param {Set} shown id показанных именованных тел (представители групп)
+ * @returns {Array} targets — hover-цели показанных тел
+ */
+export function drawSmallBodies(ctx, shown) {
     const { simDays, zoom } = state;
     const targets = [];
-    const groups = [];
-    const fit = visibleCount();
-
-    /** Хвост семейства (если не поместился) — подписью у тела-представителя. */
-    function pushGroup(plan) {
-        if (!plan.group) return;
-        const rep = plan.shown[plan.group.at].m;
-        groups.push({ x: rep.x, y: rep.y, group: plan.group });
-    }
+    const jupAng = orbitAngle(JUPITER.l0, JUPITER.period, simDays);
 
     // Дальняя пыль фоном: пояс Койпера и облако Оорта (под всеми телами)
     drawDustRing(ctx, kuiperDust, zoom);
@@ -309,33 +358,22 @@ export function drawSmallBodies(ctx) {
     });
 
     // Крупнейшие тела пояса — заметные точки с обводкой, выбираются
-    const notablePlan = groupPlan(notables, fit, { nameOf: m => m.ru });
-    notablePlan.shown.forEach(({ m: b }) => {
-        const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
-        b.x = pos.x;
-        b.y = pos.y;
-
+    notables.forEach(b => {
+        if (!shown.has(b.id)) return;
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, b.r, 0, Math.PI * 2);
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
         ctx.fillStyle = '#cfcfcf';
         ctx.fill();
         ctx.strokeStyle = '#efefef';
         ctx.lineWidth = STROKE.moon / zoom;
         ctx.stroke();
 
-        targets.push({ kind: 'asteroid', name: b.name, x: pos.x, y: pos.y, r: b.r, moons: [], small: b });
-    });
-    pushGroup(notablePlan);
-
-    // ОЗА: сначала позиции всех тел, затем безымянные — тусклые точки всегда
-    // (в группы не входят, их не выбирают), именованные — по классам
-    // (amor/apollo/aten): у каждого класса своё число показанных и своя группа
-    neaBodies.forEach(b => {
-        const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
-        b.x = pos.x;
-        b.y = pos.y;
+        targets.push({ kind: 'asteroid', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
     });
 
+    // ОЗА: безымянные досыпанные — тусклые точки всегда (в правило слипания не
+    // входят, их не выбирают), именованные — как остальные тела: точкой и
+    // hover-целью только когда показаны (позиции посчитаны в smallBodyList)
     ctx.fillStyle = '#8a8a8a';
     neaBodies.forEach(b => {
         if (b.name) return;
@@ -344,24 +382,19 @@ export function drawSmallBodies(ctx) {
         ctx.fill();
     });
 
-    ['amor', 'apollo', 'aten'].forEach(g => {
-        const plan = groupPlan(neaBodies.filter(b => b.name && b.group === g), fit,
-            { nameOf: m => m.ru });
-        plan.shown.forEach(({ m: b }) => {
-            ctx.beginPath();
-            ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-            ctx.fillStyle = '#d8d8d8';
-            ctx.fill();
-            ctx.strokeStyle = '#f0f0f0';
-            ctx.lineWidth = STROKE.moon / zoom;
-            ctx.stroke();
-            targets.push({ kind: 'nea', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
-        });
-        pushGroup(plan);
+    neaBodies.forEach(b => {
+        if (!b.name || !shown.has(b.id)) return;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.fillStyle = '#d8d8d8';
+        ctx.fill();
+        ctx.strokeStyle = '#f0f0f0';
+        ctx.lineWidth = STROKE.moon / zoom;
+        ctx.stroke();
+        targets.push({ kind: 'nea', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
     });
 
     // Троянцы: два облака точек, синхронных с Юпитером (плюс либрация)
-    const jupAng = orbitAngle(JUPITER.l0, JUPITER.period, simDays);
     ctx.fillStyle = '#808080';
     trojanClouds.forEach(c => {
         const base = jupAng + c.camp * Math.PI / 3 + trojanLib(simDays, c.camp) * Math.PI / 180;
@@ -375,80 +408,65 @@ export function drawSmallBodies(ctx) {
     });
 
     // Именованные троянцы — заметные точки с обводкой, выбираются; позиции
-    // всех, затем группировка по облакам (L4 и L5 — отдельные семейства)
+    // посчитаны в smallBodyList, рисуются только показанные
     trojanBodies.forEach(b => {
-        const ang = jupAng + b.camp * Math.PI / 3 + (b.dAng + trojanLib(simDays, b.camp)) * Math.PI / 180;
-        const rr = JUPITER.dist + b.dR;
-        b.x = Math.cos(ang) * rr;
-        b.y = -Math.sin(ang) * rr;
+        if (!shown.has(b.id)) return;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.fillStyle = '#cfcfcf';
+        ctx.fill();
+        ctx.strokeStyle = '#efefef';
+        ctx.lineWidth = STROKE.moon / zoom;
+        ctx.stroke();
+
+        targets.push({ kind: 'trojan', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
     });
 
-    [4, 5].forEach(camp => {
-        const plan = groupPlan(trojanBodies.filter(b => b.camp === camp), fit,
-            { nameOf: m => m.ru });
-        plan.shown.forEach(({ m: b }) => {
-            ctx.beginPath();
-            ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-            ctx.fillStyle = '#cfcfcf';
-            ctx.fill();
-            ctx.strokeStyle = '#efefef';
-            ctx.lineWidth = STROKE.moon / zoom;
-            ctx.stroke();
+    // Кометы: ядро, кома и хвост, направленный от Солнца. Рисуются только
+    // показанные (позиции и rAu посчитаны в smallBodyList); хвост — в пикселях
+    // экрана, поэтому его длина делится на зум.
+    cometBodies.forEach(b => {
+        if (!shown.has(b.id)) return;
 
-            targets.push({ kind: 'trojan', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
-        });
-        pushGroup(plan);
-    });
-
-    // Кометы: ядро, кома и хвост, направленный от Солнца. Показанные — по
-    // общему плану; скрытые группой не рисуются, их имена уходят в подпись
-    // представителя (как и у остальных семейств)
-    const cometPlan = groupPlan(cometBodies, fit, { nameOf: m => m.ru });
-    cometPlan.shown.forEach(({ m: b }) => {
-        const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
-        b.x = pos.x;
-        b.y = pos.y;
-
-        const pf = clamp(b.q / Math.max(pos.rAu, 0.001), 0, 1);  // близость к перигелию
-        const len = (26 + 46 * pf) * b.tailK / zoom;             // хвост в пикселях экрана
-        const d = Math.hypot(pos.x, pos.y) || 1;
-        const dx = pos.x / d, dy = pos.y / d;                    // от Солнца
+        const pf = clamp(b.q / Math.max(b.rAu, 0.001), 0, 1);   // близость к перигелию
+        const len = (26 + 46 * pf) * b.tailK / zoom;            // хвост в пикселях экрана
+        const d = Math.hypot(b.x, b.y) || 1;
+        const dx = b.x / d, dy = b.y / d;                       // от Солнца
 
         // хвост: сужающийся треугольник вдоль антисолнечного луча
         const w0 = 1.6 / zoom;
-        const tipX = pos.x + dx * len, tipY = pos.y + dy * len;
-        const grad = ctx.createLinearGradient(pos.x, pos.y, tipX, tipY);
+        const tipX = b.x + dx * len, tipY = b.y + dy * len;
+        const grad = ctx.createLinearGradient(b.x, b.y, tipX, tipY);
         grad.addColorStop(0, 'rgba(230,230,230,0.42)');
         grad.addColorStop(0.55, 'rgba(225,225,225,0.15)');
         grad.addColorStop(1, 'rgba(220,220,220,0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.moveTo(pos.x - dy * w0, pos.y + dx * w0);
-        ctx.lineTo(pos.x + dy * w0, pos.y - dx * w0);
+        ctx.moveTo(b.x - dy * w0, b.y + dx * w0);
+        ctx.lineTo(b.x + dy * w0, b.y - dx * w0);
         ctx.lineTo(tipX, tipY);
         ctx.closePath();
         ctx.fill();
 
         // кома — радиальное свечение вокруг ядра
         const comaR = 9 / zoom;
-        const coma = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, comaR);
+        const coma = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, comaR);
         coma.addColorStop(0, 'rgba(235,235,235,0.5)');
         coma.addColorStop(0.5, 'rgba(220,220,220,0.16)');
         coma.addColorStop(1, 'rgba(220,220,220,0)');
         ctx.fillStyle = coma;
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, comaR, 0, Math.PI * 2);
+        ctx.arc(b.x, b.y, comaR, 0, Math.PI * 2);
         ctx.fill();
 
         // ядро
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, b.r, 0, Math.PI * 2);
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
         ctx.fillStyle = '#f0f0f0';
         ctx.fill();
 
-        targets.push({ kind: 'comet', name: b.name, x: pos.x, y: pos.y, r: b.r, moons: [], small: b });
+        targets.push({ kind: 'comet', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
     });
-    pushGroup(cometPlan);
 
-    return { targets, groups };
+    return targets;
 }

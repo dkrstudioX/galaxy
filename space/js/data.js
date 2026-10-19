@@ -6,15 +6,16 @@
 
 // Планеты. r и dist — условные единицы мира (не в масштабе, но порядок верный).
 // rings — рисовать кольца (Сатурн). type оставлен для совместимости.
+// ru — русское имя для подписей на карте и в карточках (ui.js).
 export const planets = [
-    { name: 'Mercury', color: '#b5b5b5', r: 4,  dist: 70,  period: 87.969,   l0: 252.251, type: 'rocky' },
-    { name: 'Venus',   color: '#e8cda0', r: 7,  dist: 110, period: 224.701,  l0: 181.980, type: 'rocky' },
-    { name: 'Earth',   color: '#4488ff', r: 8,  dist: 160, period: 365.256,  l0: 100.464, type: 'earth' },
-    { name: 'Mars',    color: '#c1440e', r: 5,  dist: 220, period: 686.980,  l0: 355.453, type: 'rocky' },
-    { name: 'Jupiter', color: '#c88b3a', r: 22, dist: 380, period: 4332.589, l0: 34.396,  type: 'gas' },
-    { name: 'Saturn',  color: '#e8d191', r: 18, dist: 520, period: 10759.22, l0: 49.954,  type: 'gas', rings: true },
-    { name: 'Uranus',  color: '#7de8e8', r: 12, dist: 660, period: 30685.4,  l0: 313.238, type: 'ice' },
-    { name: 'Neptune', color: '#3f54ba', r: 12, dist: 780, period: 60189.0,  l0: 304.880, type: 'ice' }
+    { name: 'Mercury', ru: 'Меркурий', color: '#b5b5b5', r: 4,  dist: 70,  period: 87.969,   l0: 252.251, type: 'rocky' },
+    { name: 'Venus',   ru: 'Венера',   color: '#e8cda0', r: 7,  dist: 110, period: 224.701,  l0: 181.980, type: 'rocky' },
+    { name: 'Earth',   ru: 'Земля',    color: '#4488ff', r: 8,  dist: 160, period: 365.256,  l0: 100.464, type: 'earth' },
+    { name: 'Mars',    ru: 'Марс',     color: '#c1440e', r: 5,  dist: 220, period: 686.980,  l0: 355.453, type: 'rocky' },
+    { name: 'Jupiter', ru: 'Юпитер',   color: '#c88b3a', r: 22, dist: 380, period: 4332.589, l0: 34.396,  type: 'gas' },
+    { name: 'Saturn',  ru: 'Сатурн',   color: '#e8d191', r: 18, dist: 520, period: 10759.22, l0: 49.954,  type: 'gas', rings: true },
+    { name: 'Uranus',  ru: 'Уран',     color: '#7de8e8', r: 12, dist: 660, period: 30685.4,  l0: 313.238, type: 'ice' },
+    { name: 'Neptune', ru: 'Нептун',   color: '#3f54ba', r: 12, dist: 780, period: 60189.0,  l0: 304.880, type: 'ice' }
 ];
 
 // Луна Земли: сидерический период 27.32 суток.
@@ -38,9 +39,10 @@ export function moonOrbitRadius(p, i) {
 }
 
 // Главные луны других планет: период (сутки), радиус отрисовки r, цвет c,
-// стартовая фаза phase (градусы, произвольная). Порядок = порядок раскрытия
-// при зуме (см. scene.js visibleCount): первыми показываются главные луны,
-// при росте зума добавляются всё более мелкие/дальних.
+// стартовая фаза phase (градусы, произвольная). Порядок списка = порядок
+// орбит луны от планеты (moonOrbitRadius i-й луны); что показано при текущем
+// зуме, решает слипание тел по экранному расстоянию (scene.js clusterBodies),
+// а не порядок списка.
 export const moonsByPlanet = {
     Mars: [
         { n: 'Phobos',   period: 0.3189, r: 1.5, c: '#9c8f84', phase: 40 },

@@ -50,6 +50,7 @@ import { COLORS, SUN_R } from './config.js';
 import { planets, moonsByPlanet, moonDist, baseOrbitRadius, basePeriod, moonOrbitRadius } from './data.js';
 import { BASE_NAMES } from './bases_name.js';
 import { archiveBase } from './bases_removed.js';
+import { placeLabel } from './scene.js';
 
 const STORAGE_KEY = 'galaxy_space_bases_v1';
 const NAMES_KEY = 'galaxy_space_base_names_v1';   // реестр имён новых баз
@@ -624,8 +625,27 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet, hostMoon) {
     // что строки подписи группы лун: сверху тело, снизу база). У базы скрытой
     // луны строки нет — имя спутника несёт подпись группы.
     const moonLine = !quiet && hostMoon ? hostMoon : null;
+
+    // Место подписи подбирает раскладка кадра (scene.js placeLabel): если подпись
+    // налезает на соседнюю — подпись группы или другой базы, — она сдвигается по
+    // вертикали вместе со строкой спутника и полоской разбора.
+    ctx.font = `600 ${fontPx}px "Manrope", sans-serif`;
+    let shift = 0;
+    if (!quiet) {
+        let mt = 0;
+        if (moonLine) {
+            ctx.font = `${fontPx}px monospace`;
+            mt = Math.min(ctx.measureText(moonLine).width, pw);
+            ctx.font = `600 ${fontPx}px "Manrope", sans-serif`;
+        }
+        const w = Math.min(pw, Math.max(ctx.measureText(b.name).width, mt)) + 2 / zoom;
+        const room = moonLine ? 12 / zoom : 0;   // строка спутника — в той же коробке
+        shift = placeLabel(lx, ly - fontPx * 1.3 - room, w, fontPx * 1.6 + room);
+    }
+    const ny = ly + shift;                     // базовая линия имени базы
+    const mly = ny - 12 / zoom;                // строка спутника — выше имени
+
     if (moonLine) {
-        const mly = ly - 12 / zoom;            // строка выше имени базы
         ctx.font = `${fontPx}px monospace`;    // как строки подписи группы
         const mt = ctx.measureText(moonLine).width > pw
             ? cutForPanel(ctx, moonLine, pw) : moonLine;
@@ -641,13 +661,13 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet, hostMoon) {
     ctx.fillStyle = removing ? COLORS.danger : COLORS.base;
 
     if (quiet) {
-        // База лунной группы: имя не подписываем — оно стоит второй строкой
-        // подписи группы (scene.js groupPlan.baseLabel).
+        // База группы тел: имя не подписываем — оно стоит второй строкой
+        // подписи группы (render.js drawGroupLabel).
         labelScrollFrom.delete(b.id);
     } else {
         const tw = ctx.measureText(b.name).width;
         const overflow = tw > pw;
-        const scrolling = overflow && labelHovered(b, lx, ly, pw, bs, moonLine ? 12 / zoom : 0);
+        const scrolling = overflow && labelHovered(b, lx, ny, pw, bs, moonLine ? 12 / zoom : 0);
         const nowMs = performance.now();
         if (scrolling) {
             if (!labelScrollFrom.has(b.id)) labelScrollFrom.set(b.id, nowMs);
@@ -657,23 +677,23 @@ function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet, hostMoon) {
 
         ctx.save();
         ctx.beginPath();
-        ctx.rect(lx, ly - fontPx * 1.25, pw, fontPx * 1.6);
+        ctx.rect(lx, ny - fontPx * 1.25, pw, fontPx * 1.6);
         ctx.clip();
         if (scrolling) {
             // бегущая строка: имя уходит влево, следом въезжает его же копия
             const gap = 40 / zoom, cycle = tw + gap;
             const off = ((nowMs - labelScrollFrom.get(b.id)) / 1000) * 28 / zoom % cycle;
-            ctx.fillText(b.name, lx - off, ly);
-            ctx.fillText(b.name, lx - off + cycle, ly);
+            ctx.fillText(b.name, lx - off, ny);
+            ctx.fillText(b.name, lx - off + cycle, ny);
         } else {
-            ctx.fillText(overflow ? cutForPanel(ctx, b.name, pw) : b.name, lx, ly);
+            ctx.fillText(overflow ? cutForPanel(ctx, b.name, pw) : b.name, lx, ny);
         }
         ctx.restore();
     }
 
     if (removing) {
         // полоска разбора — во всю панель, заполняется справа налево
-        const bh = 3 / zoom, by = ly + 4 / zoom;
+        const bh = 3 / zoom, by = ny + 4 / zoom;
         const p = removalProgress(b);
         ctx.fillStyle = 'rgba(255, 95, 122, 0.22)';
         ctx.fillRect(lx, by, pw, bh);

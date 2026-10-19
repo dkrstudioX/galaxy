@@ -17,11 +17,10 @@ import { SUN_R, COLORS, MIN_ZOOM, MAX_ZOOM } from './config.js';
 import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, moonOrbitRadius, moonPeriod } from './data.js';
 import { bases, basesAt, fitBaseRadius, startBaseRemoval, removalProgress, BASE_REMOVAL_MS } from './bases.js';
 
-// Русские названия и подписи классов для блока «ОБЪЕКТ».
-const RU = {
-    Sun: 'Солнце', Mercury: 'Меркурий', Venus: 'Венера', Earth: 'Земля', Mars: 'Марс',
-    Jupiter: 'Юпитер', Saturn: 'Сатурн', Uranus: 'Уран', Neptune: 'Нептун'
-};
+// Русские имена для блока «ОБЪЕКТ»: планеты хранят их в данных (data.js, поле
+// ru), здесь только солнце — на карте оно не в списке планет.
+const RU = { Sun: 'Солнце' };
+planets.forEach(p => { RU[p.name] = p.ru || p.name; });
 const TYPES = {
     rocky: 'Каменная планета', earth: 'Обитаемая планета',
     gas: 'Газовый гигант', ice: 'Ледяной гигант'
@@ -416,6 +415,13 @@ function removalBarHTML(rec) {
         'ms;animation-delay:-' + elapsed + 'ms"></i></span>';
 }
 
+/** Кнопка «Войти на базу»: переход в интерьер базы (приложение ангара). */
+function enterBaseButtonHTML(b) {
+    const off = b.status !== 'active' ? ' disabled' : '';   // разбираемую не открываем
+    return '<button class="base-create" id="baseEnterBtn"' +
+        ' data-enter-id="' + b.id + '"' + off + '>Войти на базу</button>';
+}
+
 /** Кнопка «Переместить базу» у созданной базы — в том же месте, что «Создать базу». */
 function moveBaseButtonHTML(b) {
     const active = state.baseMode && state.baseMode.moveId === b.id;
@@ -450,6 +456,7 @@ function selectBaseHost(rec) {
  * Оживить карточку после innerHTML: клики по строкам баз (выбор) и кнопка
  * «Создать базу» — включает режим выбора орбиты на карте (подтверждает клик,
  * отменяют Esc и правая кнопка; обработка — в input.js). У карточки базы —
+ * «Войти на базу» (переход в интерьер базы, приложение ангара),
  * «Переместить базу» (тот же режим) и «Удалить базу» (запись убирается).
  */
 function wireObjectCard(box) {
@@ -475,6 +482,15 @@ function wireObjectCard(box) {
         // разведение с другими его базами (fitBaseRadius).
         state.baseRadius = state.baseMode ? fitBaseRadius(60, state.baseMode, null) : 60;
         renderObjectInfo();   // надпись кнопки: «Создать базу» <-> «Отмена»
+    });
+
+    const enterBtn = box.querySelector('#baseEnterBtn');
+    if (enterBtn) enterBtn.addEventListener('click', () => {
+        const rec = bases.find(b => b.id === enterBtn.dataset.enterId);
+        if (!rec || rec.status !== 'active') return;   // разбираемую не открываем
+        // Интерьер базы — приложение ангара (орбитальная звёздная база); имя базы
+        // уходит в адрес, чтобы станция знала, на какую базу вошёл игрок.
+        window.location.href = '../hangar/index.html?base=' + encodeURIComponent(rec.name);
     });
 
     const mvBtn = box.querySelector('#baseMoveBtn');
@@ -622,6 +638,7 @@ function newBaseInfoHTML(b) {
             ? '<div class="obj-note">База разбирается — перенос и повторное удаление недоступны</div>'
             : fleet ? '' : '<div class="obj-note">Новая база на орбите — корабли и постройки появятся позже</div>') +
         (fleet && !removing ? shipsSectionHTML() : '') +
+        enterBaseButtonHTML(b) +
         moveBaseButtonHTML(b) +
         deleteBaseButtonHTML(b);
 }
