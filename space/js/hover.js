@@ -8,7 +8,8 @@
 
 import { state } from './state.js';
 import { screenToWorld } from './math.js';
-import { COLORS } from './config.js';
+import { COLORS, ISO_K } from './config.js';
+import { orbitEllipsePath } from './iso.js';
 
 /** Минимальный радиус попадания в пикселях экрана — чтобы легко попадать в мелкие луны. */
 const MIN_HIT_MOON_PX = 6;
@@ -55,7 +56,8 @@ export function drawSelection(ctx, sel, hoverTargets) {
         // малое тело: орбита по сэмплированным элементам (poly), у троянцев — круг
         orbit = sel.small.poly ? { poly: sel.small.poly } : sel.small.orbit;
     } else if (sel.kind === 'planet') {
-        orbit = { cx: 0, cy: 0, r: target.p.dist };
+        // планета: реальная эллиптическая орбита (poly в view), не круг
+        orbit = target.orbit ? { poly: target.orbit } : { cx: 0, cy: 0, r: target.p.dist };
     } else if (sel.kind === 'base') {
         // база летает вокруг Луны Земли — орбита от Луны, не от солнца
         orbit = { cx: target.orbitCx, cy: target.orbitCy, r: target.orbitR };
@@ -63,7 +65,9 @@ export function drawSelection(ctx, sel, hoverTargets) {
         // луна ищется по имени: объекты лун в кадре и в дереве — разные ссылки
         const mh = target.moons.find(x => x.m.n === sel.m.n);
         if (!mh) return;
-        orbit = { cx: target.x, cy: target.y, r: mh.md };
+        orbit = mh.orbitPoly
+            ? { poly: mh.orbitPoly }
+            : { cx: target.x, cy: target.y, r: mh.md };
     }
     drawOrbitOverlay(ctx, { kind: sel.kind, orbit }, COLORS.orbitSelected);
 }
@@ -84,8 +88,12 @@ export function findBodyAt(hoverTargets, mouseX, mouseY) {
             const mh = t.moons[j];
             const hitR = Math.max(mh.m.r, MIN_HIT_MOON_PX / state.zoom);
             if ((w.x - mh.mx) ** 2 + (w.y - mh.my) ** 2 <= hitR * hitR) {
-                // луна: орбита вокруг своей планеты
-                return { kind: 'moon', name: mh.m.n, orbit: { cx: t.x, cy: t.y, r: mh.md }, p: t.p, m: mh.m };
+                // луна: наклонная орбита вокруг своей планеты
+                return {
+                    kind: 'moon', name: mh.m.n,
+                    orbit: mh.orbitPoly ? { poly: mh.orbitPoly } : { cx: t.x, cy: t.y, r: mh.md },
+                    p: t.p, m: mh.m
+                };
             }
         }
 
@@ -106,7 +114,7 @@ export function findBodyAt(hoverTargets, mouseX, mouseY) {
             // солнца; у самого солнца орбиты нет
             let orbit = null;
             if (t.small) orbit = t.small.poly ? { poly: t.small.poly } : t.small.orbit;
-            else if (t.kind !== 'sun') orbit = { cx: 0, cy: 0, r: t.p.dist };
+            else if (t.kind !== 'sun') orbit = t.orbit ? { poly: t.orbit } : { cx: 0, cy: 0, r: t.p.dist };
             return { kind: t.kind, name, orbit, p: t.p || null, m: null, small: t.small || null };
         }
     }
@@ -127,15 +135,27 @@ function drawOrbitOverlay(ctx, hover, color) {
     ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.beginPath();
     if (hover.orbit.poly) {
-        // малое тело: сэмплированная петля — эллипс по (a, e) врёт вне линейных зон
+        // сэмплированная петля (малые тела, кометы, планеты): эллипс по (a,e)
+        // неверен после нелинейного сжатия шкалы и наклонной орбиты кометы
         const p = hover.orbit.poly;
         ctx.moveTo(p[0], p[1]);
         for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]);
+        ctx.closePath();
     } else if (hover.orbit.rot !== undefined) {
-        // эллипс малого тела: центр, полуоси, поворот (мировые единицы)
-        ctx.ellipse(hover.orbit.cx, hover.orbit.cy, hover.orbit.a, hover.orbit.b, hover.orbit.rot, 0, Math.PI * 2);
+        // запасной путь для старого эллипса: сэмплируем в raw и проецируем,
+        // иначе наклонный эллипс после сжатия по y не совпадёт с орбитой
+        const o = hover.orbit;
+        const cr = Math.cos(o.rot), sr = Math.sin(o.rot);
+        for (let i = 0; i <= 96; i++) {
+            const t = i / 96 * Math.PI * 2;
+            const ex = Math.cos(t) * o.a, ey = Math.sin(t) * o.b;
+            const x = o.cx + ex * cr - ey * sr;
+            const y = o.cy + ex * sr + ey * cr;
+            if (i === 0) ctx.moveTo(x, y * ISO_K);
+            else ctx.lineTo(x, y * ISO_K);
+        }
     } else {
-        ctx.arc(hover.orbit.cx, hover.orbit.cy, hover.orbit.r, 0, Math.PI * 2);
+        orbitEllipsePath(ctx, hover.orbit.cx, hover.orbit.cy, hover.orbit.r);
     }
     ctx.stroke();
     ctx.setLineDash([]);

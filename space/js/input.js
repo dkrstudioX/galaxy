@@ -13,6 +13,7 @@ import { planets } from './data.js';
 import { findBodyAt } from './hover.js';
 import { selectBody, refreshObjectCard } from './ui.js';
 import { createBase, moveBase, bases, fitBaseRadius } from './bases.js';
+import { rawDist, rawAngle } from './iso.js';
 
 /**
  * Зум к точке экрана: мировая точка под (ax, ay) остаётся под ней после
@@ -240,13 +241,15 @@ function updateBaseRadius(x, y) {
     const hp = hostPosOf(state.baseMode);   // радиус — от живого положения хоста
     // Механизм баз: коридор «не пересекать тела» + разведение с другими базами
     // этого хозяина; переносимая база себе не мешает (moveId исключается).
-    const d = hp ? Math.hypot(w.x - hp.x, w.y - hp.y) : bd;
+    // Экран/view сжат по y: расстояние и угол базы живут в raw-плоскости.
+    const d = hp ? rawDist(w.x - hp.x, w.y - hp.y)
+                 : rawDist(w.x - best.x, w.y - best.y);
     state.baseRadius = fitBaseRadius(d, state.baseMode, state.baseMode.moveId || null);
     // Сторона орбиты — направление от центра хозяина к курсору: перенос
     // поставит базу с этой стороны, создание появится тут же (mode.ang).
     if (hp) {
         const dx = w.x - hp.x, dy = w.y - hp.y;
-        if (Math.hypot(dx, dy) > 1e-6) state.baseMode.ang = Math.atan2(-dy, dx);
+        if (rawDist(dx, dy) > 1e-6) state.baseMode.ang = rawAngle(dx, dy);
     }
 }
 

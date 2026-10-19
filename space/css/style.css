@@ -230,10 +230,10 @@ canvas { display: block; width: 100vw; height: 100vh; }
     transition: background .12s ease;
 }
 .base-row:last-child { border-bottom: 0; }
-.base-row:hover { background: rgba(0, 255, 255, .05); }
+.base-row:hover { background: rgba(53, 232, 216, .05); }
 .base-row .b-dot {
     width: 7px; height: 7px; flex: none; border-radius: 1px;
-    background: #00ffff; box-shadow: 0 0 6px rgba(0, 255, 255, .55);
+    background: #35e8d8; box-shadow: 0 0 6px rgba(53, 232, 216, .55);
 }
 .base-row .b-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .base-row .b-name {
@@ -259,12 +259,12 @@ canvas { display: block; width: 100vw; height: 100vh; }
 @keyframes rm-progress { from { width: 0; } to { width: 100%; } }
 .base-create {
     margin-top: 10px; width: 100%; padding: 9px 10px;
-    border: 1px solid rgba(0, 255, 255, .35); border-radius: 6px;
-    background: rgba(0, 255, 255, .07); color: #bffcfc;
+    border: 1px solid rgba(53, 232, 216, .35); border-radius: 6px;
+    background: rgba(53, 232, 216, .07); color: #bffcfc;
     font: 600 10px "Manrope", sans-serif; letter-spacing: .1em; text-transform: uppercase;
     cursor: pointer; transition: background .12s ease, border-color .12s ease;
 }
-.base-create:not(:disabled):hover { background: rgba(0, 255, 255, .16); }
+.base-create:not(:disabled):hover { background: rgba(53, 232, 216, .16); }
 .base-create.active {
     border-color: rgba(255, 205, 120, .55); background: rgba(255, 205, 120, .10);
     color: #ffd79a;

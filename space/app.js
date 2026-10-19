@@ -25,33 +25,65 @@ const MIN_SPEED = 1 / 1024;
 const MAX_SPEED = 1048576; // хватает, чтобы при 1x увидеть движение планет
 
 // --- Солнце ----------------------------------------------------------------------
-const SUN_R = 22; // радиус отрисовки солнца (условные единицы мира)
+const SUN_R = 22; // радиус ядра солнца (условные единицы мира)
+
+// --- Изометрия -------------------------------------------------------------------
+// Референсы карты — диметрия 2:1: плоскость эклиптики сжимается по вертикали
+// вдвое. Все позиции тел, камеры и hover-целей живут в «виде» (view): y уже
+// умножен на ISO_K. Физика (орбиты, коридоры баз) остаётся в raw-координатах.
+const ISO_K = 0.5;
+
+// Высота над плоскостью эклиптики в той же ортогональной проекции:
+// если плоскость сжата как sin(26.57°) = 0.5, то вертикаль — cos(26.57°).
+// Так наклонные орбиты (inc/node) получают реальный экранный наклон, а не
+// декоративный подъём.
+const ISO_Z = 0.866;
+
+// Высота маркера базы над полом — в экранных пикселях (делится на zoom).
+const LIFT = {
+    base: 10
+};
 
 // --- Стили карты -------------------------------------------------------------------
-// Планеты — прозрачная заливка: тело читается только по обводке, одинаковой
-// у всех; сквозь него видно звёздное небо. Солнце — жёлтая заливка.
+// Солнце, планеты и луны — сферы: радиальный градиент с бликом в верхней левой
+// части и тёмным краем. Тени — эллипсы на полу. Плоских обводок больше нет.
 const COLORS = {
     sun: '#ffd75e',
-    sunStroke: '#ffffff',
+    sunCore: '#fffef7',
+    sunMid: '#ffe7a3',
+    sunEdge: '#ff9d3c',
+    sunOuter: '#ff7a18',
     planetStroke: '#efefef',
     moon: '#a8a8a8',
     moonStroke: '#d6d6d6',
-    base: '#00ffff', // функциональный маркер базы, не декор
+    base: '#35e8d8', // цвет базы с референса map4/map5/map6
     danger: '#ff5f7a', // удаление базы: имя и полоска прогресса (общий красный проекта)
     tooltip: '#ffffff',
     tooltipShadow: 'rgba(0,0,0,0.6)',
     orbitPlanet: 'rgba(120,140,200,0.6)',
+    orbitPlanetFaint: 'rgba(57,74,104,0.9)', // постоянные орбиты планет, как на референсах
     orbitMoon: 'rgba(150,160,180,0.6)',
-    orbitSelected: 'rgba(122,236,224,0.8)' // орбита выбранного кликом тела (акцент hangar)
+    orbitSelected: 'rgba(122,236,224,0.8)', // орбита выбранного кликом тела (акцент hangar)
+    cometIon: '#bff6ff',
+    cometDust: '#ffe7a3',
+    cometComa: '#dff8ff',
+    starHalo: 'rgba(255,157,60,0.18)'
 };
 
 // Толщина обводок в пикселях экрана (делим на zoom при отрисовке).
-// Солнце — самая толстая, у планет обводка одинаковая у всех (заливки нет),
-// луны — самые тонкие.
+// Оставлено для тонкого rim сфер и мелких тел.
 const STROKE = {
     sun: 2.5,
-    planet: 2,
-    moon: 0.7
+    planet: 0.6,
+    moon: 0.45
+};
+
+// Тень на полу: смещение вниз и пропорции эллипса.
+const SHADOW = {
+    alpha: 0.34,
+    dy: 0.65,       // доля радиуса тела
+    rx: 1.0,        // доля радиуса по горизонтали
+    ry: 0.32        // доля радиуса по вертикали
 };
 
 // ===== math.js =====
@@ -154,9 +186,12 @@ function periodFromA(a) {
  * @param {number} m0   средняя аномалия на J2000, градусы
  * @param {number} T    период, сутки
  * @param {number} t    симуляционное время, сутки от J2000
+ * @param {Function} [mapDist] перевод радиуса в единицы карты; по умолчанию
+ *        а.е. -> условные единицы (auToDist). Для планет с уже сжатым
+ *        радиусом p.dist передаётся тождественная функция.
  * @returns {{x: number, y: number, rAu: number}} единицы мира + радиус, а.е.
  */
-function keplerPos(a, e, peri, m0, T, t) {
+function keplerPos(a, e, peri, m0, T, t, mapDist = auToDist) {
     let turns = (m0 / 360 + t / T) % 1;
     if (turns < 0) turns += 1;
     const M = turns * 2 * Math.PI;
@@ -168,8 +203,73 @@ function keplerPos(a, e, peri, m0, T, t) {
     const nu = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
     const rAu = a * (1 - e * Math.cos(E));
     const th = nu + peri * Math.PI / 180;
-    const r = auToDist(rAu);
+    const r = mapDist(rAu);
     return { x: Math.cos(th) * r, y: -Math.sin(th) * r, rAu };
+}
+
+/** Градусы -> радианы для орбитальных элементов. */
+const ORBIT_RAD = Math.PI / 180;
+
+/**
+ * Точка на орбите с наклонением. lon — долгота в плоскости эклиптики
+ * (радианы), inc — наклонение, node — долгота восходящего узла (градусы).
+ * Возвращает уже 3D-точку: x, y (вниз), z (высота над эклиптикой).
+ */
+function orbitPoint3(radius, lon, incDeg = 0, nodeDeg = 0) {
+    const inc = incDeg * ORBIT_RAD;
+    const node = nodeDeg * ORBIT_RAD;
+    const u = lon - node;                 // аргумент широты от узла
+    const cu = Math.cos(u), su = Math.sin(u);
+    const ci = Math.cos(inc), si = Math.sin(inc);
+    const co = Math.cos(node), so = Math.sin(node);
+
+    // Поворот орбитальной плоскости: Rz(node) * Rx(inc) * Rz(-node),
+    // затем перевод в экранные «y вниз».
+    return {
+        x: radius * (co * cu - so * su * ci),
+        y: -radius * (so * cu + co * su * ci),
+        z: radius * su * si
+    };
+}
+
+/**
+ * Позиция тела на наклонной орбите: те же элементы, что у keplerPos, плюс
+ * реальные inc/node. Плоский случай (inc = node = 0) совпадает с keplerPos.
+ * @returns {{x: number, y: number, z: number, rAu: number}}
+ */
+function keplerPos3(a, e, peri, m0, T, t, mapDist = auToDist, inc = 0, node = 0) {
+    const flat = keplerPos(a, e, peri, m0, T, t, mapDist);
+    const r = Math.hypot(flat.x, flat.y);
+    const lon = Math.atan2(-flat.y, flat.x);
+    return Object.assign(orbitPoint3(r, lon, inc, node), { rAu: flat.rAu });
+}
+
+/**
+ * Замкнутая полилиния орбиты по элементам: плоский массив x0, y0, x1, y1…
+ * (сырые единицы карты). Нужна для эллиптических орбит, где descriptor
+ * {a,b,rot} после проекции уже неудобен.
+ * @param {Function} [mapDist] как у keplerPos
+ */
+function keplerPoly(a, e, peri, m0, T, steps = 128, mapDist = auToDist) {
+    const pts = [];
+    for (let k = 0; k <= steps; k++) {
+        const pos = keplerPos(a, e, peri, m0, T, k * T / steps, mapDist);
+        pts.push(pos.x, pos.y);
+    }
+    return pts;
+}
+
+/**
+ * То же, но с наклонением: x0,y0,z0,x1,y1,z1… (сырые единицы карты).
+ * @param {Function} [mapDist] как у keplerPos
+ */
+function keplerPoly3(a, e, peri, m0, T, steps = 128, mapDist = auToDist, inc = 0, node = 0) {
+    const pts = [];
+    for (let k = 0; k <= steps; k++) {
+        const pos = keplerPos3(a, e, peri, m0, T, k * T / steps, mapDist, inc, node);
+        pts.push(pos.x, pos.y, pos.z);
+    }
+    return pts;
 }
 
 // ===== data.js =====
@@ -179,24 +279,36 @@ function keplerPos(a, e, peri, m0, T, t) {
 // средние на эпоху J2000 (градусы) — отсюда реалистичные взаимные положения.
 // =============================================================================
 
-// Планеты. r и dist — условные единицы мира (не в масштабе, но порядок верный).
+// Планеты. r и dist — условные единицы мира (dist — сжатая большая полуось,
+// порядок и относительные расстояния верные). l0 — средняя долгота на J2000,
+// e — реальный эксцентриситет, peri — долгота перигелия, inc/node — реальное
+// наклонение и долгота восходящего узла к плоскости эклиптики (J2000).
+// Позиция считается уравнением Кеплера (math.js keplerPos3), поэтому форма,
+// наклон и скорость движения соответствуют реальным элементам.
 // rings — рисовать кольца (Сатурн). type оставлен для совместимости.
 // ru — русское имя для подписей на карте и в карточках (ui.js).
 const planets = [
-    { name: 'Mercury', ru: 'Меркурий', color: '#b5b5b5', r: 4,  dist: 70,  period: 87.969,   l0: 252.251, type: 'rocky' },
-    { name: 'Venus',   ru: 'Венера',   color: '#e8cda0', r: 7,  dist: 110, period: 224.701,  l0: 181.980, type: 'rocky' },
-    { name: 'Earth',   ru: 'Земля',    color: '#4488ff', r: 8,  dist: 160, period: 365.256,  l0: 100.464, type: 'earth' },
-    { name: 'Mars',    ru: 'Марс',     color: '#c1440e', r: 5,  dist: 220, period: 686.980,  l0: 355.453, type: 'rocky' },
-    { name: 'Jupiter', ru: 'Юпитер',   color: '#c88b3a', r: 22, dist: 380, period: 4332.589, l0: 34.396,  type: 'gas' },
-    { name: 'Saturn',  ru: 'Сатурн',   color: '#e8d191', r: 18, dist: 520, period: 10759.22, l0: 49.954,  type: 'gas', rings: true },
-    { name: 'Uranus',  ru: 'Уран',     color: '#7de8e8', r: 12, dist: 660, period: 30685.4,  l0: 313.238, type: 'ice' },
-    { name: 'Neptune', ru: 'Нептун',   color: '#3f54ba', r: 12, dist: 780, period: 60189.0,  l0: 304.880, type: 'ice' }
+    { name: 'Mercury', ru: 'Меркурий', color: '#b5b5b5', r: 4,  dist: 70,  period: 87.969,   l0: 252.251, e: 0.205636, peri: 77.458,  inc: 7.005,  node: 48.331,  type: 'rocky' },
+    { name: 'Venus',   ru: 'Венера',   color: '#e8cda0', r: 7,  dist: 110, period: 224.701,  l0: 181.980, e: 0.006777, peri: 131.602, inc: 3.395,  node: 76.680,  type: 'rocky' },
+    { name: 'Earth',   ru: 'Земля',    color: '#4488ff', r: 8,  dist: 160, period: 365.256,  l0: 100.464, e: 0.016711, peri: 102.938, inc: 0.000,  node: 0.000,   type: 'earth' },
+    { name: 'Mars',    ru: 'Марс',     color: '#c1440e', r: 5,  dist: 220, period: 686.980,  l0: 355.453, e: 0.093394, peri: 336.041, inc: 1.850,  node: 49.579,  type: 'rocky' },
+    { name: 'Jupiter', ru: 'Юпитер',   color: '#c88b3a', r: 22, dist: 380, period: 4332.589, l0: 34.396,  e: 0.048386, peri: 14.728,  inc: 1.304,  node: 100.464, type: 'gas' },
+    { name: 'Saturn',  ru: 'Сатурн',   color: '#e8d191', r: 18, dist: 520, period: 10759.22, l0: 49.954,  e: 0.053862, peri: 92.599,  inc: 2.488,  node: 113.665, type: 'gas', rings: true },
+    { name: 'Uranus',  ru: 'Уран',     color: '#7de8e8', r: 12, dist: 660, period: 30685.4,  l0: 313.238, e: 0.047257, peri: 170.954, inc: 0.773,  node: 74.006,  type: 'ice' },
+    { name: 'Neptune', ru: 'Нептун',   color: '#3f54ba', r: 12, dist: 780, period: 60189.0,  l0: 304.880, e: 0.008590, peri: 44.965,  inc: 1.770,  node: 131.784, type: 'ice' }
 ];
+
+/** Средняя аномалия планеты на J2000: L0 − долгота перигелия. */
+function planetM0(p) {
+    return p.l0 - p.peri;
+}
 
 // Луна Земли: сидерический период 27.32 суток.
 const moonDist = 22;          // радиус орбиты Луны от Земли
 const moonPeriod = 27.321661; // суток
 const moonL0 = 218.32;        // средняя долгота на J2000, градусы
+const moonInc = 5.145;        // наклонение к эклиптике, градусы
+const moonNode = 125.08;      // долгота восходящего узла, градусы
 // Базы игрока: на радиусе baseOrbitRadius виток занимает basePeriod суток,
 // дальше период растёт по закону Кеплера (bases.js); на этом же радиусе
 // рождается стартовая база LUNA-ORBIT.
@@ -210,48 +322,61 @@ const basePeriod = 1;         // суток на виток (на радиусе
  * (коридор радиусов орбит баз: база не должна пересекать луну).
  */
 function moonOrbitRadius(p, i) {
-    return p.r + 12 + i * 7;
+    const list = moonsByPlanet[p.name] || [];
+    const m = list[i];
+    if (!m || !m.a) return p.r + 12 + i * 7;
+
+    // Реальные большие полуоси лун сжаты логарифмически, как и вся карта:
+    // порядок и относительный размах сохранены, но Ио и Гималия не разлетаются
+    // на сотни единиц. Внутренняя луна — p.r + 12, внешняя — p.r + 40.
+    const amin = Math.min(...list.map(x => x.a));
+    const amax = Math.max(...list.map(x => x.a));
+    const t = Math.log(m.a / amin + 1) / Math.log(amax / amin + 1);
+    return p.r + 12 + t * 28;
 }
 
-// Главные луны других планет: период (сутки), радиус отрисовки r, цвет c,
-// стартовая фаза phase (градусы, произвольная). Порядок списка = порядок
-// орбит луны от планеты (moonOrbitRadius i-й луны); что показано при текущем
-// зуме, решает слипание тел по экранному расстоянию (scene.js clusterBodies),
-// а не порядок списка.
+// Главные луны других планет: период (сутки), реальная большая полуось a (км),
+// радиус отрисовки r, цвет c, стартовая фаза phase (градусы, произвольная).
+// inc/node — наклонение и узел орбиты луны относительно эклиптики (J2000):
+// у регулярных лун это плоскость экватора планеты (поэтому у Урана ~98°,
+// у Сатурна ~26.7°), у нерегулярных — собственное наклонение.
+// moonOrbitRadius ставит луны по реальному a (логарифмическое сжатие), поэтому
+// порядок списка не важен; что показано при текущем зуме, решает слипание тел
+// по экранному расстоянию (scene.js clusterBodies).
 const moonsByPlanet = {
     Mars: [
-        { n: 'Phobos',   period: 0.3189, r: 1.5, c: '#9c8f84', phase: 40 },
-        { n: 'Deimos',   period: 1.2624, r: 1.3, c: '#b3a89e', phase: 150 }
+        { n: 'Phobos',   period: 0.3189, a: 9376,     r: 1.5, c: '#9c8f84', phase: 40,  inc: 26.04, node: 125.08 },
+        { n: 'Deimos',   period: 1.2624, a: 23463,    r: 1.3, c: '#b3a89e', phase: 150, inc: 26.58, node: 125.08 }
     ],
     Jupiter: [
-        { n: 'Io',       period: 1.769,  r: 2.3, c: '#d8c26a', phase: 70 },
-        { n: 'Europa',   period: 3.551,  r: 2.0, c: '#cbb8a0', phase: 190 },
-        { n: 'Ganymede', period: 7.155,  r: 2.7, c: '#9a8f85', phase: 300 },
-        { n: 'Callisto', period: 16.689, r: 2.5, c: '#7d746c', phase: 20 },
-        { n: 'Amalthea', period: 0.498,  r: 1.2, c: '#b06a4a', phase: 130 },
-        { n: 'Himalia',  period: 250.6,  r: 1.2, c: '#8a8078', phase: 45 }
+        { n: 'Io',       period: 1.769,  a: 421700,   r: 2.3, c: '#d8c26a', phase: 70,  inc: 0.04,  node: 100.46 },
+        { n: 'Europa',   period: 3.551,  a: 671034,   r: 2.0, c: '#cbb8a0', phase: 190, inc: 0.47,  node: 100.46 },
+        { n: 'Ganymede', period: 7.155,  a: 1070412,  r: 2.7, c: '#9a8f85', phase: 300, inc: 0.20,  node: 100.46 },
+        { n: 'Callisto', period: 16.689, a: 1882709,  r: 2.5, c: '#7d746c', phase: 20,  inc: 0.19,  node: 100.46 },
+        { n: 'Amalthea', period: 0.498,  a: 181365,   r: 1.2, c: '#b06a4a', phase: 130, inc: 0.38,  node: 100.46 },
+        { n: 'Himalia',  period: 250.6,  a: 11460000, r: 1.2, c: '#8a8078', phase: 45,  inc: 27.50, node: 40.00 }
     ],
     Saturn: [
-        { n: 'Mimas',    period: 0.942,  r: 1.5, c: '#b8bcc2', phase: 110 },
-        { n: 'Enceladus',period: 1.370,  r: 1.7, c: '#d9dee3', phase: 250 },
-        { n: 'Rhea',     period: 4.518,  r: 1.9, c: '#a8adb5', phase: 330 },
-        { n: 'Titan',    period: 15.945, r: 2.9, c: '#c79b5a', phase: 80 },
-        { n: 'Dione',    period: 2.737,  r: 1.6, c: '#c2c7cd', phase: 15 },
-        { n: 'Tethys',   period: 1.888,  r: 1.6, c: '#ccd1d6', phase: 200 },
-        { n: 'Iapetus',  period: 79.32,  r: 1.7, c: '#8f8478', phase: 300 }
+        { n: 'Mimas',    period: 0.942,  a: 185539,   r: 1.5, c: '#b8bcc2', phase: 110, inc: 26.73, node: 113.67 },
+        { n: 'Enceladus',period: 1.370,  a: 238037,   r: 1.7, c: '#d9dee3', phase: 250, inc: 26.73, node: 113.67 },
+        { n: 'Rhea',     period: 4.518,  a: 527108,   r: 1.9, c: '#a8adb5', phase: 330, inc: 26.73, node: 113.67 },
+        { n: 'Titan',    period: 15.945, a: 1221870,  r: 2.9, c: '#c79b5a', phase: 80,  inc: 26.73, node: 113.67 },
+        { n: 'Dione',    period: 2.737,  a: 377396,   r: 1.6, c: '#c2c7cd', phase: 15,  inc: 26.73, node: 113.67 },
+        { n: 'Tethys',   period: 1.888,  a: 294619,   r: 1.6, c: '#ccd1d6', phase: 200, inc: 26.73, node: 113.67 },
+        { n: 'Iapetus',  period: 79.32,  a: 3560820,  r: 1.7, c: '#8f8478', phase: 300, inc: 15.47, node: 80.00 }
     ],
     Uranus: [
-        { n: 'Miranda',  period: 1.413,  r: 1.4, c: '#a9b3b8', phase: 210 },
-        { n: 'Ariel',    period: 2.520,  r: 1.7, c: '#b6c0c4', phase: 20 },
-        { n: 'Umbriel',  period: 4.144,  r: 1.5, c: '#7e888d', phase: 95 },
-        { n: 'Titania',  period: 8.706,  r: 2.1, c: '#9aa5ab', phase: 140 },
-        { n: 'Oberon',   period: 13.463, r: 2.0, c: '#8b969c', phase: 260 },
-        { n: 'Puck',     period: 0.762,  r: 1.1, c: '#9c9a94', phase: 175 }
+        { n: 'Miranda',  period: 1.413,  a: 129390,   r: 1.4, c: '#a9b3b8', phase: 210, inc: 97.77, node: 74.01 },
+        { n: 'Ariel',    period: 2.520,  a: 190900,   r: 1.7, c: '#b6c0c4', phase: 20,  inc: 97.77, node: 74.01 },
+        { n: 'Umbriel',  period: 4.144,  a: 266000,   r: 1.5, c: '#7e888d', phase: 95,  inc: 97.77, node: 74.01 },
+        { n: 'Titania',  period: 8.706,  a: 436300,   r: 2.1, c: '#9aa5ab', phase: 140, inc: 97.77, node: 74.01 },
+        { n: 'Oberon',   period: 13.463, a: 583500,   r: 2.0, c: '#8b969c', phase: 260, inc: 97.77, node: 74.01 },
+        { n: 'Puck',     period: 0.762,  a: 86004,    r: 1.1, c: '#9c9a94', phase: 175, inc: 97.77, node: 74.01 }
     ],
     Neptune: [
-        { n: 'Proteus',  period: 1.122,  r: 1.5, c: '#8f9aa3', phase: 310 },
-        { n: 'Triton',   period: 5.877,  r: 2.3, c: '#c3cdd4', phase: 100 },
-        { n: 'Nereid',   period: 360.1,  r: 1.2, c: '#9aa2ab', phase: 220 }
+        { n: 'Proteus',  period: 1.122,  r: 1.5, c: '#8f9aa3', phase: 310, inc: 28.32,  node: 131.78 },
+        { n: 'Triton',   period: 5.877,  r: 2.3, c: '#c3cdd4', phase: 100, inc: 156.88, node: 177.40 },
+        { n: 'Nereid',   period: 360.1,  r: 1.2, c: '#9aa2ab', phase: 220, inc: 35.00,  node: 131.78 }
     ]
 };
 
@@ -287,10 +412,10 @@ const AU_ANCHORS = [
 // m0 — средняя аномалия на J2000 (град., произвольная фаза карты),
 // dia — диаметр (км). Период считается по третьему закону Кеплера.
 const beltNotables = [
-    { n: 'Ceres',  ru: 'Церера',  a: 2.7675, e: 0.0785, peri: 73.6,  m0: 95,  dia: 939, type: 'dwarf' },
-    { n: 'Vesta',  ru: 'Веста',   a: 2.3615, e: 0.0887, peri: 151.2, m0: 210, dia: 525 },
-    { n: 'Pallas', ru: 'Паллада', a: 2.7727, e: 0.2313, peri: 310.0, m0: 42,  dia: 512 },
-    { n: 'Hygiea', ru: 'Гигея',   a: 3.1395, e: 0.1067, peri: 313.2, m0: 152, dia: 434 }
+    { n: 'Ceres',  ru: 'Церера',  a: 2.7675, e: 0.0785, peri: 73.6,  m0: 95,  dia: 939, inc: 10.59, node: 80.3,  type: 'dwarf' },
+    { n: 'Vesta',  ru: 'Веста',   a: 2.3615, e: 0.0887, peri: 151.2, m0: 210, dia: 525, inc: 7.14,  node: 103.8 },
+    { n: 'Pallas', ru: 'Паллада', a: 2.7727, e: 0.2313, peri: 310.0, m0: 42,  dia: 512, inc: 34.84, node: 173.0 },
+    { n: 'Hygiea', ru: 'Гигея',   a: 3.1395, e: 0.1067, peri: 313.2, m0: 152, dia: 434, inc: 3.83,  node: 283.2 }
 ];
 
 // Околоземные астероиды (реальные элементы; m0 — произвольная фаза карты).
@@ -298,20 +423,20 @@ const beltNotables = [
 // пересекают; apollo — пересекают орбиту Земли, a > 1 а.е.; aten — пересекают,
 // a < 1 а.е. Тутатис — «переходный»: афелий 4.1 а.е. — заходит в пояс.
 const neas = [
-    { n: 'Eros',      ru: 'Эрос',      group: 'amor',   a: 1.4582, e: 0.2226, peri: 178.9, m0: 250, dia: 16.8 },
-    { n: 'Amor',      ru: 'Амур',      group: 'amor',   a: 1.9197, e: 0.4351, peri: 26.7,  m0: 120, dia: 1.0 },
-    { n: 'Ganymed',   ru: 'Ганимед',   group: 'amor',   a: 2.6632, e: 0.5339, peri: 132.4, m0: 300, dia: 35 },
-    { n: 'Apollo',    ru: 'Аполлон',   group: 'apollo', a: 1.4704, e: 0.5599, peri: 285.7, m0: 60,  dia: 1.5 },
-    { n: 'Bennu',     ru: 'Бенну',     group: 'apollo', a: 1.1264, e: 0.2038, peri: 66.2,  m0: 101, dia: 0.49 },
-    { n: 'Itokawa',   ru: 'Итокава',   group: 'apollo', a: 1.3241, e: 0.2801, peri: 162.8, m0: 312, dia: 0.33 },
-    { n: 'Toutatis',  ru: 'Тутатис',   group: 'apollo', a: 2.5344, e: 0.6299, peri: 278.8, m0: 190, dia: 4.5 },
-    { n: 'Didymos',   ru: 'Дидим',     group: 'apollo', a: 1.6444, e: 0.3835, peri: 319.3, m0: 340, dia: 0.78 },
-    { n: 'Icarus',    ru: 'Икар',      group: 'apollo', a: 1.0780, e: 0.8265, peri: 31.5,  m0: 210, dia: 1.4 },
-    { n: 'Nereus',    ru: 'Нерей',     group: 'apollo', a: 1.4892, e: 0.3603, peri: 158.0, m0: 15,  dia: 0.33 },
-    { n: 'Aten',      ru: 'Атон',      group: 'aten',   a: 0.9668, e: 0.1826, peri: 147.5, m0: 280, dia: 1.1 },
-    { n: 'Apophis',   ru: 'Апофис',    group: 'aten',   a: 0.9224, e: 0.1914, peri: 126.4, m0: 60,  dia: 0.37 },
-    { n: 'Ra-Shalom', ru: 'Ра-Шалом',  group: 'aten',   a: 0.8322, e: 0.4364, peri: 356.0, m0: 130, dia: 2.3 },
-    { n: 'Cruithne',  ru: 'Круитни',   group: 'aten',   a: 0.9978, e: 0.5148, peri: 12.0,  m0: 220, dia: 5 }
+    { n: 'Eros',      ru: 'Эрос',      group: 'amor',   a: 1.4582, e: 0.2226, peri: 178.9, m0: 250, dia: 16.8, inc: 10.83, node: 304.3 },
+    { n: 'Amor',      ru: 'Амур',      group: 'amor',   a: 1.9197, e: 0.4351, peri: 26.7,  m0: 120, dia: 1.0,  inc: 11.00, node: 171.3 },
+    { n: 'Ganymed',   ru: 'Ганимед',   group: 'amor',   a: 2.6632, e: 0.5339, peri: 132.4, m0: 300, dia: 35,   inc: 26.70, node: 215.5 },
+    { n: 'Apollo',    ru: 'Аполлон',   group: 'apollo', a: 1.4704, e: 0.5599, peri: 285.7, m0: 60,  dia: 1.5,  inc: 6.35,  node: 35.5  },
+    { n: 'Bennu',     ru: 'Бенну',     group: 'apollo', a: 1.1264, e: 0.2038, peri: 66.2,  m0: 101, dia: 0.49, inc: 6.00,  node: 2.0   },
+    { n: 'Itokawa',   ru: 'Итокава',   group: 'apollo', a: 1.3241, e: 0.2801, peri: 162.8, m0: 312, dia: 0.33, inc: 1.62,  node: 69.1  },
+    { n: 'Toutatis',  ru: 'Тутатис',   group: 'apollo', a: 2.5344, e: 0.6299, peri: 278.8, m0: 190, dia: 4.5,  inc: 0.45,  node: 124.3 },
+    { n: 'Didymos',   ru: 'Дидим',     group: 'apollo', a: 1.6444, e: 0.3835, peri: 319.3, m0: 340, dia: 0.78, inc: 3.40,  node: 73.0  },
+    { n: 'Icarus',    ru: 'Икар',      group: 'apollo', a: 1.0780, e: 0.8265, peri: 31.5,  m0: 210, dia: 1.4,  inc: 22.80, node: 88.0  },
+    { n: 'Nereus',    ru: 'Нерей',     group: 'apollo', a: 1.4892, e: 0.3603, peri: 158.0, m0: 15,  dia: 0.33, inc: 1.43,  node: 159.5 },
+    { n: 'Aten',      ru: 'Атон',      group: 'aten',   a: 0.9668, e: 0.1826, peri: 147.5, m0: 280, dia: 1.1,  inc: 6.40,  node: 122.9 },
+    { n: 'Apophis',   ru: 'Апофис',    group: 'aten',   a: 0.9224, e: 0.1914, peri: 126.4, m0: 60,  dia: 0.37, inc: 3.34,  node: 204.4 },
+    { n: 'Ra-Shalom', ru: 'Ра-Шалом',  group: 'aten',   a: 0.8322, e: 0.4364, peri: 356.0, m0: 130, dia: 2.3,  inc: 2.50,  node: 169.9 },
+    { n: 'Cruithne',  ru: 'Круитни',   group: 'aten',   a: 0.9978, e: 0.5148, peri: 12.0,  m0: 220, dia: 5,    inc: 19.80, node: 126.2 }
 ];
 
 // Именованные троянцы Юпитера: camp 4 — L4 (впереди Юпитера), 5 — L5 (позади);
@@ -328,11 +453,13 @@ const trojanNames = [
 // Энке и Хейла—Боппа — у перигелия. shower — связанный метеорный поток,
 // src — источник (oort — облако Оорта, kuiper — пояс Койпера),
 // tailK — множитель длины хвоста (0.75–1.0, у крупных больше).
+// inc/node — реальное наклонение и долгота узла: по ним комета поднимается
+// над плоскостью карты и её орбита действительно наклонена к эклиптике.
 const comets = [
-    { n: '1P/Halley',        ru: 'Галлея',         a: 17.834, e: 0.9671, peri: 111.3, m0: 234, dia: 11, shower: 'Ориониды · Эта-Аквариды', src: 'oort',   tailK: 1.0 },
-    { n: '2P/Encke',         ru: 'Энке',           a: 2.2151, e: 0.8483, peri: 187.6, m0: 323, dia: 4.8, shower: 'Тауриды',                src: 'kuiper', tailK: 0.75 },
-    { n: '109P/Swift-Tuttle', ru: 'Свифта—Таттла', a: 26.09,  e: 0.9633, peri: 113.4, m0: 289, dia: 26, shower: 'Персеиды',               src: 'oort',   tailK: 1.0 },
-    { n: 'C/1995 O1',        ru: 'Хейла—Боппа',    a: 186.0,  e: 0.9951, peri: 130.6, m0: 0,   dia: 60, shower: null,                     src: 'oort',   tailK: 0.9 }
+    { n: '1P/Halley',        ru: 'Галлея',         a: 17.834, e: 0.9671, peri: 111.3, m0: 234, dia: 11, inc: 162.26, node: 58.42,  shower: 'Ориониды · Эта-Аквариды', src: 'oort',   tailK: 1.0 },
+    { n: '2P/Encke',         ru: 'Энке',           a: 2.2151, e: 0.8483, peri: 187.6, m0: 323, dia: 4.8, inc: 11.78,  node: 334.57, shower: 'Тауриды',                src: 'kuiper', tailK: 0.75 },
+    { n: '109P/Swift-Tuttle', ru: 'Свифта—Таттла', a: 26.09,  e: 0.9633, peri: 113.4, m0: 289, dia: 26, inc: 113.45, node: 139.40, shower: 'Персеиды',               src: 'oort',   tailK: 1.0 },
+    { n: 'C/1995 O1',        ru: 'Хейла—Боппа',    a: 186.0,  e: 0.9951, peri: 130.6, m0: 0,   dia: 60, inc: 89.43,  node: 282.47, shower: null,                     src: 'oort',   tailK: 0.9 }
 ];
 
 // ===== state.js =====
@@ -385,6 +512,283 @@ function resize(canvas) {
     state.H = canvas.height = window.innerHeight;
 }
 
+// ===== iso.js =====
+// =============================================================================
+// iso.js — проекция карты в диметрию 2:1.
+//
+// Мир (raw) — плоскость эклиптики: окружности, радиусы, коридоры баз.
+// Вид (view) — та же плоскость, сжатая по вертикали: y *= ISO_K.
+// Высота z над эклиптикой проецируется отдельно: y -= z * ISO_Z. Это даёт
+// реальный наклон орбит по inc/node, а не только декоративный подъём.
+// Вся отрисовка, камера, hover-цели и подписи живут в view; физика — в raw.
+//
+// Здесь только чистые функции: без canvas, состояния и данных.
+// =============================================================================
+
+
+
+/**
+ * 3D-точка эклиптики (x, y, z) -> view.
+ * x — долгота, y — поперечная ось (вниз), z — высота над плоскостью.
+ */
+function project3(x, y, z = 0) {
+    return { x, y: y * ISO_K - z * ISO_Z };
+}
+
+/** raw -> view для плоской орбиты (z = 0). */
+function view(x, y) {
+    return project3(x, y, 0);
+}
+
+/** raw-y -> view-y. */
+function viewY(y) {
+    return y * ISO_K;
+}
+
+/** view-y -> raw-y (обратный перевод для физики базы). */
+function unviewY(y) {
+    return y / ISO_K;
+}
+
+/**
+ * Точка на круговой орбите вокруг центра: угол против часовой, y — вниз.
+ * Центр и результат — в view-координатах.
+ */
+function orbitPoint(cx, cy, r, ang) {
+    return {
+        x: cx + Math.cos(ang) * r,
+        y: cy - Math.sin(ang) * r * ISO_K
+    };
+}
+
+/**
+ * Начать путь эллипса орбиты вокруг центра (view).
+ * У круговой орбиты радиуса r на карте rx = r, ry = r * ISO_K.
+ */
+function orbitEllipsePath(ctx, cx, cy, r, rot = 0) {
+    ctx.ellipse(cx, cy, Math.abs(r), Math.abs(r) * ISO_K, rot, 0, Math.PI * 2);
+}
+
+/** Плоский массив x0,y0,x1,y1… из raw -> view. */
+function viewPoly(poly) {
+    const out = new Array(poly.length);
+    for (let i = 0; i < poly.length; i += 2) {
+        out[i] = poly[i];
+        out[i + 1] = poly[i + 1] * ISO_K;
+    }
+    return out;
+}
+
+/** Плоский массив x0,y0,z0,x1,y1,z1… из raw -> view x/y. */
+function view3Poly(poly) {
+    const out = [];
+    for (let i = 0; i < poly.length; i += 3) {
+        const v = project3(poly[i], poly[i + 1], poly[i + 2]);
+        out.push(v.x, v.y);
+    }
+    return out;
+}
+
+/** Расстояние в raw-единицах по смещению в view. */
+function rawDist(dx, dy) {
+    return Math.hypot(dx, dy / ISO_K);
+}
+
+/** Угол орбиты (как в orbitAngle) по смещению в view. */
+function rawAngle(dx, dy) {
+    return Math.atan2(-(dy / ISO_K), dx);
+}
+
+/** Пиксели экрана -> мировые единицы view (для теней/ножек/хвостов). */
+function px(pxValue, zoom) {
+    return pxValue / zoom;
+}
+
+// ===== paint.js =====
+// =============================================================================
+// paint.js — «живопись» карты: сферы, тени, свечения, ромб базы, камни.
+// Все функции рисуют в текущей (мировой/view) системе координат. Размеры в
+// world-единицах; экранные пиксели делятся на zoom вызывающим кодом.
+// =============================================================================
+
+
+
+
+const rgbCache = new Map();
+
+/** '#rgb' / '#rrggbb' -> {r,g,b}; неизвестное — серый. */
+function parseColor(color) {
+    if (rgbCache.has(color)) return rgbCache.get(color);
+    let out = { r: 200, g: 200, b: 200 };
+    const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(color).trim());
+    if (m) {
+        let h = m[1];
+        if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+        out = {
+            r: parseInt(h.slice(0, 2), 16),
+            g: parseInt(h.slice(2, 4), 16),
+            b: parseInt(h.slice(4, 6), 16)
+        };
+    }
+    rgbCache.set(color, out);
+    return out;
+}
+
+/** Цвет с прозрачностью: hex -> rgba(...). */
+function alpha(color, a) {
+    const c = parseColor(color);
+    return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
+}
+
+/** Смешать два цвета: k=0 — color, k=1 — target. */
+function mix(color, target, k) {
+    const a = parseColor(color), b = parseColor(target);
+    const f = (x, y) => Math.round(x + (y - x) * k);
+    return 'rgb(' + f(a.r, b.r) + ',' + f(a.g, b.g) + ',' + f(a.b, b.b) + ')';
+}
+
+/**
+ * Сфера с бликом в верхней левой части и тёмным краем.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} x,y,r  view-координаты и радиус, world-единицы
+ * @param {string} color  основной цвет тела
+ * @param {{zoom?: number, rim?: boolean, rimAlpha?: number}} [opts]
+ */
+function sphere(ctx, x, y, r, color, opts = {}) {
+    if (!(r > 0)) return;
+    const hi = mix(color, '#ffffff', 0.58);
+    const lo = mix(color, '#000000', 0.78);
+    const g = ctx.createRadialGradient(
+        x - r * 0.33, y - r * 0.33, Math.max(0.05, r * 0.06),
+        x, y, r * 1.18
+    );
+    g.addColorStop(0, hi);
+    g.addColorStop(0.42, color);
+    g.addColorStop(0.78, mix(color, '#000000', 0.42));
+    g.addColorStop(1, lo);
+
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (opts.rim !== false) {
+        const z = opts.zoom || 1;
+        ctx.strokeStyle = 'rgba(255,255,255,' + (opts.rimAlpha ?? 0.15) + ')';
+        ctx.lineWidth = 0.55 / z;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+}
+
+/**
+ * Мягкая тень-эллипс на полу под телом.
+ * @param {number} alphaOpacity 0..1
+ */
+function shadow(ctx, x, y, r, zoom, alphaOpacity = SHADOW.alpha) {
+    if (!(r > 0)) return;
+    const rx = Math.max(r * SHADOW.rx, 1.2 / zoom);
+    const dy = r * SHADOW.dy + 1.5 / zoom;
+    ctx.save();
+    ctx.translate(x, y + dy);
+    ctx.scale(1, SHADOW.ry);
+    const g = ctx.createRadialGradient(0, 0, rx * 0.08, 0, 0, rx);
+    g.addColorStop(0, 'rgba(0,0,0,' + alphaOpacity + ')');
+    g.addColorStop(0.55, 'rgba(0,0,0,' + alphaOpacity * 0.55 + ')');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, rx, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+/** Радиальное свечение вокруг точки (ореол, блик базы). */
+function glow(ctx, x, y, r, color, alphaValue = 0.5) {
+    if (!(r > 0)) return;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, alpha(color, alphaValue));
+    g.addColorStop(0.45, alpha(color, alphaValue * 0.35));
+    g.addColorStop(1, alpha(color, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+/** Солнечная сфера: белое ядро -> жёлтый -> оранжевый край. Без пульсации. */
+function sunSphere(ctx, x, y, r) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, '#fffef7');
+    g.addColorStop(0.4, '#ffe7a3');
+    g.addColorStop(0.74, '#ff9d3c');
+    g.addColorStop(1, '#ff7a18');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+/** Ромб базы: квадрат, повёрнутый на 45°. size — сторона квадрата до поворота. */
+function diamond(ctx, x, y, size, stroke, fill, zoom) {
+    const s = Math.max(size, 1 / zoom);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = fill;
+    ctx.fillRect(-s / 2, -s / 2, s, s);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 2 / zoom;
+    ctx.strokeRect(-s / 2, -s / 2, s, s);
+    ctx.restore();
+}
+
+/** Детерминированный хеш строки для формы камня. */
+function hashSeed(seed) {
+    let h = 2166136261;
+    const s = String(seed);
+    for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+}
+
+/**
+ * Неровный камень: многоугольник с детерминированной формой.
+ * @param {string} seed id тела — форма не дрожит между кадрами
+ */
+function rock(ctx, x, y, r, seed, color = '#b9a88f', zoom = 1) {
+    if (!(r > 0)) return;
+    const rng = makeRng(hashSeed(seed));
+    const n = 9;
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + (rng() - 0.5) * 0.16;
+        const rr = r * (0.78 + rng() * 0.36);
+        pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]);
+    }
+
+    const hi = mix(color, '#fff3dc', 0.55);
+    const lo = mix(color, '#120c08', 0.75);
+    const g = ctx.createRadialGradient(x - r * 0.32, y - r * 0.32, r * 0.08, x, y, r * 1.2);
+    g.addColorStop(0, hi);
+    g.addColorStop(0.5, color);
+    g.addColorStop(1, lo);
+
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = 0.5 / zoom;
+    ctx.stroke();
+}
+
 // ===== scene.js =====
 // =============================================================================
 // scene.js — генерация фона сцены (звёзды) и правила показа тел при масштабе:
@@ -433,7 +837,11 @@ const MERGE_PX = 50;
  * Якоря (anchor: планеты и солнце) в чужую группу не входят никогда: иначе их
  * точки мерцали бы, входя и выходя из групп по мере обхода орбит.
  *
- * @param {Array} bodies тела кадра с мировыми x, y: { anchor, x, y, ... }
+ * Группируются только тела одной системы (system: имя планеты у планеты и её
+ * лун, null у малых тел). Иначе луна у Земли могла «прилипнуть» к пролетавшему
+ * астероиду и потерять подпись/выбор, а малые тела — к чужой планете.
+ *
+ * @param {Array} bodies тела кадра с мировыми x, y: { anchor, system, x, y, ... }
  * @param {number} zoom
  * @returns {Array} группы { rep, members }: members включает представителя
  *                  (members[0] === rep), остальные тела группы скрыты — их
@@ -448,6 +856,7 @@ function clusterBodies(bodies, zoom) {
         if (!b.anchor) {
             let host = null, best = Infinity;
             for (const g of groups) {
+                if ((g.rep.system || null) !== (b.system || null)) continue;
                 const dx = b.x - g.rep.x, dy = b.y - g.rep.y;
                 const d2 = dx * dx + dy * dy;
                 if (d2 < best) { best = d2; host = g; }
@@ -514,22 +923,19 @@ function cross(a, b) {
 // астероиды (Атон/Аполлон/Амур), троянцы Юпитера (L4/L5), кометы, пояс
 // Койпера и облако Оорта.
 //
+// Карта — диметрия 2:1 (iso.js): все позиции здесь уже в view-координатах
+// (y сжат вдвое). Орбитальные элементы — реальные; движение считается из
+// общего simDays через Кеплер. Кометы дополнительно поднимаются над полом
+// по наклонению inc/node — стилизованная 3D-орбита, как на референсах.
+//
 // Именованные тела (крупнейшие тела пояса, именованные ОЗА, троянцы L4/L5,
 // кометы) слипаются по экранному расстоянию общим правилом scene.js
-// clusterBodies: smallBodyList() отдаёт их позиции в кадр, а drawSmallBodies
-// рисует точками только показанные (id — в наборе shown); имена слипшихся
-// уходят в подпись группы у тела-представителя (её рисует render.js общей
-// drawGroupLabel). Безымянные досыпанные ОЗА, частицы пояса, облака троянцев и
-// пыль дальних поясов в правило не входят: их не выбирают.
-//
-// Каждое тело — сущность со своим типом (kind) и id: в будущем появится
-// добыча/уничтожение астероидов, поэтому генерация выполняется при каждом
-// запуске и детерминирована (сидированный ПСЧ) — пояс стабилен между
-// загрузками, а уничтоженные можно будет исключать по id.
-//
-// Позиции считаются каждый кадр из общего simDays — как у планет. Элементы
-// орбит реальные (a, e, долгота перигелия), карта — 2D-плоскость эклиптики.
+// clusterBodies: smallBodyList() отдаёт их позиции в кадр, а render.js
+// рисует только показанных представителей через drawSmallBody. Пыль,
+// частицы пояса и пути комет остаются в слое пола (drawSmallBodiesFloor).
 // =============================================================================
+
+
 
 
 
@@ -550,6 +956,7 @@ function beltPeriod(d) {
 const BELT_MIN = 270, BELT_MAX = 350;    // прежние границы (≈ 2.2–3.5 а.е.)
 const BELT_COUNT = 400;
 const BELT_SEED = 20261018;
+const BELT_MID = (BELT_MIN + BELT_MAX) / 2;
 
 // Щели Кирквуда — резонансы с Юпитером 2.50 / 2.82 / 2.95 / 3.27 а.е.:
 // [радиус (а.е.), глубина провала, ширина (ед.)]. Плотность частиц в щели падает.
@@ -587,12 +994,12 @@ for (let i = 0; i < BELT_COUNT; i++) {
     });
 }
 
-/** Дескриптор эллипса орбиты для hover/выбора: центр, полуоси, поворот. */
+/** Дескриптор эллипса орбиты для карточек/совместимости: центр, полуоси, поворот. */
 function orbitEllipse(aAu, e, periDeg) {
     const A = auToDist(aAu);
     const p = periDeg * Math.PI / 180;
     return {
-        cx: -A * e * Math.cos(p),          // центр — от солнца в сторону, обратную перигелию
+        cx: -A * e * Math.cos(p),
         cy: A * e * Math.sin(p),
         a: A,
         b: A * Math.sqrt(1 - e * e),
@@ -600,55 +1007,74 @@ function orbitEllipse(aAu, e, periDeg) {
     };
 }
 
-// --- Главный пояс: крупнейшие тела ---------------------------------------------
-// Церера (карликовая планета), Веста, Паллада, Гигея — заметнее частиц пояса
-// (ярче, крупнее, с обводкой) и выбираются кликом, как планеты.
-const notables = beltNotables.map(b => ({
-    id: 'notable-' + b.n,
-    kind: 'asteroid',
-    name: b.ru + ' / ' + b.n,
-    ru: b.ru,
-    note: b.type === 'dwarf' ? 'Карликовая планета' : 'Крупный астероид',
-    a: b.a, e: b.e, peri: b.peri, m0: b.m0, dia: b.dia,
-    T: periodFromA(b.a),
-    r: b.type === 'dwarf' ? 3.2 : 2.6,
-    x: 0, y: 0,
-    orbit: orbitEllipse(b.a, b.e, b.peri)
-}));
-
-// --- Околоземные астероиды (ОЗА) ----------------------------------------------
 /**
- * Точки орбиты для подсветки (hover/выбор): маппинг а.е.→единицы нелинеен,
- * поэтому «эллипс по (a, e)» верен лишь в линейных зонах шкалы. Надёжнее
- * сэмплировать положения по тем же элементам, что и движение.
- * @returns {number[]} плоский массив x0, y0, x1, y1, … (мир, замкнутая петля)
+ * Точки орбиты для hover/выбора: маппинг а.е.→единицы нелинеен, поэтому
+ * «эллипс по (a, e)» верен лишь в линейных зонах шкалы. Сэмплируем положения
+ * по тем же элементам, что и движение, и сразу переводим в view.
+ * @returns {number[]} плоский массив x0, y0, x1, y1, … (view, замкнутая петля)
  */
-function orbitPoly(a, e, peri, T) {
+function orbitPoly(a, e, peri, T, inc = 0, node = 0) {
     const pts = [];
-    for (let k = 0; k <= 96; k++) {
-        const pos = keplerPos(a, e, peri, 0, T, k * T / 96);
-        pts.push(pos.x, pos.y);
+    for (let k = 0; k <= 128; k++) {
+        const pos = keplerPos3(a, e, peri, 0, T, k * T / 128, auToDist, inc, node);
+        const v = project3(pos.x, pos.y, pos.z);
+        pts.push(v.x, v.y);
     }
     return pts;
 }
 
+/** Круговая орбита в view с наклонением inc/node (для троянцев). */
+function circlePoly(r, inc = 0, node = 0) {
+    const pts = [];
+    for (let k = 0; k <= 128; k++) {
+        const lon = k / 128 * Math.PI * 2;
+        const pos = orbitPoint3(r, lon, inc, node);
+        const v = project3(pos.x, pos.y, pos.z);
+        pts.push(v.x, v.y);
+    }
+    return pts;
+}
+
+// --- Главный пояс: крупнейшие тела ---------------------------------------------
+// Церера (карликовая планета), Веста, Паллада, Гигея — заметнее частиц пояса
+// (ярче, крупнее, с обводкой) и выбираются кликом, как планеты.
+const notables = beltNotables.map(b => {
+    const T = periodFromA(b.a);
+    return {
+        id: 'notable-' + b.n,
+        kind: 'asteroid',
+        name: b.ru + ' / ' + b.n,
+        ru: b.ru,
+        note: b.type === 'dwarf' ? 'Карликовая планета' : 'Крупный астероид',
+        a: b.a, e: b.e, peri: b.peri, m0: b.m0, dia: b.dia,
+        inc: b.inc, node: b.node,
+        T,
+        r: b.type === 'dwarf' ? 3.2 : 2.6,
+        x: 0, y: 0,
+        orbit: orbitEllipse(b.a, b.e, b.peri),
+        poly: orbitPoly(b.a, b.e, b.peri, T, b.inc, b.node)
+    };
+});
+
+// --- Околоземные астероиды (ОЗА) ----------------------------------------------
+
 /** Малое тело карты: общие поля для hover и карточек (элементы, орбита, тип). */
 function smallBody(id, kind, name, src, r, extra) {
     const T = periodFromA(src.a);
+    const inc = src.inc ?? 0;
+    const node = src.node ?? 0;
     return Object.assign({
         id, kind, name,
         a: src.a, e: src.e, peri: src.peri, m0: src.m0, dia: src.dia,
+        inc, node,
         T,
         q: src.a * (1 - src.e), Q: src.a * (1 + src.e),
         r, x: 0, y: 0,
         orbit: orbitEllipse(src.a, src.e, src.peri),
-        poly: orbitPoly(src.a, src.e, src.peri, T)
+        poly: orbitPoly(src.a, src.e, src.peri, T, inc, node)
     }, extra || {});
 }
 
-// Реальные элементы — из data.js; шесть безымянных досыпаны по границам групп:
-// амур — перигелий между орбитами Земли и Марса; аполлон — пересекает орбиту
-// Земли, a > 1; атон — пересекает, a < 1. Орбиты заметно эллиптические.
 const NEA_SEED = 20261018;
 const neaRng = makeRng(NEA_SEED);
 
@@ -659,25 +1085,25 @@ for (let i = 0; i < 6; i++) {
     const group = ['amor', 'apollo', 'aten'][i % 3];
     let q, Q;
     if (group === 'amor') {
-        q = 1.05 + neaRng() * 0.35;                        // 1.05–1.40: орбиту Земли не пересекает
+        q = 1.05 + neaRng() * 0.35;
         Q = 1.7 + neaRng() * 1.6;
     } else if (group === 'apollo') {
         q = 0.30 + neaRng() * 0.65;
-        Q = (2.02 - q) + neaRng() * (3.7 - (2.02 - q));    // a > 1 а.е.
+        Q = (2.02 - q) + neaRng() * (3.7 - (2.02 - q));
     } else {
-        const aAten = 0.85 + neaRng() * 0.14;              // a < 1 а.е.
+        const aAten = 0.85 + neaRng() * 0.14;
         q = 0.35 + neaRng() * (Math.min(0.85, 2 * aAten - 1.06) - 0.35);
-        Q = 2 * aAten - q;                                 // афелий выше орбиты Земли
+        Q = 2 * aAten - q;
     }
     const a = (q + Q) / 2, e = (Q - q) / (Q + q);
     neaBodies.push(smallBody('nea-gen-' + i, 'nea', null,
-        { a, e, peri: neaRng() * 360, m0: neaRng() * 360 }, 1.2, { group }));
+        {
+            a, e, peri: neaRng() * 360, m0: neaRng() * 360,
+            inc: 0.5 + neaRng() * 24, node: neaRng() * 360
+        }, 1.2, { group }));
 }
 
 // --- Троянцы Юпитера (L4/L5) ----------------------------------------------------
-// Два облака точек на 60° впереди и позади Юпитера вдоль его орбиты (60 и 40
-// точек) с медленной либрацией ±5° за ~150 лет; точки движутся синхронно с
-// Юпитером. Именованные (Ахиллес, Гектор…) — заметнее и выбираются.
 const TROJAN_SEED = 20261018;
 const TROJAN_LIB_PERIOD = 54786;   // период либрации, сутки (~150 лет)
 const TROJAN_LIB_AMP = 5;          // амплитуда либрации, градусы
@@ -692,8 +1118,8 @@ trojanClouds.forEach((c, ci) => {
     for (let i = 0; i < n; i++) {
         c.points.push({
             id: 'trojan-' + c.camp + '-' + i,
-            dAng: (trojanRng() - 0.5) * 16,   // ±8° вокруг центра облака
-            dR: (trojanRng() - 0.5) * 28,     // ±14 ед. поперёк орбиты
+            dAng: (trojanRng() - 0.5) * 16,
+            dR: (trojanRng() - 0.5) * 28,
             s: 0.7 + trojanRng() * 0.6
         });
     }
@@ -711,24 +1137,22 @@ const trojanBodies = trojanNames.map(t => ({
     ru: t.ru,
     camp: t.camp, dAng: t.dAng, dR: t.dR,
     r: 2.2, x: 0, y: 0,
-    orbit: { cx: 0, cy: 0, r: JUPITER.dist }
+    inc: JUPITER.inc, node: JUPITER.node,
+    orbit: { cx: 0, cy: 0, r: JUPITER.dist },
+    poly: circlePoly(JUPITER.dist, JUPITER.inc, JUPITER.node)
 }));
 
 // --- Пояс Койпера и облако Оорта ------------------------------------------------
-// Разреженная пыль без имён (не выбирается). Койпер — 30–50 а.е. в радиусах
-// карты (auToDist), Оорт — сфера 1300–1800 единиц. Точки рисуются
-// прямоугольниками (дешевле дуг) с минимальным экранным размером 1.1 px;
-// точки вне кадра отбрасываются по полудиагонали, полоса — целиком.
 const DUST_SEED = 20261018;
 const dustRng = makeRng(DUST_SEED);
 
-/** Собрать кольцо пыли: мировые позиции, границы радиусов и группы по цвету. */
+/** Собрать кольцо пыли: view-позиции, границы raw-радиусов и группы по цвету. */
 function makeDustRing(list) {
     let rMin = Infinity, rMax = 0;
     const map = new Map();
     for (const p of list) {
         p.x = Math.cos(p.ang) * p.r;
-        p.y = -Math.sin(p.ang) * p.r;
+        p.y = -Math.sin(p.ang) * p.r * ISO_K;
         if (p.r < rMin) rMin = p.r;
         if (p.r > rMax) rMax = p.r;
         let g = map.get(p.col);
@@ -742,7 +1166,7 @@ const kuiperDust = makeDustRing(Array.from({ length: 600 }, () => {
     const al = 0.22 + dustRng() * 0.23;
     return {
         ang: dustRng() * Math.PI * 2,
-        r: auToDist(30 + dustRng() * 20),              // 30–50 а.е.
+        r: auToDist(30 + dustRng() * 20),
         s: 0.8 + dustRng() * 1.0,
         col: 'rgba(150,150,150,' + al.toFixed(2) + ')'
     };
@@ -752,47 +1176,74 @@ const oortDust = makeDustRing(Array.from({ length: 350 }, () => {
     const al = 0.16 + dustRng() * 0.18;
     return {
         ang: dustRng() * Math.PI * 2,
-        r: 1300 + dustRng() * 500,                     // 1300–1800 ед.
+        r: 1300 + dustRng() * 500,
         s: 0.8 + dustRng() * 1.0,
         col: 'rgba(150,150,150,' + al.toFixed(2) + ')'
     };
 }));
 
-/** Нарисовать кольцо пыли: полоса или точка вне кадра — пропускаются; fillStyle
- *  переключается по цветовым группам (иначе на 950 точек — 950 переключений). */
+/** Нарисовать кольцо пыли: точки вне кадра пропускаются. */
 function drawDustRing(ctx, ring, zoom) {
     const half = Math.hypot(state.W, state.H) / 2 / zoom + 2;
-    const camD = Math.hypot(state.camX, state.camY);
-    if (camD + half < ring.rMin || camD - half > ring.rMax) return;  // вся полоса вне кадра
+    // rMin/rMax — в raw, камера — в view: сравниваем в raw-единицах
+    const camD = Math.hypot(state.camX, state.camY / ISO_K);
+    if (camD + half < ring.rMin || camD - half > ring.rMax) return;
 
-    const minS = 1.1 / zoom;
     const h2 = half * half;
     for (const g of ring.groups) {
         ctx.fillStyle = g.col;
         for (const p of g.points) {
             if ((p.x - state.camX) ** 2 + (p.y - state.camY) ** 2 > h2) continue;
-            const s = Math.max(p.s, minS);
-            ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+            ctx.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s);
         }
     }
 }
 
 // --- Кометы ---------------------------------------------------------------------
-// Ядро, кома и хвост, направленный от Солнца. Длина хвоста — в экранных
-// пикселях: (26 + 46·pf)·tailK / zoom, где pf = q/r — близость к перигелию.
-const cometBodies = comets.map(c =>
-    smallBody('comet-' + c.n, 'comet', c.ru + ' / ' + c.n, c, 1.4,
-        { shower: c.shower, src: c.src, tailK: c.tailK, ru: c.ru }));
+// Ядро, кома и хвост, направленный от Солнца. Орбита действительно наклонена
+// к эклиптике по реальным inc/node: положение считается в 3D и проецируется
+// через project3, поэтому комета висит над полом на своей высоте z.
+
+const RAD = Math.PI / 180;
+
+/** Замкнутый путь кометы в view — с той же высотой, что и у тела. */
+function cometOrbitPoly(b) {
+    const pts = [];
+    for (let k = 0; k <= 160; k++) {
+        const pos = keplerPos3(b.a, b.e, b.peri, 0, b.T, k * b.T / 160,
+            auToDist, b.inc, b.node);
+        const v = project3(pos.x, pos.y, pos.z);
+        pts.push(v.x, v.y);
+    }
+    return pts;
+}
+
+const cometBodies = comets.map(c => {
+    const b = smallBody('comet-' + c.n, 'comet', c.ru + ' / ' + c.n, c, 1.4,
+        { shower: c.shower, src: c.src, tailK: c.tailK, ru: c.ru, inc: c.inc, node: c.node });
+    b.poly = cometOrbitPoly(b);
+    return b;
+});
+
+/** Обновить позицию кометы из simDays: view-точка с высотой + точка на полу. */
+function updateComet(b, t) {
+    const pos = keplerPos3(b.a, b.e, b.peri, b.m0, b.T, t, auToDist, b.inc, b.node);
+    const v = project3(pos.x, pos.y, pos.z);
+    b.x = v.x;
+    b.y = v.y;
+    b.fx = pos.x;
+    b.fy = pos.y * ISO_K;
+    b.floorY = b.fy;
+    b.z = pos.z;
+    b.rAu = pos.rAu;
+}
 
 /**
  * Позиции всех именованных малых тел кадра — для общего правила слипания
  * (scene.js clusterBodies): крупнейшие тела пояса, именованные ОЗА, троянцы и
  * кометы. Безымянные (частицы пояса, досыпанные ОЗА, облака троянцев, пыль
  * дальних поясов) сюда не входят: их не выбирают и в подписи они не попадают.
- * Движение — то же, что в drawSmallBodies: у троянцев синхронно с Юпитером
- * плюс либрация, у остальных — элементы Кеплера из data.js. Позиции кладутся в
- * сами записи тел (b.x, b.y) — ими же рисует drawSmallBodies.
- * @returns {Array} записи { id, kind, small, r, x, y, label } — label для подписи
+ * @returns {Array} записи { id, kind, small, r, x, y, label } — view-координаты
  */
 function smallBodyList() {
     const { simDays } = state;
@@ -800,38 +1251,50 @@ function smallBodyList() {
     const list = [];
 
     function add(b, kind) {
-        list.push({ id: b.id, kind, small: b, r: b.r, x: b.x, y: b.y, label: b.ru || b.name });
+        list.push({
+            id: b.id, kind, small: b, r: b.r, x: b.x, y: b.y,
+            z: b.z || 0, floorY: b.floorY ?? b.y, label: b.ru || b.name
+        });
     }
 
     notables.forEach(b => {
-        const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
-        b.x = pos.x;
-        b.y = pos.y;
+        const pos = keplerPos3(b.a, b.e, b.peri, b.m0, b.T, simDays,
+            auToDist, b.inc, b.node);
+        const v = project3(pos.x, pos.y, pos.z);
+        b.x = v.x;
+        b.y = v.y;
+        b.z = pos.z;
+        b.floorY = pos.y * ISO_K;
         add(b, 'asteroid');
     });
 
     neaBodies.forEach(b => {
-        const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
-        b.x = pos.x;
-        b.y = pos.y;
-        b.rAu = pos.rAu;   // кометам и ОЗА — для хвоста/подписи
+        const pos = keplerPos3(b.a, b.e, b.peri, b.m0, b.T, simDays,
+            auToDist, b.inc, b.node);
+        const v = project3(pos.x, pos.y, pos.z);
+        b.x = v.x;
+        b.y = v.y;
+        b.z = pos.z;
+        b.floorY = pos.y * ISO_K;
+        b.rAu = pos.rAu;
         if (b.name) add(b, 'nea');
     });
 
     trojanBodies.forEach(b => {
         const ang = jupAng + b.camp * Math.PI / 3
-            + (b.dAng + trojanLib(simDays, b.camp)) * Math.PI / 180;
+            + (b.dAng + trojanLib(simDays, b.camp)) * RAD;
         const rr = JUPITER.dist + b.dR;
-        b.x = Math.cos(ang) * rr;
-        b.y = -Math.sin(ang) * rr;
+        const pos = orbitPoint3(rr, ang, JUPITER.inc, JUPITER.node);
+        const v = project3(pos.x, pos.y, pos.z);
+        b.x = v.x;
+        b.y = v.y;
+        b.z = pos.z;
+        b.floorY = pos.y * ISO_K;
         add(b, 'trojan');
     });
 
     cometBodies.forEach(b => {
-        const pos = keplerPos(b.a, b.e, b.peri, b.m0, b.T, simDays);
-        b.x = pos.x;
-        b.y = pos.y;
-        b.rAu = pos.rAu;
+        updateComet(b, simDays);
         add(b, 'comet');
     });
 
@@ -839,51 +1302,38 @@ function smallBodyList() {
 }
 
 /**
- * Нарисовать малые тела в мировой системе координат (вызывается из render.js
- * после звёзд). Пыль и частицы пояса рисуются всегда, именованные тела —
- * только показанные общим правилом слипания (scene.js clusterBodies):
- * показанные становятся точками и hover-целями, а имена слипшихся уходят в
- * подпись группы у тела-представителя (её рисует render.js общей
- * drawGroupLabel). Позиции именованных тел считает smallBodyList — render.js
- * зовёт его в начале кадра, здесь они уже готовы.
- * @param {Set} shown id показанных именованных тел (представители групп)
- * @returns {Array} targets — hover-цели показанных тел
+ * Слой пола: пыль Койпера/Оорта, полоса и частицы главного пояса, облака
+ * троянцев и пути комет. Hover-целей не даёт: именованные тела рисует
+ * drawSmallBody в общем слое тел.
  */
-function drawSmallBodies(ctx, shown) {
+function drawSmallBodiesFloor(ctx) {
     const { simDays, zoom } = state;
-    const targets = [];
-    const jupAng = orbitAngle(JUPITER.l0, JUPITER.period, simDays);
 
-    // Дальняя пыль фоном: пояс Койпера и облако Оорта (под всеми телами)
+    // Дальняя пыль фоном: пояс Койпера и облако Оорта.
     drawDustRing(ctx, kuiperDust, zoom);
     drawDustRing(ctx, oortDust, zoom);
 
-    // Частицы пояса
+    // Полоса пояса — «гравий» на полу, эллипс 2:1.
+    ctx.save();
+    ctx.strokeStyle = 'rgba(58,66,82,0.10)';
+    ctx.lineWidth = 10 / zoom;
+    ctx.beginPath();
+    orbitEllipsePath(ctx, 0, 0, BELT_MID);
+    ctx.stroke();
+    ctx.restore();
+
+    // Частицы пояса.
     ctx.fillStyle = '#6e6e6e';
     asteroids.forEach(a => {
         const ang = orbitAngle(a.l0, a.period, simDays);
+        const x = Math.cos(ang) * a.d;
+        const y = -Math.sin(ang) * a.d * ISO_K;
         ctx.beginPath();
-        ctx.arc(Math.cos(ang) * a.d, -Math.sin(ang) * a.d, a.s, 0, Math.PI * 2);
+        ctx.arc(x, y, a.s, 0, Math.PI * 2);
         ctx.fill();
     });
 
-    // Крупнейшие тела пояса — заметные точки с обводкой, выбираются
-    notables.forEach(b => {
-        if (!shown.has(b.id)) return;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-        ctx.fillStyle = '#cfcfcf';
-        ctx.fill();
-        ctx.strokeStyle = '#efefef';
-        ctx.lineWidth = STROKE.moon / zoom;
-        ctx.stroke();
-
-        targets.push({ kind: 'asteroid', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
-    });
-
-    // ОЗА: безымянные досыпанные — тусклые точки всегда (в правило слипания не
-    // входят, их не выбирают), именованные — как остальные тела: точкой и
-    // hover-целью только когда показаны (позиции посчитаны в smallBodyList)
+    // Безымянные досыпанные ОЗА — тусклые точки всегда.
     ctx.fillStyle = '#8a8a8a';
     neaBodies.forEach(b => {
         if (b.name) return;
@@ -892,93 +1342,144 @@ function drawSmallBodies(ctx, shown) {
         ctx.fill();
     });
 
-    neaBodies.forEach(b => {
-        if (!b.name || !shown.has(b.id)) return;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-        ctx.fillStyle = '#d8d8d8';
-        ctx.fill();
-        ctx.strokeStyle = '#f0f0f0';
-        ctx.lineWidth = STROKE.moon / zoom;
-        ctx.stroke();
-        targets.push({ kind: 'nea', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
-    });
-
-    // Троянцы: два облака точек, синхронных с Юпитером (плюс либрация)
+    // Троянцы: два облака точек, синхронных с Юпитером (плюс либрация).
+    const jupAng = orbitAngle(JUPITER.l0, JUPITER.period, simDays);
     ctx.fillStyle = '#808080';
     trojanClouds.forEach(c => {
-        const base = jupAng + c.camp * Math.PI / 3 + trojanLib(simDays, c.camp) * Math.PI / 180;
+        const base = jupAng + c.camp * Math.PI / 3 + trojanLib(simDays, c.camp) * RAD;
         c.points.forEach(p => {
-            const ang = base + p.dAng * Math.PI / 180;
+            const ang = base + p.dAng * RAD;
             const rr = JUPITER.dist + p.dR;
             ctx.beginPath();
-            ctx.arc(Math.cos(ang) * rr, -Math.sin(ang) * rr, p.s, 0, Math.PI * 2);
+            ctx.arc(Math.cos(ang) * rr, -Math.sin(ang) * rr * ISO_K, p.s, 0, Math.PI * 2);
             ctx.fill();
         });
     });
 
-    // Именованные троянцы — заметные точки с обводкой, выбираются; позиции
-    // посчитаны в smallBodyList, рисуются только показанные
-    trojanBodies.forEach(b => {
-        if (!shown.has(b.id)) return;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-        ctx.fillStyle = '#cfcfcf';
-        ctx.fill();
-        ctx.strokeStyle = '#efefef';
-        ctx.lineWidth = STROKE.moon / zoom;
-        ctx.stroke();
-
-        targets.push({ kind: 'trojan', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
-    });
-
-    // Кометы: ядро, кома и хвост, направленный от Солнца. Рисуются только
-    // показанные (позиции и rAu посчитаны в smallBodyList); хвост — в пикселях
-    // экрана, поэтому его длина делится на зум.
+    // Пути комет — наклонные, с высотой (полилиния уже в view).
+    ctx.save();
+    ctx.strokeStyle = 'rgba(111,184,216,0.35)';
+    ctx.lineWidth = 1 / zoom;
+    ctx.setLineDash([3 / zoom, 5 / zoom]);
     cometBodies.forEach(b => {
-        if (!shown.has(b.id)) return;
-
-        const pf = clamp(b.q / Math.max(b.rAu, 0.001), 0, 1);   // близость к перигелию
-        const len = (26 + 46 * pf) * b.tailK / zoom;            // хвост в пикселях экрана
-        const d = Math.hypot(b.x, b.y) || 1;
-        const dx = b.x / d, dy = b.y / d;                       // от Солнца
-
-        // хвост: сужающийся треугольник вдоль антисолнечного луча
-        const w0 = 1.6 / zoom;
-        const tipX = b.x + dx * len, tipY = b.y + dy * len;
-        const grad = ctx.createLinearGradient(b.x, b.y, tipX, tipY);
-        grad.addColorStop(0, 'rgba(230,230,230,0.42)');
-        grad.addColorStop(0.55, 'rgba(225,225,225,0.15)');
-        grad.addColorStop(1, 'rgba(220,220,220,0)');
-        ctx.fillStyle = grad;
+        const poly = b.poly;
+        if (!poly || poly.length < 4) return;
         ctx.beginPath();
-        ctx.moveTo(b.x - dy * w0, b.y + dx * w0);
-        ctx.lineTo(b.x + dy * w0, b.y - dx * w0);
-        ctx.lineTo(tipX, tipY);
+        ctx.moveTo(poly[0], poly[1]);
+        for (let i = 2; i < poly.length; i += 2) ctx.lineTo(poly[i], poly[i + 1]);
         ctx.closePath();
-        ctx.fill();
+        ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    ctx.restore();
+}
 
-        // кома — радиальное свечение вокруг ядра
-        const comaR = 9 / zoom;
-        const coma = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, comaR);
-        coma.addColorStop(0, 'rgba(235,235,235,0.5)');
-        coma.addColorStop(0.5, 'rgba(220,220,220,0.16)');
-        coma.addColorStop(1, 'rgba(220,220,220,0)');
-        ctx.fillStyle = coma;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, comaR, 0, Math.PI * 2);
-        ctx.fill();
+/**
+ * Нарисовать одно показанное именованное малое тело в общем слое тел.
+ * @returns {?Object} hover-цель { kind, name, x, y, r, moons, small }
+ */
+function drawSmallBody(ctx, b) {
+    const zoom = state.zoom;
 
-        // ядро
+    if (b.kind === 'comet') return drawComet(ctx, b);
+
+    // Камни пояса/ОЗА/троянцев: неровная форма, детерминированная id.
+    if (b.r >= 1.4) {
+        rock(ctx, b.x, b.y, b.r, b.id, '#b9a88f', zoom);
+    } else {
+        ctx.fillStyle = '#d8d8d8';
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-        ctx.fillStyle = '#f0f0f0';
         ctx.fill();
+    }
 
-        targets.push({ kind: 'comet', name: b.name, x: b.x, y: b.y, r: b.r, moons: [], small: b });
-    });
+    return {
+        kind: b.kind, name: b.name, x: b.x, y: b.y, r: b.r,
+        moons: [], small: b
+    };
+}
 
-    return targets;
+/** Комета: ножка, тень, два хвоста от Солнца, кома и ядро. */
+function drawComet(ctx, b) {
+    const zoom = state.zoom;
+    const pf = clamp(b.q / Math.max(b.rAu, 0.001), 0, 1);
+    // Хвост растёт с зумом, но не остаётся гигантским при общем плане:
+    // world-длина ~ 1/√zoom, экранная ~ √zoom.
+    const len = (85 + 95 * pf) * b.tailK / Math.sqrt(zoom);
+
+    // Направление от Солнца с учётом высоты: хвост уходит вверх-в сторону.
+    const dx = b.x, dy = b.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const ux = dx / d, uy = dy / d;
+    const px = -uy, py = ux;
+
+    const tipX = b.x + ux * len;
+    const tipY = b.y + uy * len;
+
+    // Ножка к полу и тень.
+    ctx.strokeStyle = 'rgba(127,216,255,0.30)';
+    ctx.lineWidth = 1 / zoom;
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(b.fx, b.fy);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(127,216,255,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(b.fx, b.fy, 7 / zoom, 2.6 / zoom, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Пылевой хвост — шире и чуть изогнут.
+    const wd = 4.6 / Math.sqrt(zoom);
+    const midX = b.x + ux * len * 0.55 + px * 7 / zoom;
+    const midY = b.y + uy * len * 0.55 + py * 7 / zoom;
+    let g = ctx.createLinearGradient(b.x, b.y, tipX, tipY);
+    g.addColorStop(0, 'rgba(255,231,163,0.60)');
+    g.addColorStop(0.6, 'rgba(255,231,163,0.20)');
+    g.addColorStop(1, 'rgba(255,231,163,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(b.x + px * wd, b.y + py * wd);
+    ctx.quadraticCurveTo(midX + px * wd * 1.7, midY + py * wd * 1.7, tipX, tipY);
+    ctx.quadraticCurveTo(midX - px * wd * 0.9, midY - py * wd * 0.9, b.x - px * wd, b.y - py * wd);
+    ctx.closePath();
+    ctx.fill();
+
+    // Ионный хвост — узкий, почти прямой, голубой.
+    const wi = 2.1 / Math.sqrt(zoom);
+    const ionTipX = b.x + ux * len * 1.12;
+    const ionTipY = b.y + uy * len * 1.12;
+    g = ctx.createLinearGradient(b.x, b.y, ionTipX, ionTipY);
+    g.addColorStop(0, 'rgba(191,246,255,0.85)');
+    g.addColorStop(0.55, 'rgba(191,246,255,0.24)');
+    g.addColorStop(1, 'rgba(191,246,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(b.x + px * wi, b.y + py * wi);
+    ctx.lineTo(ionTipX, ionTipY);
+    ctx.lineTo(b.x - px * wi, b.y - py * wi);
+    ctx.closePath();
+    ctx.fill();
+
+    // Кома — радиальное свечение вокруг ядра.
+    const comaR = 12 / Math.sqrt(zoom);
+    const coma = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, comaR);
+    coma.addColorStop(0, 'rgba(255,255,255,0.95)');
+    coma.addColorStop(0.35, 'rgba(223,248,255,0.42)');
+    coma.addColorStop(0.7, 'rgba(127,216,255,0.14)');
+    coma.addColorStop(1, 'rgba(127,216,255,0)');
+    ctx.fillStyle = coma;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, comaR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ядро — белая сфера (минимальный экранный размер, чтобы не пропадало).
+    sphere(ctx, b.x, b.y, Math.max(b.r, 2.4 / zoom), '#ffffff', { zoom, rim: false });
+
+    return {
+        kind: 'comet', name: b.name, x: b.x, y: b.y,
+        r: Math.max(b.r, 3 / zoom), moons: [], small: b
+    };
 }
 
 // ===== bases_name.js =====
@@ -1192,6 +1693,8 @@ function archiveBase(rec) {
 // связка «тело над базой», что в подписи группы лун; у скрытой зумом луны имя
 // спутника несёт подпись группы, и своя подпись базы гасится).
 // =============================================================================
+
+
 
 
 
@@ -1704,8 +2207,15 @@ function drawBases(ctx, hostPos, quietIds) {
         // позиции над картой) — база встанет туда же после подтверждения.
         let ang = b.phase0 + 2 * Math.PI * simDays / period;
         if (moving && typeof mode.ang === 'number') ang = mode.ang;
-        b.x = hp.x + Math.cos(ang) * orbitR;
-        b.y = hp.y - Math.sin(ang) * orbitR;
+
+        // Точка на полу — по эллипсу 2:1; маркер приподнят над ней, как на
+        // референсах (ромб с ножкой и тенью).
+        const ex = hp.x + Math.cos(ang) * orbitR;
+        const ey = hp.y - Math.sin(ang) * orbitR * ISO_K;
+        b.fx = ex;
+        b.fy = ey;
+        b.x = ex;
+        b.y = ey - LIFT.base / zoom;
 
         // Имя спутника-хозяина для подписи: у переноса — хост режима, иначе
         // запись базы (у базы на планете строки нет).
@@ -1713,7 +2223,7 @@ function drawBases(ctx, hostPos, quietIds) {
             ? (moving ? mode.moon : b.moon) || null : null;
         drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quietIds && quietIds.has(b.id), hostMoon);
         targets.push({
-            kind: 'base', name: b.name, x: b.x, y: b.y, r: 4 / zoom,
+            kind: 'base', name: b.name, x: b.x, y: b.y, r: 6 / zoom,
             orbitCx: hp.x, orbitCy: hp.y, orbitR,
             local: b, moons: []
         });
@@ -1729,35 +2239,46 @@ function drawBases(ctx, hostPos, quietIds) {
  *  выше имени базы — подпись читается связкой «спутник над базой», как строки
  *  подписи группы лун. */
 function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet, hostMoon) {
-    ctx.strokeStyle = 'rgba(0,255,255,0.27)';
+    // Орбита базы — эллипс 2:1 вокруг хост-тела (view).
+    ctx.strokeStyle = 'rgba(53,232,216,0.27)';
     ctx.lineWidth = 0.5 / zoom;
     ctx.setLineDash([1 / zoom, 1 / zoom]);
     ctx.beginPath();
-    ctx.arc(hp.x, hp.y, orbitR, 0, Math.PI * 2);
+    orbitEllipsePath(ctx, hp.x, hp.y, orbitR);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    const bs = 4 / zoom;
+    const bs = 4 / zoom;          // половина ромба / радиус пульса
+    const ds = 8 / zoom;          // сторона квадрата до поворота на 45°
 
-    const glow = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, bs * 2);
-    glow.addColorStop(0, 'rgba(0,255,255,0.6)');
-    glow.addColorStop(1, 'rgba(0,255,255,0)');
-    ctx.fillStyle = glow;
+    // Ножка от маркера к полу и мягкая тень в точке орбиты.
+    ctx.strokeStyle = 'rgba(53,232,216,0.34)';
+    ctx.lineWidth = 1 / zoom;
     ctx.beginPath();
-    ctx.arc(b.x, b.y, bs * 2, 0, Math.PI * 2);
+    ctx.moveTo(b.x, b.y + ds * 0.55);
+    ctx.lineTo(b.fx, b.fy);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(53,232,216,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(b.fx, b.fy, 6 / zoom, 2.2 / zoom, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    glow(ctx, b.x, b.y, bs * 2.6, COLORS.base, 0.55);
+
+    // Ромб с тёмной заливкой и бирюзовой обводкой — как на референсах.
+    diamond(ctx, b.x, b.y, ds, COLORS.base, '#05060c', zoom);
+
     ctx.fillStyle = COLORS.base;
-    ctx.fillRect(b.x - bs / 2, b.y - bs / 2, bs, bs);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1 / zoom;
-    ctx.strokeRect(b.x - bs / 2, b.y - bs / 2, bs, bs);
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 1.2 / zoom, 0, Math.PI * 2);
+    ctx.fill();
 
     const pulse = (Math.sin(time * 4) + 1) * 0.5;
-    ctx.strokeStyle = `rgba(0,255,255,${0.5 - pulse * 0.5})`;
+    ctx.strokeStyle = `rgba(53,232,216,${0.5 - pulse * 0.5})`;
     ctx.lineWidth = 1 / zoom;
     ctx.beginPath();
-    ctx.arc(b.x, b.y, bs + pulse * 4, 0, Math.PI * 2);
+    ctx.arc(b.x, b.y, bs + pulse * 4 / zoom, 0, Math.PI * 2);
     ctx.stroke();
 
     // Подпись базы: имя — шрифт интерфейса (Manrope, как .b-name в списках),
@@ -1886,32 +2407,27 @@ function drawBasePreview(ctx, hostPos) {
     const { zoom } = state;
     const r = state.baseRadius;
 
-    ctx.strokeStyle = 'rgba(0,255,255,0.55)';
+    ctx.strokeStyle = 'rgba(53,232,216,0.55)';
     ctx.lineWidth = 1 / zoom;
     ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.beginPath();
-    ctx.arc(hp.x, hp.y, r, 0, Math.PI * 2);
+    orbitEllipsePath(ctx, hp.x, hp.y, r);
     ctx.stroke();
     ctx.setLineDash([]);
 
     const w = screenToWorld(state.mouseX, state.mouseY, state);
-    // луч — направление будущего положения базы: угол от центра хоста к
-    // курсору (mode.ang; до первого движения над картой — по позиции мыши)
-    let ux, uy;
-    if (typeof mode.ang === 'number') {
-        ux = Math.cos(mode.ang);
-        uy = -Math.sin(mode.ang);
-    } else {
-        const dx = w.x - hp.x, dy = w.y - hp.y, d = Math.hypot(dx, dy) || 1;
-        ux = dx / d;
-        uy = dy / d;
-    }
+    // луч — направление будущего положения базы: угол в raw-плоскости от
+    // центра хоста к курсору (mode.ang; до первого движения — по позиции мыши).
+    const ang = typeof mode.ang === 'number'
+        ? mode.ang : rawAngle(w.x - hp.x, w.y - hp.y);
+    const ux = Math.cos(ang);
+    const uy = -Math.sin(ang);
 
-    ctx.strokeStyle = 'rgba(0,255,255,0.25)';
+    ctx.strokeStyle = 'rgba(53,232,216,0.25)';
     ctx.lineWidth = 0.5 / zoom;
     ctx.beginPath();
     ctx.moveTo(hp.x, hp.y);
-    ctx.lineTo(hp.x + ux * r, hp.y + uy * r);
+    ctx.lineTo(hp.x + ux * r, hp.y + uy * r * ISO_K);
     ctx.stroke();
 
     const l1 = 'Орбита: ' + Math.round(r) + ' ед.';
@@ -2244,18 +2760,22 @@ function buildSky() {
 
 // ===== render.js =====
 // =============================================================================
-// render.js — отрисовка сцены на канвас: фон, малые тела (smallbodies.js),
-// солнце, планеты, луны и звёздные базы. Тела слипаются по ЭКРАННОМУ расстоянию
-// одним правилом (scene.js clusterBodies): что ближе порога на экране — в одну
-// группу с общей подписью-списком; планеты и солнце — якоря, они видны всегда.
-// Подписи кадра раскладываются без наложений (scene.js placeLabel).
-// Стиль тел: у планет прозрачная заливка — тело читается только по обводке,
-// одинаково толстой у всех; солнце — жёлтая заливка; луны — плоские серые
-// круги. Орбит на карте нет — их рисует
-// hover.js только при наведении. Дальний фон (небо) — отдельный слой sky.js.
+// render.js — отрисовка сцены на канвас: фон, пол, малые тела, солнце,
+// планеты, луны и звёздные базы.
+//
+// Карта — диметрия 2:1 (iso.js): мир-эклиптика сжимается по y, поэтому орбиты
+// становятся эллипсами, а сферы остаются круглыми. Слои кадра:
+//   небо -> световое пятно/ореол звезды -> постоянные орбиты -> пыль/пояс/
+//   пути комет -> тени на полу -> тела по глубине (view.y) -> базы -> подписи.
+//
+// Тела слипаются по ЭКРАННОМУ расстоянию (scene.js clusterBodies): что ближе
+// порога — в одну группу с общей подписью; планеты и солнце — якоря.
+// Подписи раскладываются без наложений (scene.js placeLabel).
 //
 // Возвращает массив hoverTargets — позиции всех тел для hit-теста наведения.
 // =============================================================================
+
+
 
 
 
@@ -2270,7 +2790,38 @@ function buildSky() {
  * Луна Земли — такая же запись тела, как луны планет: своя дистанция
  * (moonDist), радиус (3) и период. В moonsByPlanet её нет.
  */
-const EARTH_MOON = { n: 'Луна / Moon', r: 3, period: moonPeriod };
+const EARTH_MOON = { n: 'Луна / Moon', r: 3, period: moonPeriod, c: '#c9cfd8' };
+
+/**
+ * Орбиты планет — реальные элементы (эксцентриситет и перигелий из data.js).
+ * Считаются один раз: форма орбиты от времени не зависит. Хранятся сразу в
+ * view-координатах — по ним рисуются постоянные линии и hover/выбор.
+ */
+const PLANET_ORBITS = new Map();
+planets.forEach(p => {
+    const raw = keplerPoly3(p.dist, p.e, p.peri, 0, p.period, 160, v => v, p.inc, p.node);
+    PLANET_ORBITS.set(p, view3Poly(raw));
+});
+
+/** Позиция планеты на орбите: Кеплер с эксцентриситетом и наклоном. */
+function planetRawPos(p, t) {
+    return keplerPos3(p.dist, p.e, p.peri, planetM0(p), p.period, t, v => v, p.inc, p.node);
+}
+
+/**
+ * Замкнутая орбита луны вокруг планеты: круг в наклонённой плоскости
+ * (inc/node), спроецированный в view. Точки уже абсолютные (центр — планета).
+ */
+function moonOrbitPoly(planetRaw, radius, inc, node, steps = 96) {
+    const pts = [];
+    for (let k = 0; k <= steps; k++) {
+        const ang = k / steps * Math.PI * 2;
+        const off = orbitPoint3(radius, ang, inc, node);
+        const v = project3(planetRaw.x + off.x, planetRaw.y + off.y, planetRaw.z + off.z);
+        pts.push(v.x, v.y);
+    }
+    return pts;
+}
 
 /**
  * Нарисовать один кадр мира в мировой системе координат (save/restore внутри).
@@ -2281,11 +2832,10 @@ function renderScene(ctx) {
     const { zoom, simDays, time } = state;
     const hoverTargets = [];
 
-    // Дальний фон — отдельный слой sky.js, в экранных координатах:
-    // камера и зум на небо не влияют (оно бесконечно далеко).
+    // Дальний фон — отдельный слой sky.js, в экранных координатах.
     drawSky(ctx);
 
-    // Раскладка подписей кадра — заново: placeLabel разводит их по вертикали.
+    // Раскладка подписей кадра — заново.
     resetLabels();
 
     // Мировая система координат: центр экрана -> камера -> зум.
@@ -2296,80 +2846,90 @@ function renderScene(ctx) {
 
     drawStars(ctx, time);
 
-    // === ТЕЛА КАДРА: позиции, затем слипание по экранному расстоянию ===
-    // Угол строго из simDays: движение по орбите и счётчик дней — один таймер.
-    // y с минусом: против часовой, как видно с севера эклиптики.
+    // === ТЕЛА КАДРА: позиции в view, затем слипание по экранному расстоянию ===
+    // Планеты храним в raw (для лун и наклонных орбит) и в view (для отрисовки).
+    const planetRaw = new Map();
     const planetPos = new Map();
     planets.forEach(p => {
-        const ang = orbitAngle(p.l0, p.period, simDays);
-        planetPos.set(p, { x: Math.cos(ang) * p.dist, y: -Math.sin(ang) * p.dist });
+        const raw = planetRawPos(p, simDays);
+        const v = project3(raw.x, raw.y, raw.z);
+        planetRaw.set(p, raw);
+        planetPos.set(p, { x: v.x, y: v.y, z: raw.z, floorY: raw.y * ISO_K });
     });
 
-    // Тела-кандидаты: чем к телу привязана база, знает basesAt (hostKind и имя
-    // хоста); у малых тел баз пока нет.
     const bodies = [];
 
     // Планеты — якоря: видны всегда и в чужую группу не входят.
     planets.forEach(p => {
-        const { x, y } = planetPos.get(p);
+        const { x, y, z, floorY } = planetPos.get(p);
         bodies.push({
-            anchor: true, kind: 'planet', p, x, y, r: p.r,
+            anchor: true, system: p.name, kind: 'planet', p, x, y, z, floorY, r: p.r,
             label: p.ru || p.name,
             bases: basesAt('planet', p.name, null)
         });
     });
 
-    // Луны планет и Луна Земли
+    // Луны планет и Луна Земли — круговые орбиты вокруг планеты, наклонённые
+    // по реальным inc/node (плоскость экватора планеты). Периоды реальные,
+    // расстояния сжаты той же шкалой, что и вся карта.
     planets.forEach(p => {
-        const { x, y } = planetPos.get(p);
+        const o = planetRaw.get(p);
         (moonsByPlanet[p.name] || []).forEach((m, i) => {
-            const md = moonOrbitRadius(p, i);   // радиус орбиты луны от планеты
+            const md = moonOrbitRadius(p, i);
             const mAng = orbitAngle(m.phase, m.period, simDays);
+            const off = orbitPoint3(md, mAng, m.inc, m.node);
+            const wx = o.x + off.x, wy = o.y + off.y, wz = o.z + off.z;
+            const v = project3(wx, wy, wz);
+            // Луны — якоря: реальные спутники не должны пропадать в группе
+            // с планетой или астероидом, иначе их нельзя навести/выбрать.
             bodies.push({
-                anchor: false, kind: 'moon', p, m, md,
-                x: x + Math.cos(mAng) * md,
-                y: y - Math.sin(mAng) * md,
+                anchor: true, system: p.name, kind: 'moon', p, m, md,
+                x: v.x, y: v.y, z: wz, floorY: wy * ISO_K,
+                orbitPoly: moonOrbitPoly(o, md, m.inc, m.node),
                 label: m.n,
                 bases: basesAt('moon', p.name, m.n)
             });
         });
 
-        // Луна Земли — особый случай: своя дистанция и радиус, не в moonsByPlanet.
-        // Базы на ней рисует общий слой баз (bases.js), как у остальных лун.
         if (p.name === 'Earth') {
             const mAng = orbitAngle(moonL0, moonPeriod, simDays);
+            const off = orbitPoint3(moonDist, mAng, moonInc, moonNode);
+            const wx = o.x + off.x, wy = o.y + off.y, wz = o.z + off.z;
+            const v = project3(wx, wy, wz);
             bodies.push({
-                anchor: false, kind: 'moon', p, m: EARTH_MOON, md: moonDist,
-                x: x + Math.cos(mAng) * moonDist,
-                y: y - Math.sin(mAng) * moonDist,
+                anchor: true, system: p.name, kind: 'moon', p, m: EARTH_MOON, md: moonDist,
+                x: v.x, y: v.y, z: wz, floorY: wy * ISO_K,
+                orbitPoly: moonOrbitPoly(o, moonDist, moonInc, moonNode),
                 label: EARTH_MOON.n,
                 bases: basesAt('moon', p.name, EARTH_MOON.n)
             });
         }
     });
 
-    // Малые тела: позиции именованных считает smallbodies.js (smallBodyList) —
-    // их же рисует drawSmallBodies по набору показанных (showSmall ниже).
+    // Малые тела: позиции уже в view (smallbodies.js).
     const small = smallBodyList();
     small.forEach(s => {
         bodies.push({
-            anchor: false, kind: 'small', id: s.id, small: s.small, r: s.r,
-            x: s.x, y: s.y, label: s.label, bases: []
+            // Кометы — якоря: пользователь просил показать все кометы, а не
+            // только представителей групп. Остальные малые тела слипаются.
+            anchor: s.kind === 'comet',
+            system: null,
+            kind: 'small', id: s.id, small: s.small, r: s.r,
+            x: s.x, y: s.y, z: s.z || 0, floorY: s.floorY ?? s.y,
+            label: s.label, bases: []
         });
     });
 
-    // Порядок важности: якоря первыми, дальше крупные раньше мелких — кто в
-    // списке первый, тот и становится представителем группы.
+    // Порядок важности: якоря первыми, дальше крупные раньше мелких.
     const ordered = bodies.slice().sort((a, b) => (b.anchor - a.anchor) || (b.r - a.r));
     const groups = clusterBodies(ordered, zoom);
 
     // === ЧТО ПОКАЗАНО КАДРА ===
-    const hostPos = {};             // мировые позиции хост-тел для баз (ключи bases.js)
-    const quietIds = new Set();     // базы групп: маркеры без имён — имена в подписи группы
-    const shownSmall = new Set();   // id показанных малых тел (представители групп)
-    const moonHits = new Map();     // планета -> [{ m, md, mx, my }] показанные луны
+    const hostPos = {};             // view-позиции хост-тел для баз
+    const quietIds = new Set();     // базы групп: маркеры без имён
+    const shownSmall = new Set();   // id показанных малых тел
+    const moonHits = new Map();     // планета -> [{ m, md, mx, my, orbitPoly }]
 
-    // Хост-позиция тела по умолчанию — его собственные координаты.
     bodies.forEach(b => {
         if (b.kind === 'planet') hostPos['planet:' + b.p.name] = { x: b.x, y: b.y };
         if (b.kind === 'moon') hostPos['moon:' + b.p.name + ':' + b.m.n] = { x: b.x, y: b.y };
@@ -2377,19 +2937,16 @@ function renderScene(ctx) {
 
     groups.forEach(g => {
         const rep = g.rep;
-
-        // Точкой рисуется только тело-представитель группы.
         if (rep.kind === 'moon') {
             if (!moonHits.has(rep.p)) moonHits.set(rep.p, []);
-            moonHits.get(rep.p).push({ m: rep.m, md: rep.md, mx: rep.x, my: rep.y });
+            moonHits.get(rep.p).push({
+                m: rep.m, md: rep.md, mx: rep.x, my: rep.y, orbitPoly: rep.orbitPoly
+            });
         }
         if (rep.kind === 'small') shownSmall.add(rep.id);
 
         if (g.members.length < 2) return;
 
-        // Скрытые тела группы «встают» в маркер представителя: базы на них
-        // рисуются у группы (bases.js по hostPos), а имена баз гасятся —
-        // они стоят в подписи группы (quietIds).
         g.members.forEach(m => {
             if (m.kind === 'moon' && m !== rep)
                 hostPos['moon:' + m.p.name + ':' + m.m.n] = { x: rep.x, y: rep.y };
@@ -2397,29 +2954,52 @@ function renderScene(ctx) {
         });
     });
 
-    // === ОТРИСОВКА ===
-    // Малые тела (пояс, ОЗА, троянцы, кометы, дальние пояса) — под планетами:
-    // пыль и частицы всегда, именованные — только показанные.
-    hoverTargets.push(...drawSmallBodies(ctx, shownSmall));
+    // === ПОЛ ===
+    // Световое пятно и ореол звезды — до орбит; постоянные орбиты планет —
+    // тонкие эллипсы; пыль/пояс/пути комет — на полу.
+    drawStarFloor(ctx);
+    drawPlanetOrbits(ctx, zoom);
+    drawSmallBodiesFloor(ctx);
+    drawStarHalo(ctx);
 
-    // Солнце — первая hover-цель (проверяется последней, т.к. планеты поверх)
-    drawSun(ctx);
-    hoverTargets.push({ kind: 'sun', name: 'Солнце / Sun', x: 0, y: 0, r: SUN_R, moons: [] });
+    // Тени на полу — отдельным проходом, до всех сфер.
+    drawFloorShadows(ctx, groups, planetPos, zoom);
 
-    // Планеты-якоря и показанные луны (представители групп)
+    // === ТЕЛА ПО ГЛУБИНЕ ===
+    // Дальние (меньший view.y) — раньше; звезда участвует в сортировке.
+    const drawList = [];
     planets.forEach(p => {
         const { x, y } = planetPos.get(p);
-        if (p.rings) drawRings(ctx, x, y, p);
-        drawPlanetBody(ctx, x, y, p.r);
-        hoverTargets.push({ kind: 'planet', p, x, y, moons: moonHits.get(p) || [] });
+        drawList.push({ kind: 'planet', x, y, r: p.r, p });
     });
     groups.forEach(g => {
-        if (g.rep.kind === 'moon') drawMoonBody(ctx, g.rep.x, g.rep.y, g.rep.m.r);
+        const rep = g.rep;
+        if (rep.kind === 'moon' || rep.kind === 'small') {
+            drawList.push({ kind: rep.kind, x: rep.x, y: rep.y, r: rep.r, rep });
+        }
+    });
+    drawList.push({ kind: 'sun', x: 0, y: 0, r: SUN_R });
+
+    drawList.sort((a, b) => (a.y - b.y) || (b.r - a.r));
+
+    const smallTargets = new Map();
+    drawList.forEach(item => {
+        if (item.kind === 'planet') {
+            drawPlanet(ctx, item.x, item.y, item.p, zoom);
+        } else if (item.kind === 'moon') {
+            drawMoonBody(ctx, item.x, item.y, item.rep.m.r, item.rep.m.c, zoom);
+        } else if (item.kind === 'small') {
+            const t = drawSmallBody(ctx, item.rep.small);
+            if (t) smallTargets.set(item.rep.small.id, t);
+        } else if (item.kind === 'sun') {
+            drawSunCore(ctx);
+        }
     });
 
-    // Подписи групп: имена тел через запятую, затем базы на них
+    // Подписи групп: имена тел через запятую, затем базы на них. Подписаны все
+    // показанные тела — планеты, одиночные луны и малые тела: имя видно всегда,
+    // а не только при наведении (подсказка при наведении остаётся).
     groups.forEach(g => {
-        if (g.members.length < 2) return;
         const baseNames = [];
         g.members.forEach(m => m.bases.forEach(b => baseNames.push(b.name)));
         drawGroupLabel(ctx, g.rep.x, g.rep.y, {
@@ -2428,14 +3008,33 @@ function renderScene(ctx) {
         }, zoom);
     });
 
-    // Звёздные базы (bases.js): маркеры, орбиты и превью выбора орбиты;
-    // базы групп (quietIds) — без имён: они в подписи группы
-    drawBases(ctx, hostPos, quietIds).forEach(t => {
-        t.p = planets.find(x => x.name === t.local.planet);
-        hoverTargets.push(t);
-    });
+    // Солнце — тоже подпись всегда.
+    drawSunLabel(ctx, zoom);
+
+    // Звёздные базы (bases.js): маркеры, орбиты и превью выбора орбиты.
+    const baseTargets = drawBases(ctx, hostPos, quietIds);
+    baseTargets.forEach(t => { t.p = planets.find(x => x.name === t.local.planet); });
 
     ctx.restore();
+
+    // === HOVER-ЦЕЛИ ===
+    // Порядок прежний и не зависит от порядка отрисовки: малые тела -> солнце
+    // -> планеты (с лунами) -> базы. findBodyAt идёт с конца.
+    small.forEach(s => {
+        if (!shownSmall.has(s.id)) return;
+        const t = smallTargets.get(s.id);
+        if (t) hoverTargets.push(t);
+    });
+    hoverTargets.push({ kind: 'sun', name: 'Солнце / Sun', x: 0, y: 0, r: SUN_R, moons: [] });
+    planets.forEach(p => {
+        const { x, y } = planetPos.get(p);
+        hoverTargets.push({
+            kind: 'planet', p, x, y, moons: moonHits.get(p) || [],
+            orbit: PLANET_ORBITS.get(p)
+        });
+    });
+    baseTargets.forEach(t => hoverTargets.push(t));
+
     return hoverTargets;
 }
 
@@ -2450,79 +3049,118 @@ function drawStars(ctx, time) {
     });
 }
 
+/** Световое пятно на полу под звездой (эллипс 2:1). */
+function drawStarFloor(ctx) {
+    ctx.save();
+    ctx.scale(1, ISO_K);
+    const r = SUN_R * 7.5;
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    g.addColorStop(0, 'rgba(255,206,122,0.22)');
+    g.addColorStop(0.55, 'rgba(255,157,60,0.06)');
+    g.addColorStop(1, 'rgba(255,157,60,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+/** Большой ореол звезды — над полом, под телами. */
+function drawStarHalo(ctx) {
+    glow(ctx, 0, 0, SUN_R * 5.2, '#ff9d3c', 0.34);
+    glow(ctx, 0, 0, SUN_R * 2.6, '#ffd27a', 0.28);
+}
+
+/** Постоянные орбиты планет: тонкий пунктирный эллипс/полилиния по Кеплеру. */
+function drawPlanetOrbits(ctx, zoom) {
+    ctx.save();
+    ctx.strokeStyle = COLORS.orbitPlanetFaint;
+    ctx.lineWidth = 1 / zoom;
+    ctx.setLineDash([2 / zoom, 7 / zoom]);
+    ctx.beginPath();
+    planets.forEach(p => strokePoly(ctx, PLANET_ORBITS.get(p)));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+}
+
+/** Тени на полу: планеты; показанные луны; показанные малые тела.
+ *  Наклонные орбиты поднимают тело над эклиптикой — тень остаётся на полу
+ *  (floorY), поэтому видно высоту. */
+function drawFloorShadows(ctx, groups, planetPos, zoom) {
+    planets.forEach(p => {
+        const { x, floorY } = planetPos.get(p);
+        shadow(ctx, x, floorY, p.r, zoom);
+    });
+    groups.forEach(g => {
+        const rep = g.rep;
+        const fy = rep.floorY ?? rep.y;
+        if (rep.kind === 'moon' && rep.m.r >= 1.5) shadow(ctx, rep.x, fy, rep.m.r, zoom);
+        if (rep.kind === 'small' && rep.r >= 1.5) shadow(ctx, rep.x, fy, rep.r, zoom);
+    });
+}
+
 // --- Тела ----------------------------------------------------------------------
 
-/** Солнце: жёлтая заливка и самая толстая обводка. */
-function drawSun(ctx) {
-    const z = state.zoom;
-    ctx.fillStyle = COLORS.sun;
-    circle(ctx, 0, 0, SUN_R);
-    ctx.fill();
-
-    ctx.strokeStyle = COLORS.sunStroke;
-    ctx.lineWidth = STROKE.sun / z;
-    circle(ctx, 0, 0, SUN_R);
-    ctx.stroke();
+/** Ядро солнца — сфера; ореол и пятно света нарисованы в слое пола. */
+function drawSunCore(ctx) {
+    sunSphere(ctx, 0, 0, SUN_R);
 }
 
-/** Планета: прозрачная заливка — видна только обводка, у всех одна толщина. */
-function drawPlanetBody(ctx, x, y, r) {
-    const z = state.zoom;
-    ctx.strokeStyle = COLORS.planetStroke;
-    ctx.lineWidth = STROKE.planet / z;
-    circle(ctx, x, y, r);
-    ctx.stroke();
+/** Подпись Солнца — постоянная, как у остальных тел. */
+function drawSunLabel(ctx, zoom) {
+    drawGroupLabel(ctx, SUN_R * 0.6, 0, { label: 'Солнце / Sun', baseLabel: null }, zoom);
 }
 
-/** Кольца Сатурна: два сплюснутых эллипса под наклоном. */
-function drawRings(ctx, x, y, p) {
-    const z = state.zoom;
+/** Планета: сфера + кольца Сатурна (задняя половина до сферы, передняя после). */
+function drawPlanet(ctx, x, y, p, zoom) {
+    if (p.rings) drawRingHalf(ctx, x, y, p, true, zoom);
+    sphere(ctx, x, y, p.r, p.color, { zoom });
+    if (p.rings) drawRingHalf(ctx, x, y, p, false, zoom);
+}
+
+/** Половина кольца Сатурна: back — дальняя (верхняя), иначе передняя. */
+function drawRingHalf(ctx, x, y, p, back, zoom) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(0.4);
     ctx.scale(1, 0.3);
 
-    ctx.strokeStyle = 'rgba(200,200,200,0.35)';
-    ctx.lineWidth = 4 / z;
-    circle(ctx, 0, 0, p.r * 2.2);
+    const a0 = back ? Math.PI : 0;
+    const a1 = back ? Math.PI * 2 : Math.PI;
+
+    ctx.strokeStyle = 'rgba(200,200,200,0.30)';
+    ctx.lineWidth = 4 / zoom;
+    ctx.beginPath();
+    ctx.arc(0, 0, p.r * 2.2, a0, a1);
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(220,220,220,0.5)';
-    ctx.lineWidth = 3 / z;
-    circle(ctx, 0, 0, p.r * 1.7);
+    ctx.strokeStyle = 'rgba(220,220,220,0.46)';
+    ctx.lineWidth = 3 / zoom;
+    ctx.beginPath();
+    ctx.arc(0, 0, p.r * 1.7, a0, a1);
     ctx.stroke();
 
     ctx.restore();
 }
 
-/** Луна: плоский серый круг с самой тонкой обводкой. */
-function drawMoonBody(ctx, x, y, r) {
-    const z = state.zoom;
-    ctx.fillStyle = COLORS.moon;
-    circle(ctx, x, y, r);
-    ctx.fill();
-
-    ctx.strokeStyle = COLORS.moonStroke;
-    ctx.lineWidth = STROKE.moon / z;
-    circle(ctx, x, y, r);
-    ctx.stroke();
+/** Луна: маленькая сфера; тень нарисована в слое пола. */
+function drawMoonBody(ctx, x, y, r, color, zoom) {
+    sphere(ctx, x, y, r, color || COLORS.moon, { zoom, rimAlpha: 0.12 });
 }
 
 /**
  * Подпись группы тел у её представителя (scene.js clusterBodies) — общая для
- * всех тел: две строки, имена тел группы и базы на них. Стиль подсказки hover:
- * тень 1 px, кегль постоянный на экране (10 / zoom). Первая строка белая,
- * вторая — цианом (цвет баз). Место подписи подбирает раскладка кадра
- * (scene.js placeLabel): подписи не перекрываются, сдвигаясь по вертикали.
+ * всех тел: две строки, имена тел группы и базы на них.
  */
 function drawGroupLabel(ctx, mx, my, group, zoom) {
     const lines = [{ text: group.label, color: COLORS.tooltip }];
     if (group.baseLabel) lines.push({ text: group.baseLabel, color: COLORS.base });
 
     ctx.font = `${10 / zoom}px monospace`;
-    const lx = mx + 6 / zoom;              // подпись — справа от маркера
-    const lh = 12 / zoom;                  // межстрочный шаг
-    const top = my - 14 / zoom;            // верх коробки раскладки
+    const lx = mx + 6 / zoom;
+    const lh = 12 / zoom;
+    const top = my - 14 / zoom;
     const w = Math.max(...lines.map(l => ctx.measureText(l.text).width));
     const h = (lines.length - 1) * lh + 14 / zoom;
     const off = placeLabel(lx, top, w, h);
@@ -2540,10 +3178,12 @@ function groupLine(ctx, text, x, y, color, zoom) {
     ctx.fillText(text, x, y);
 }
 
-/** Начать путь-окружность (без fill/stroke — их выбирает вызывающий). */
-function circle(ctx, x, y, r) {
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+/** Начать и замкнуть путь по плоскому массиву x0,y0,x1,y1… (view). */
+function strokePoly(ctx, poly) {
+    if (!poly || poly.length < 4) return;
+    ctx.moveTo(poly[0], poly[1]);
+    for (let i = 2; i < poly.length; i += 2) ctx.lineTo(poly[i], poly[i + 1]);
+    ctx.closePath();
 }
 
 // ===== hover.js =====
@@ -2554,6 +3194,7 @@ function circle(ctx, x, y, r) {
 // для обработчика клика в input.js.
 // Вызывается из main.js ПОСЛЕ renderScene и уже вне мирового transform.
 // =============================================================================
+
 
 
 
@@ -2604,7 +3245,8 @@ function drawSelection(ctx, sel, hoverTargets) {
         // малое тело: орбита по сэмплированным элементам (poly), у троянцев — круг
         orbit = sel.small.poly ? { poly: sel.small.poly } : sel.small.orbit;
     } else if (sel.kind === 'planet') {
-        orbit = { cx: 0, cy: 0, r: target.p.dist };
+        // планета: реальная эллиптическая орбита (poly в view), не круг
+        orbit = target.orbit ? { poly: target.orbit } : { cx: 0, cy: 0, r: target.p.dist };
     } else if (sel.kind === 'base') {
         // база летает вокруг Луны Земли — орбита от Луны, не от солнца
         orbit = { cx: target.orbitCx, cy: target.orbitCy, r: target.orbitR };
@@ -2612,7 +3254,9 @@ function drawSelection(ctx, sel, hoverTargets) {
         // луна ищется по имени: объекты лун в кадре и в дереве — разные ссылки
         const mh = target.moons.find(x => x.m.n === sel.m.n);
         if (!mh) return;
-        orbit = { cx: target.x, cy: target.y, r: mh.md };
+        orbit = mh.orbitPoly
+            ? { poly: mh.orbitPoly }
+            : { cx: target.x, cy: target.y, r: mh.md };
     }
     drawOrbitOverlay(ctx, { kind: sel.kind, orbit }, COLORS.orbitSelected);
 }
@@ -2633,8 +3277,12 @@ function findBodyAt(hoverTargets, mouseX, mouseY) {
             const mh = t.moons[j];
             const hitR = Math.max(mh.m.r, MIN_HIT_MOON_PX / state.zoom);
             if ((w.x - mh.mx) ** 2 + (w.y - mh.my) ** 2 <= hitR * hitR) {
-                // луна: орбита вокруг своей планеты
-                return { kind: 'moon', name: mh.m.n, orbit: { cx: t.x, cy: t.y, r: mh.md }, p: t.p, m: mh.m };
+                // луна: наклонная орбита вокруг своей планеты
+                return {
+                    kind: 'moon', name: mh.m.n,
+                    orbit: mh.orbitPoly ? { poly: mh.orbitPoly } : { cx: t.x, cy: t.y, r: mh.md },
+                    p: t.p, m: mh.m
+                };
             }
         }
 
@@ -2655,7 +3303,7 @@ function findBodyAt(hoverTargets, mouseX, mouseY) {
             // солнца; у самого солнца орбиты нет
             let orbit = null;
             if (t.small) orbit = t.small.poly ? { poly: t.small.poly } : t.small.orbit;
-            else if (t.kind !== 'sun') orbit = { cx: 0, cy: 0, r: t.p.dist };
+            else if (t.kind !== 'sun') orbit = t.orbit ? { poly: t.orbit } : { cx: 0, cy: 0, r: t.p.dist };
             return { kind: t.kind, name, orbit, p: t.p || null, m: null, small: t.small || null };
         }
     }
@@ -2676,15 +3324,27 @@ function drawOrbitOverlay(ctx, hover, color) {
     ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.beginPath();
     if (hover.orbit.poly) {
-        // малое тело: сэмплированная петля — эллипс по (a, e) врёт вне линейных зон
+        // сэмплированная петля (малые тела, кометы, планеты): эллипс по (a,e)
+        // неверен после нелинейного сжатия шкалы и наклонной орбиты кометы
         const p = hover.orbit.poly;
         ctx.moveTo(p[0], p[1]);
         for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]);
+        ctx.closePath();
     } else if (hover.orbit.rot !== undefined) {
-        // эллипс малого тела: центр, полуоси, поворот (мировые единицы)
-        ctx.ellipse(hover.orbit.cx, hover.orbit.cy, hover.orbit.a, hover.orbit.b, hover.orbit.rot, 0, Math.PI * 2);
+        // запасной путь для старого эллипса: сэмплируем в raw и проецируем,
+        // иначе наклонный эллипс после сжатия по y не совпадёт с орбитой
+        const o = hover.orbit;
+        const cr = Math.cos(o.rot), sr = Math.sin(o.rot);
+        for (let i = 0; i <= 96; i++) {
+            const t = i / 96 * Math.PI * 2;
+            const ex = Math.cos(t) * o.a, ey = Math.sin(t) * o.b;
+            const x = o.cx + ex * cr - ey * sr;
+            const y = o.cy + ex * sr + ey * cr;
+            if (i === 0) ctx.moveTo(x, y * ISO_K);
+            else ctx.lineTo(x, y * ISO_K);
+        }
     } else {
-        ctx.arc(hover.orbit.cx, hover.orbit.cy, hover.orbit.r, 0, Math.PI * 2);
+        orbitEllipsePath(ctx, hover.orbit.cx, hover.orbit.cy, hover.orbit.r);
     }
     ctx.stroke();
     ctx.setLineDash([]);
@@ -2715,6 +3375,7 @@ function drawTooltip(ctx, name, mouseX, mouseY) {
 // кнопки скорости времени.
 // Только меняет state и курсор канваса, ничего не рисует.
 // =============================================================================
+
 
 
 
@@ -2950,13 +3611,15 @@ function updateBaseRadius(x, y) {
     const hp = hostPosOf(state.baseMode);   // радиус — от живого положения хоста
     // Механизм баз: коридор «не пересекать тела» + разведение с другими базами
     // этого хозяина; переносимая база себе не мешает (moveId исключается).
-    const d = hp ? Math.hypot(w.x - hp.x, w.y - hp.y) : bd;
+    // Экран/view сжат по y: расстояние и угол базы живут в raw-плоскости.
+    const d = hp ? rawDist(w.x - hp.x, w.y - hp.y)
+                 : rawDist(w.x - best.x, w.y - best.y);
     state.baseRadius = fitBaseRadius(d, state.baseMode, state.baseMode.moveId || null);
     // Сторона орбиты — направление от центра хозяина к курсору: перенос
     // поставит базу с этой стороны, создание появится тут же (mode.ang).
     if (hp) {
         const dx = w.x - hp.x, dy = w.y - hp.y;
-        if (Math.hypot(dx, dy) > 1e-6) state.baseMode.ang = Math.atan2(-dy, dx);
+        if (rawDist(dx, dy) > 1e-6) state.baseMode.ang = rawAngle(dx, dy);
     }
 }
 
@@ -3612,7 +4275,7 @@ function newBaseInfoHTML(b) {
         : 'планета ' + (RU[b.planet] || b.planet);
     const removing = b.status === 'removing';   // идёт разбор: имя краснеет, под ним полоска прогресса, кнопки выключены
     const fleet = !!b.fleet;    // стартовая LUNA-ORBIT: в карточке — купленные корабли
-    return '<div class="obj-title' + (removing ? ' danger' : '') + '"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
+    return '<div class="obj-title' + (removing ? ' danger' : '') + '"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(53,232,216,.6)"></span>' +
             '<strong>База ' + b.name + '</strong></div>' +
         (removing ? removalBarHTML(b) : '') +
         '<div class="obj-kind">Звёздная база · ' + host + '</div>' +
@@ -3781,7 +4444,7 @@ function frame() {
     updateBaseTimerCard();   // и обновить открытую карточку с таймером (раз в секунду)
 
     // фон: очищаем весь канвас в экранных координатах
-    ctx.fillStyle = '#020205';
+    ctx.fillStyle = '#05060c';
     ctx.fillRect(0, 0, state.W, state.H);
 
     // мир (в мировой системе координат) + сбор тел для наведения

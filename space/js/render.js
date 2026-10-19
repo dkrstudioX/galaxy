@@ -1,31 +1,69 @@
 // =============================================================================
-// render.js — отрисовка сцены на канвас: фон, малые тела (smallbodies.js),
-// солнце, планеты, луны и звёздные базы. Тела слипаются по ЭКРАННОМУ расстоянию
-// одним правилом (scene.js clusterBodies): что ближе порога на экране — в одну
-// группу с общей подписью-списком; планеты и солнце — якоря, они видны всегда.
-// Подписи кадра раскладываются без наложений (scene.js placeLabel).
-// Стиль тел: у планет прозрачная заливка — тело читается только по обводке,
-// одинаково толстой у всех; солнце — жёлтая заливка; луны — плоские серые
-// круги. Орбит на карте нет — их рисует
-// hover.js только при наведении. Дальний фон (небо) — отдельный слой sky.js.
+// render.js — отрисовка сцены на канвас: фон, пол, малые тела, солнце,
+// планеты, луны и звёздные базы.
+//
+// Карта — диметрия 2:1 (iso.js): мир-эклиптика сжимается по y, поэтому орбиты
+// становятся эллипсами, а сферы остаются круглыми. Слои кадра:
+//   небо -> световое пятно/ореол звезды -> постоянные орбиты -> пыль/пояс/
+//   пути комет -> тени на полу -> тела по глубине (view.y) -> базы -> подписи.
+//
+// Тела слипаются по ЭКРАННОМУ расстоянию (scene.js clusterBodies): что ближе
+// порога — в одну группу с общей подписью; планеты и солнце — якоря.
+// Подписи раскладываются без наложений (scene.js placeLabel).
 //
 // Возвращает массив hoverTargets — позиции всех тел для hit-теста наведения.
 // =============================================================================
 
 import { state } from './state.js';
-import { orbitAngle } from './math.js';
-import { SUN_R, COLORS, STROKE } from './config.js';
-import { planets, moonsByPlanet, moonDist, moonPeriod, moonL0, moonOrbitRadius } from './data.js';
+import { orbitAngle, orbitPoint3, keplerPos3, keplerPoly3 } from './math.js';
+import { SUN_R, COLORS, ISO_K, ISO_Z } from './config.js';
+import {
+    planets, planetM0, moonsByPlanet, moonDist, moonPeriod, moonL0,
+    moonInc, moonNode, moonOrbitRadius
+} from './data.js';
 import { stars, clusterBodies, resetLabels, placeLabel } from './scene.js';
-import { smallBodyList, drawSmallBodies } from './smallbodies.js';
+import { smallBodyList, drawSmallBodiesFloor, drawSmallBody } from './smallbodies.js';
 import { basesAt, drawBases } from './bases.js';
 import { drawSky } from './sky.js';
+import { project3, view3Poly } from './iso.js';
+import { sphere, shadow, glow, sunSphere } from './paint.js';
 
 /**
  * Луна Земли — такая же запись тела, как луны планет: своя дистанция
  * (moonDist), радиус (3) и период. В moonsByPlanet её нет.
  */
-const EARTH_MOON = { n: 'Луна / Moon', r: 3, period: moonPeriod };
+const EARTH_MOON = { n: 'Луна / Moon', r: 3, period: moonPeriod, c: '#c9cfd8' };
+
+/**
+ * Орбиты планет — реальные элементы (эксцентриситет и перигелий из data.js).
+ * Считаются один раз: форма орбиты от времени не зависит. Хранятся сразу в
+ * view-координатах — по ним рисуются постоянные линии и hover/выбор.
+ */
+const PLANET_ORBITS = new Map();
+planets.forEach(p => {
+    const raw = keplerPoly3(p.dist, p.e, p.peri, 0, p.period, 160, v => v, p.inc, p.node);
+    PLANET_ORBITS.set(p, view3Poly(raw));
+});
+
+/** Позиция планеты на орбите: Кеплер с эксцентриситетом и наклоном. */
+function planetRawPos(p, t) {
+    return keplerPos3(p.dist, p.e, p.peri, planetM0(p), p.period, t, v => v, p.inc, p.node);
+}
+
+/**
+ * Замкнутая орбита луны вокруг планеты: круг в наклонённой плоскости
+ * (inc/node), спроецированный в view. Точки уже абсолютные (центр — планета).
+ */
+function moonOrbitPoly(planetRaw, radius, inc, node, steps = 96) {
+    const pts = [];
+    for (let k = 0; k <= steps; k++) {
+        const ang = k / steps * Math.PI * 2;
+        const off = orbitPoint3(radius, ang, inc, node);
+        const v = project3(planetRaw.x + off.x, planetRaw.y + off.y, planetRaw.z + off.z);
+        pts.push(v.x, v.y);
+    }
+    return pts;
+}
 
 /**
  * Нарисовать один кадр мира в мировой системе координат (save/restore внутри).
@@ -36,11 +74,10 @@ export function renderScene(ctx) {
     const { zoom, simDays, time } = state;
     const hoverTargets = [];
 
-    // Дальний фон — отдельный слой sky.js, в экранных координатах:
-    // камера и зум на небо не влияют (оно бесконечно далеко).
+    // Дальний фон — отдельный слой sky.js, в экранных координатах.
     drawSky(ctx);
 
-    // Раскладка подписей кадра — заново: placeLabel разводит их по вертикали.
+    // Раскладка подписей кадра — заново.
     resetLabels();
 
     // Мировая система координат: центр экрана -> камера -> зум.
@@ -51,80 +88,90 @@ export function renderScene(ctx) {
 
     drawStars(ctx, time);
 
-    // === ТЕЛА КАДРА: позиции, затем слипание по экранному расстоянию ===
-    // Угол строго из simDays: движение по орбите и счётчик дней — один таймер.
-    // y с минусом: против часовой, как видно с севера эклиптики.
+    // === ТЕЛА КАДРА: позиции в view, затем слипание по экранному расстоянию ===
+    // Планеты храним в raw (для лун и наклонных орбит) и в view (для отрисовки).
+    const planetRaw = new Map();
     const planetPos = new Map();
     planets.forEach(p => {
-        const ang = orbitAngle(p.l0, p.period, simDays);
-        planetPos.set(p, { x: Math.cos(ang) * p.dist, y: -Math.sin(ang) * p.dist });
+        const raw = planetRawPos(p, simDays);
+        const v = project3(raw.x, raw.y, raw.z);
+        planetRaw.set(p, raw);
+        planetPos.set(p, { x: v.x, y: v.y, z: raw.z, floorY: raw.y * ISO_K });
     });
 
-    // Тела-кандидаты: чем к телу привязана база, знает basesAt (hostKind и имя
-    // хоста); у малых тел баз пока нет.
     const bodies = [];
 
     // Планеты — якоря: видны всегда и в чужую группу не входят.
     planets.forEach(p => {
-        const { x, y } = planetPos.get(p);
+        const { x, y, z, floorY } = planetPos.get(p);
         bodies.push({
-            anchor: true, kind: 'planet', p, x, y, r: p.r,
+            anchor: true, system: p.name, kind: 'planet', p, x, y, z, floorY, r: p.r,
             label: p.ru || p.name,
             bases: basesAt('planet', p.name, null)
         });
     });
 
-    // Луны планет и Луна Земли
+    // Луны планет и Луна Земли — круговые орбиты вокруг планеты, наклонённые
+    // по реальным inc/node (плоскость экватора планеты). Периоды реальные,
+    // расстояния сжаты той же шкалой, что и вся карта.
     planets.forEach(p => {
-        const { x, y } = planetPos.get(p);
+        const o = planetRaw.get(p);
         (moonsByPlanet[p.name] || []).forEach((m, i) => {
-            const md = moonOrbitRadius(p, i);   // радиус орбиты луны от планеты
+            const md = moonOrbitRadius(p, i);
             const mAng = orbitAngle(m.phase, m.period, simDays);
+            const off = orbitPoint3(md, mAng, m.inc, m.node);
+            const wx = o.x + off.x, wy = o.y + off.y, wz = o.z + off.z;
+            const v = project3(wx, wy, wz);
+            // Луны — якоря: реальные спутники не должны пропадать в группе
+            // с планетой или астероидом, иначе их нельзя навести/выбрать.
             bodies.push({
-                anchor: false, kind: 'moon', p, m, md,
-                x: x + Math.cos(mAng) * md,
-                y: y - Math.sin(mAng) * md,
+                anchor: true, system: p.name, kind: 'moon', p, m, md,
+                x: v.x, y: v.y, z: wz, floorY: wy * ISO_K,
+                orbitPoly: moonOrbitPoly(o, md, m.inc, m.node),
                 label: m.n,
                 bases: basesAt('moon', p.name, m.n)
             });
         });
 
-        // Луна Земли — особый случай: своя дистанция и радиус, не в moonsByPlanet.
-        // Базы на ней рисует общий слой баз (bases.js), как у остальных лун.
         if (p.name === 'Earth') {
             const mAng = orbitAngle(moonL0, moonPeriod, simDays);
+            const off = orbitPoint3(moonDist, mAng, moonInc, moonNode);
+            const wx = o.x + off.x, wy = o.y + off.y, wz = o.z + off.z;
+            const v = project3(wx, wy, wz);
             bodies.push({
-                anchor: false, kind: 'moon', p, m: EARTH_MOON, md: moonDist,
-                x: x + Math.cos(mAng) * moonDist,
-                y: y - Math.sin(mAng) * moonDist,
+                anchor: true, system: p.name, kind: 'moon', p, m: EARTH_MOON, md: moonDist,
+                x: v.x, y: v.y, z: wz, floorY: wy * ISO_K,
+                orbitPoly: moonOrbitPoly(o, moonDist, moonInc, moonNode),
                 label: EARTH_MOON.n,
                 bases: basesAt('moon', p.name, EARTH_MOON.n)
             });
         }
     });
 
-    // Малые тела: позиции именованных считает smallbodies.js (smallBodyList) —
-    // их же рисует drawSmallBodies по набору показанных (showSmall ниже).
+    // Малые тела: позиции уже в view (smallbodies.js).
     const small = smallBodyList();
     small.forEach(s => {
         bodies.push({
-            anchor: false, kind: 'small', id: s.id, small: s.small, r: s.r,
-            x: s.x, y: s.y, label: s.label, bases: []
+            // Кометы — якоря: пользователь просил показать все кометы, а не
+            // только представителей групп. Остальные малые тела слипаются.
+            anchor: s.kind === 'comet',
+            system: null,
+            kind: 'small', id: s.id, small: s.small, r: s.r,
+            x: s.x, y: s.y, z: s.z || 0, floorY: s.floorY ?? s.y,
+            label: s.label, bases: []
         });
     });
 
-    // Порядок важности: якоря первыми, дальше крупные раньше мелких — кто в
-    // списке первый, тот и становится представителем группы.
+    // Порядок важности: якоря первыми, дальше крупные раньше мелких.
     const ordered = bodies.slice().sort((a, b) => (b.anchor - a.anchor) || (b.r - a.r));
     const groups = clusterBodies(ordered, zoom);
 
     // === ЧТО ПОКАЗАНО КАДРА ===
-    const hostPos = {};             // мировые позиции хост-тел для баз (ключи bases.js)
-    const quietIds = new Set();     // базы групп: маркеры без имён — имена в подписи группы
-    const shownSmall = new Set();   // id показанных малых тел (представители групп)
-    const moonHits = new Map();     // планета -> [{ m, md, mx, my }] показанные луны
+    const hostPos = {};             // view-позиции хост-тел для баз
+    const quietIds = new Set();     // базы групп: маркеры без имён
+    const shownSmall = new Set();   // id показанных малых тел
+    const moonHits = new Map();     // планета -> [{ m, md, mx, my, orbitPoly }]
 
-    // Хост-позиция тела по умолчанию — его собственные координаты.
     bodies.forEach(b => {
         if (b.kind === 'planet') hostPos['planet:' + b.p.name] = { x: b.x, y: b.y };
         if (b.kind === 'moon') hostPos['moon:' + b.p.name + ':' + b.m.n] = { x: b.x, y: b.y };
@@ -132,19 +179,16 @@ export function renderScene(ctx) {
 
     groups.forEach(g => {
         const rep = g.rep;
-
-        // Точкой рисуется только тело-представитель группы.
         if (rep.kind === 'moon') {
             if (!moonHits.has(rep.p)) moonHits.set(rep.p, []);
-            moonHits.get(rep.p).push({ m: rep.m, md: rep.md, mx: rep.x, my: rep.y });
+            moonHits.get(rep.p).push({
+                m: rep.m, md: rep.md, mx: rep.x, my: rep.y, orbitPoly: rep.orbitPoly
+            });
         }
         if (rep.kind === 'small') shownSmall.add(rep.id);
 
         if (g.members.length < 2) return;
 
-        // Скрытые тела группы «встают» в маркер представителя: базы на них
-        // рисуются у группы (bases.js по hostPos), а имена баз гасятся —
-        // они стоят в подписи группы (quietIds).
         g.members.forEach(m => {
             if (m.kind === 'moon' && m !== rep)
                 hostPos['moon:' + m.p.name + ':' + m.m.n] = { x: rep.x, y: rep.y };
@@ -152,29 +196,52 @@ export function renderScene(ctx) {
         });
     });
 
-    // === ОТРИСОВКА ===
-    // Малые тела (пояс, ОЗА, троянцы, кометы, дальние пояса) — под планетами:
-    // пыль и частицы всегда, именованные — только показанные.
-    hoverTargets.push(...drawSmallBodies(ctx, shownSmall));
+    // === ПОЛ ===
+    // Световое пятно и ореол звезды — до орбит; постоянные орбиты планет —
+    // тонкие эллипсы; пыль/пояс/пути комет — на полу.
+    drawStarFloor(ctx);
+    drawPlanetOrbits(ctx, zoom);
+    drawSmallBodiesFloor(ctx);
+    drawStarHalo(ctx);
 
-    // Солнце — первая hover-цель (проверяется последней, т.к. планеты поверх)
-    drawSun(ctx);
-    hoverTargets.push({ kind: 'sun', name: 'Солнце / Sun', x: 0, y: 0, r: SUN_R, moons: [] });
+    // Тени на полу — отдельным проходом, до всех сфер.
+    drawFloorShadows(ctx, groups, planetPos, zoom);
 
-    // Планеты-якоря и показанные луны (представители групп)
+    // === ТЕЛА ПО ГЛУБИНЕ ===
+    // Дальние (меньший view.y) — раньше; звезда участвует в сортировке.
+    const drawList = [];
     planets.forEach(p => {
         const { x, y } = planetPos.get(p);
-        if (p.rings) drawRings(ctx, x, y, p);
-        drawPlanetBody(ctx, x, y, p.r);
-        hoverTargets.push({ kind: 'planet', p, x, y, moons: moonHits.get(p) || [] });
+        drawList.push({ kind: 'planet', x, y, r: p.r, p });
     });
     groups.forEach(g => {
-        if (g.rep.kind === 'moon') drawMoonBody(ctx, g.rep.x, g.rep.y, g.rep.m.r);
+        const rep = g.rep;
+        if (rep.kind === 'moon' || rep.kind === 'small') {
+            drawList.push({ kind: rep.kind, x: rep.x, y: rep.y, r: rep.r, rep });
+        }
+    });
+    drawList.push({ kind: 'sun', x: 0, y: 0, r: SUN_R });
+
+    drawList.sort((a, b) => (a.y - b.y) || (b.r - a.r));
+
+    const smallTargets = new Map();
+    drawList.forEach(item => {
+        if (item.kind === 'planet') {
+            drawPlanet(ctx, item.x, item.y, item.p, zoom);
+        } else if (item.kind === 'moon') {
+            drawMoonBody(ctx, item.x, item.y, item.rep.m.r, item.rep.m.c, zoom);
+        } else if (item.kind === 'small') {
+            const t = drawSmallBody(ctx, item.rep.small);
+            if (t) smallTargets.set(item.rep.small.id, t);
+        } else if (item.kind === 'sun') {
+            drawSunCore(ctx);
+        }
     });
 
-    // Подписи групп: имена тел через запятую, затем базы на них
+    // Подписи групп: имена тел через запятую, затем базы на них. Подписаны все
+    // показанные тела — планеты, одиночные луны и малые тела: имя видно всегда,
+    // а не только при наведении (подсказка при наведении остаётся).
     groups.forEach(g => {
-        if (g.members.length < 2) return;
         const baseNames = [];
         g.members.forEach(m => m.bases.forEach(b => baseNames.push(b.name)));
         drawGroupLabel(ctx, g.rep.x, g.rep.y, {
@@ -183,14 +250,33 @@ export function renderScene(ctx) {
         }, zoom);
     });
 
-    // Звёздные базы (bases.js): маркеры, орбиты и превью выбора орбиты;
-    // базы групп (quietIds) — без имён: они в подписи группы
-    drawBases(ctx, hostPos, quietIds).forEach(t => {
-        t.p = planets.find(x => x.name === t.local.planet);
-        hoverTargets.push(t);
-    });
+    // Солнце — тоже подпись всегда.
+    drawSunLabel(ctx, zoom);
+
+    // Звёздные базы (bases.js): маркеры, орбиты и превью выбора орбиты.
+    const baseTargets = drawBases(ctx, hostPos, quietIds);
+    baseTargets.forEach(t => { t.p = planets.find(x => x.name === t.local.planet); });
 
     ctx.restore();
+
+    // === HOVER-ЦЕЛИ ===
+    // Порядок прежний и не зависит от порядка отрисовки: малые тела -> солнце
+    // -> планеты (с лунами) -> базы. findBodyAt идёт с конца.
+    small.forEach(s => {
+        if (!shownSmall.has(s.id)) return;
+        const t = smallTargets.get(s.id);
+        if (t) hoverTargets.push(t);
+    });
+    hoverTargets.push({ kind: 'sun', name: 'Солнце / Sun', x: 0, y: 0, r: SUN_R, moons: [] });
+    planets.forEach(p => {
+        const { x, y } = planetPos.get(p);
+        hoverTargets.push({
+            kind: 'planet', p, x, y, moons: moonHits.get(p) || [],
+            orbit: PLANET_ORBITS.get(p)
+        });
+    });
+    baseTargets.forEach(t => hoverTargets.push(t));
+
     return hoverTargets;
 }
 
@@ -205,79 +291,118 @@ function drawStars(ctx, time) {
     });
 }
 
+/** Световое пятно на полу под звездой (эллипс 2:1). */
+function drawStarFloor(ctx) {
+    ctx.save();
+    ctx.scale(1, ISO_K);
+    const r = SUN_R * 7.5;
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    g.addColorStop(0, 'rgba(255,206,122,0.22)');
+    g.addColorStop(0.55, 'rgba(255,157,60,0.06)');
+    g.addColorStop(1, 'rgba(255,157,60,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+/** Большой ореол звезды — над полом, под телами. */
+function drawStarHalo(ctx) {
+    glow(ctx, 0, 0, SUN_R * 5.2, '#ff9d3c', 0.34);
+    glow(ctx, 0, 0, SUN_R * 2.6, '#ffd27a', 0.28);
+}
+
+/** Постоянные орбиты планет: тонкий пунктирный эллипс/полилиния по Кеплеру. */
+function drawPlanetOrbits(ctx, zoom) {
+    ctx.save();
+    ctx.strokeStyle = COLORS.orbitPlanetFaint;
+    ctx.lineWidth = 1 / zoom;
+    ctx.setLineDash([2 / zoom, 7 / zoom]);
+    ctx.beginPath();
+    planets.forEach(p => strokePoly(ctx, PLANET_ORBITS.get(p)));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+}
+
+/** Тени на полу: планеты; показанные луны; показанные малые тела.
+ *  Наклонные орбиты поднимают тело над эклиптикой — тень остаётся на полу
+ *  (floorY), поэтому видно высоту. */
+function drawFloorShadows(ctx, groups, planetPos, zoom) {
+    planets.forEach(p => {
+        const { x, floorY } = planetPos.get(p);
+        shadow(ctx, x, floorY, p.r, zoom);
+    });
+    groups.forEach(g => {
+        const rep = g.rep;
+        const fy = rep.floorY ?? rep.y;
+        if (rep.kind === 'moon' && rep.m.r >= 1.5) shadow(ctx, rep.x, fy, rep.m.r, zoom);
+        if (rep.kind === 'small' && rep.r >= 1.5) shadow(ctx, rep.x, fy, rep.r, zoom);
+    });
+}
+
 // --- Тела ----------------------------------------------------------------------
 
-/** Солнце: жёлтая заливка и самая толстая обводка. */
-function drawSun(ctx) {
-    const z = state.zoom;
-    ctx.fillStyle = COLORS.sun;
-    circle(ctx, 0, 0, SUN_R);
-    ctx.fill();
-
-    ctx.strokeStyle = COLORS.sunStroke;
-    ctx.lineWidth = STROKE.sun / z;
-    circle(ctx, 0, 0, SUN_R);
-    ctx.stroke();
+/** Ядро солнца — сфера; ореол и пятно света нарисованы в слое пола. */
+function drawSunCore(ctx) {
+    sunSphere(ctx, 0, 0, SUN_R);
 }
 
-/** Планета: прозрачная заливка — видна только обводка, у всех одна толщина. */
-function drawPlanetBody(ctx, x, y, r) {
-    const z = state.zoom;
-    ctx.strokeStyle = COLORS.planetStroke;
-    ctx.lineWidth = STROKE.planet / z;
-    circle(ctx, x, y, r);
-    ctx.stroke();
+/** Подпись Солнца — постоянная, как у остальных тел. */
+function drawSunLabel(ctx, zoom) {
+    drawGroupLabel(ctx, SUN_R * 0.6, 0, { label: 'Солнце / Sun', baseLabel: null }, zoom);
 }
 
-/** Кольца Сатурна: два сплюснутых эллипса под наклоном. */
-function drawRings(ctx, x, y, p) {
-    const z = state.zoom;
+/** Планета: сфера + кольца Сатурна (задняя половина до сферы, передняя после). */
+function drawPlanet(ctx, x, y, p, zoom) {
+    if (p.rings) drawRingHalf(ctx, x, y, p, true, zoom);
+    sphere(ctx, x, y, p.r, p.color, { zoom });
+    if (p.rings) drawRingHalf(ctx, x, y, p, false, zoom);
+}
+
+/** Половина кольца Сатурна: back — дальняя (верхняя), иначе передняя. */
+function drawRingHalf(ctx, x, y, p, back, zoom) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(0.4);
     ctx.scale(1, 0.3);
 
-    ctx.strokeStyle = 'rgba(200,200,200,0.35)';
-    ctx.lineWidth = 4 / z;
-    circle(ctx, 0, 0, p.r * 2.2);
+    const a0 = back ? Math.PI : 0;
+    const a1 = back ? Math.PI * 2 : Math.PI;
+
+    ctx.strokeStyle = 'rgba(200,200,200,0.30)';
+    ctx.lineWidth = 4 / zoom;
+    ctx.beginPath();
+    ctx.arc(0, 0, p.r * 2.2, a0, a1);
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(220,220,220,0.5)';
-    ctx.lineWidth = 3 / z;
-    circle(ctx, 0, 0, p.r * 1.7);
+    ctx.strokeStyle = 'rgba(220,220,220,0.46)';
+    ctx.lineWidth = 3 / zoom;
+    ctx.beginPath();
+    ctx.arc(0, 0, p.r * 1.7, a0, a1);
     ctx.stroke();
 
     ctx.restore();
 }
 
-/** Луна: плоский серый круг с самой тонкой обводкой. */
-function drawMoonBody(ctx, x, y, r) {
-    const z = state.zoom;
-    ctx.fillStyle = COLORS.moon;
-    circle(ctx, x, y, r);
-    ctx.fill();
-
-    ctx.strokeStyle = COLORS.moonStroke;
-    ctx.lineWidth = STROKE.moon / z;
-    circle(ctx, x, y, r);
-    ctx.stroke();
+/** Луна: маленькая сфера; тень нарисована в слое пола. */
+function drawMoonBody(ctx, x, y, r, color, zoom) {
+    sphere(ctx, x, y, r, color || COLORS.moon, { zoom, rimAlpha: 0.12 });
 }
 
 /**
  * Подпись группы тел у её представителя (scene.js clusterBodies) — общая для
- * всех тел: две строки, имена тел группы и базы на них. Стиль подсказки hover:
- * тень 1 px, кегль постоянный на экране (10 / zoom). Первая строка белая,
- * вторая — цианом (цвет баз). Место подписи подбирает раскладка кадра
- * (scene.js placeLabel): подписи не перекрываются, сдвигаясь по вертикали.
+ * всех тел: две строки, имена тел группы и базы на них.
  */
 function drawGroupLabel(ctx, mx, my, group, zoom) {
     const lines = [{ text: group.label, color: COLORS.tooltip }];
     if (group.baseLabel) lines.push({ text: group.baseLabel, color: COLORS.base });
 
     ctx.font = `${10 / zoom}px monospace`;
-    const lx = mx + 6 / zoom;              // подпись — справа от маркера
-    const lh = 12 / zoom;                  // межстрочный шаг
-    const top = my - 14 / zoom;            // верх коробки раскладки
+    const lx = mx + 6 / zoom;
+    const lh = 12 / zoom;
+    const top = my - 14 / zoom;
     const w = Math.max(...lines.map(l => ctx.measureText(l.text).width));
     const h = (lines.length - 1) * lh + 14 / zoom;
     const off = placeLabel(lx, top, w, h);
@@ -295,8 +420,10 @@ function groupLine(ctx, text, x, y, color, zoom) {
     ctx.fillText(text, x, y);
 }
 
-/** Начать путь-окружность (без fill/stroke — их выбирает вызывающий). */
-function circle(ctx, x, y, r) {
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+/** Начать и замкнуть путь по плоскому массиву x0,y0,x1,y1… (view). */
+function strokePoly(ctx, poly) {
+    if (!poly || poly.length < 4) return;
+    ctx.moveTo(poly[0], poly[1]);
+    for (let i = 2; i < poly.length; i += 2) ctx.lineTo(poly[i], poly[i + 1]);
+    ctx.closePath();
 }

@@ -4,24 +4,36 @@
 // средние на эпоху J2000 (градусы) — отсюда реалистичные взаимные положения.
 // =============================================================================
 
-// Планеты. r и dist — условные единицы мира (не в масштабе, но порядок верный).
+// Планеты. r и dist — условные единицы мира (dist — сжатая большая полуось,
+// порядок и относительные расстояния верные). l0 — средняя долгота на J2000,
+// e — реальный эксцентриситет, peri — долгота перигелия, inc/node — реальное
+// наклонение и долгота восходящего узла к плоскости эклиптики (J2000).
+// Позиция считается уравнением Кеплера (math.js keplerPos3), поэтому форма,
+// наклон и скорость движения соответствуют реальным элементам.
 // rings — рисовать кольца (Сатурн). type оставлен для совместимости.
 // ru — русское имя для подписей на карте и в карточках (ui.js).
 export const planets = [
-    { name: 'Mercury', ru: 'Меркурий', color: '#b5b5b5', r: 4,  dist: 70,  period: 87.969,   l0: 252.251, type: 'rocky' },
-    { name: 'Venus',   ru: 'Венера',   color: '#e8cda0', r: 7,  dist: 110, period: 224.701,  l0: 181.980, type: 'rocky' },
-    { name: 'Earth',   ru: 'Земля',    color: '#4488ff', r: 8,  dist: 160, period: 365.256,  l0: 100.464, type: 'earth' },
-    { name: 'Mars',    ru: 'Марс',     color: '#c1440e', r: 5,  dist: 220, period: 686.980,  l0: 355.453, type: 'rocky' },
-    { name: 'Jupiter', ru: 'Юпитер',   color: '#c88b3a', r: 22, dist: 380, period: 4332.589, l0: 34.396,  type: 'gas' },
-    { name: 'Saturn',  ru: 'Сатурн',   color: '#e8d191', r: 18, dist: 520, period: 10759.22, l0: 49.954,  type: 'gas', rings: true },
-    { name: 'Uranus',  ru: 'Уран',     color: '#7de8e8', r: 12, dist: 660, period: 30685.4,  l0: 313.238, type: 'ice' },
-    { name: 'Neptune', ru: 'Нептун',   color: '#3f54ba', r: 12, dist: 780, period: 60189.0,  l0: 304.880, type: 'ice' }
+    { name: 'Mercury', ru: 'Меркурий', color: '#b5b5b5', r: 4,  dist: 70,  period: 87.969,   l0: 252.251, e: 0.205636, peri: 77.458,  inc: 7.005,  node: 48.331,  type: 'rocky' },
+    { name: 'Venus',   ru: 'Венера',   color: '#e8cda0', r: 7,  dist: 110, period: 224.701,  l0: 181.980, e: 0.006777, peri: 131.602, inc: 3.395,  node: 76.680,  type: 'rocky' },
+    { name: 'Earth',   ru: 'Земля',    color: '#4488ff', r: 8,  dist: 160, period: 365.256,  l0: 100.464, e: 0.016711, peri: 102.938, inc: 0.000,  node: 0.000,   type: 'earth' },
+    { name: 'Mars',    ru: 'Марс',     color: '#c1440e', r: 5,  dist: 220, period: 686.980,  l0: 355.453, e: 0.093394, peri: 336.041, inc: 1.850,  node: 49.579,  type: 'rocky' },
+    { name: 'Jupiter', ru: 'Юпитер',   color: '#c88b3a', r: 22, dist: 380, period: 4332.589, l0: 34.396,  e: 0.048386, peri: 14.728,  inc: 1.304,  node: 100.464, type: 'gas' },
+    { name: 'Saturn',  ru: 'Сатурн',   color: '#e8d191', r: 18, dist: 520, period: 10759.22, l0: 49.954,  e: 0.053862, peri: 92.599,  inc: 2.488,  node: 113.665, type: 'gas', rings: true },
+    { name: 'Uranus',  ru: 'Уран',     color: '#7de8e8', r: 12, dist: 660, period: 30685.4,  l0: 313.238, e: 0.047257, peri: 170.954, inc: 0.773,  node: 74.006,  type: 'ice' },
+    { name: 'Neptune', ru: 'Нептун',   color: '#3f54ba', r: 12, dist: 780, period: 60189.0,  l0: 304.880, e: 0.008590, peri: 44.965,  inc: 1.770,  node: 131.784, type: 'ice' }
 ];
+
+/** Средняя аномалия планеты на J2000: L0 − долгота перигелия. */
+export function planetM0(p) {
+    return p.l0 - p.peri;
+}
 
 // Луна Земли: сидерический период 27.32 суток.
 export const moonDist = 22;          // радиус орбиты Луны от Земли
 export const moonPeriod = 27.321661; // суток
 export const moonL0 = 218.32;        // средняя долгота на J2000, градусы
+export const moonInc = 5.145;        // наклонение к эклиптике, градусы
+export const moonNode = 125.08;      // долгота восходящего узла, градусы
 // Базы игрока: на радиусе baseOrbitRadius виток занимает basePeriod суток,
 // дальше период растёт по закону Кеплера (bases.js); на этом же радиусе
 // рождается стартовая база LUNA-ORBIT.
@@ -35,48 +47,61 @@ export const basePeriod = 1;         // суток на виток (на рад�
  * (коридор радиусов орбит баз: база не должна пересекать луну).
  */
 export function moonOrbitRadius(p, i) {
-    return p.r + 12 + i * 7;
+    const list = moonsByPlanet[p.name] || [];
+    const m = list[i];
+    if (!m || !m.a) return p.r + 12 + i * 7;
+
+    // Реальные большие полуоси лун сжаты логарифмически, как и вся карта:
+    // порядок и относительный размах сохранены, но Ио и Гималия не разлетаются
+    // на сотни единиц. Внутренняя луна — p.r + 12, внешняя — p.r + 40.
+    const amin = Math.min(...list.map(x => x.a));
+    const amax = Math.max(...list.map(x => x.a));
+    const t = Math.log(m.a / amin + 1) / Math.log(amax / amin + 1);
+    return p.r + 12 + t * 28;
 }
 
-// Главные луны других планет: период (сутки), радиус отрисовки r, цвет c,
-// стартовая фаза phase (градусы, произвольная). Порядок списка = порядок
-// орбит луны от планеты (moonOrbitRadius i-й луны); что показано при текущем
-// зуме, решает слипание тел по экранному расстоянию (scene.js clusterBodies),
-// а не порядок списка.
+// Главные луны других планет: период (сутки), реальная большая полуось a (км),
+// радиус отрисовки r, цвет c, стартовая фаза phase (градусы, произвольная).
+// inc/node — наклонение и узел орбиты луны относительно эклиптики (J2000):
+// у регулярных лун это плоскость экватора планеты (поэтому у Урана ~98°,
+// у Сатурна ~26.7°), у нерегулярных — собственное наклонение.
+// moonOrbitRadius ставит луны по реальному a (логарифмическое сжатие), поэтому
+// порядок списка не важен; что показано при текущем зуме, решает слипание тел
+// по экранному расстоянию (scene.js clusterBodies).
 export const moonsByPlanet = {
     Mars: [
-        { n: 'Phobos',   period: 0.3189, r: 1.5, c: '#9c8f84', phase: 40 },
-        { n: 'Deimos',   period: 1.2624, r: 1.3, c: '#b3a89e', phase: 150 }
+        { n: 'Phobos',   period: 0.3189, a: 9376,     r: 1.5, c: '#9c8f84', phase: 40,  inc: 26.04, node: 125.08 },
+        { n: 'Deimos',   period: 1.2624, a: 23463,    r: 1.3, c: '#b3a89e', phase: 150, inc: 26.58, node: 125.08 }
     ],
     Jupiter: [
-        { n: 'Io',       period: 1.769,  r: 2.3, c: '#d8c26a', phase: 70 },
-        { n: 'Europa',   period: 3.551,  r: 2.0, c: '#cbb8a0', phase: 190 },
-        { n: 'Ganymede', period: 7.155,  r: 2.7, c: '#9a8f85', phase: 300 },
-        { n: 'Callisto', period: 16.689, r: 2.5, c: '#7d746c', phase: 20 },
-        { n: 'Amalthea', period: 0.498,  r: 1.2, c: '#b06a4a', phase: 130 },
-        { n: 'Himalia',  period: 250.6,  r: 1.2, c: '#8a8078', phase: 45 }
+        { n: 'Io',       period: 1.769,  a: 421700,   r: 2.3, c: '#d8c26a', phase: 70,  inc: 0.04,  node: 100.46 },
+        { n: 'Europa',   period: 3.551,  a: 671034,   r: 2.0, c: '#cbb8a0', phase: 190, inc: 0.47,  node: 100.46 },
+        { n: 'Ganymede', period: 7.155,  a: 1070412,  r: 2.7, c: '#9a8f85', phase: 300, inc: 0.20,  node: 100.46 },
+        { n: 'Callisto', period: 16.689, a: 1882709,  r: 2.5, c: '#7d746c', phase: 20,  inc: 0.19,  node: 100.46 },
+        { n: 'Amalthea', period: 0.498,  a: 181365,   r: 1.2, c: '#b06a4a', phase: 130, inc: 0.38,  node: 100.46 },
+        { n: 'Himalia',  period: 250.6,  a: 11460000, r: 1.2, c: '#8a8078', phase: 45,  inc: 27.50, node: 40.00 }
     ],
     Saturn: [
-        { n: 'Mimas',    period: 0.942,  r: 1.5, c: '#b8bcc2', phase: 110 },
-        { n: 'Enceladus',period: 1.370,  r: 1.7, c: '#d9dee3', phase: 250 },
-        { n: 'Rhea',     period: 4.518,  r: 1.9, c: '#a8adb5', phase: 330 },
-        { n: 'Titan',    period: 15.945, r: 2.9, c: '#c79b5a', phase: 80 },
-        { n: 'Dione',    period: 2.737,  r: 1.6, c: '#c2c7cd', phase: 15 },
-        { n: 'Tethys',   period: 1.888,  r: 1.6, c: '#ccd1d6', phase: 200 },
-        { n: 'Iapetus',  period: 79.32,  r: 1.7, c: '#8f8478', phase: 300 }
+        { n: 'Mimas',    period: 0.942,  a: 185539,   r: 1.5, c: '#b8bcc2', phase: 110, inc: 26.73, node: 113.67 },
+        { n: 'Enceladus',period: 1.370,  a: 238037,   r: 1.7, c: '#d9dee3', phase: 250, inc: 26.73, node: 113.67 },
+        { n: 'Rhea',     period: 4.518,  a: 527108,   r: 1.9, c: '#a8adb5', phase: 330, inc: 26.73, node: 113.67 },
+        { n: 'Titan',    period: 15.945, a: 1221870,  r: 2.9, c: '#c79b5a', phase: 80,  inc: 26.73, node: 113.67 },
+        { n: 'Dione',    period: 2.737,  a: 377396,   r: 1.6, c: '#c2c7cd', phase: 15,  inc: 26.73, node: 113.67 },
+        { n: 'Tethys',   period: 1.888,  a: 294619,   r: 1.6, c: '#ccd1d6', phase: 200, inc: 26.73, node: 113.67 },
+        { n: 'Iapetus',  period: 79.32,  a: 3560820,  r: 1.7, c: '#8f8478', phase: 300, inc: 15.47, node: 80.00 }
     ],
     Uranus: [
-        { n: 'Miranda',  period: 1.413,  r: 1.4, c: '#a9b3b8', phase: 210 },
-        { n: 'Ariel',    period: 2.520,  r: 1.7, c: '#b6c0c4', phase: 20 },
-        { n: 'Umbriel',  period: 4.144,  r: 1.5, c: '#7e888d', phase: 95 },
-        { n: 'Titania',  period: 8.706,  r: 2.1, c: '#9aa5ab', phase: 140 },
-        { n: 'Oberon',   period: 13.463, r: 2.0, c: '#8b969c', phase: 260 },
-        { n: 'Puck',     period: 0.762,  r: 1.1, c: '#9c9a94', phase: 175 }
+        { n: 'Miranda',  period: 1.413,  a: 129390,   r: 1.4, c: '#a9b3b8', phase: 210, inc: 97.77, node: 74.01 },
+        { n: 'Ariel',    period: 2.520,  a: 190900,   r: 1.7, c: '#b6c0c4', phase: 20,  inc: 97.77, node: 74.01 },
+        { n: 'Umbriel',  period: 4.144,  a: 266000,   r: 1.5, c: '#7e888d', phase: 95,  inc: 97.77, node: 74.01 },
+        { n: 'Titania',  period: 8.706,  a: 436300,   r: 2.1, c: '#9aa5ab', phase: 140, inc: 97.77, node: 74.01 },
+        { n: 'Oberon',   period: 13.463, a: 583500,   r: 2.0, c: '#8b969c', phase: 260, inc: 97.77, node: 74.01 },
+        { n: 'Puck',     period: 0.762,  a: 86004,    r: 1.1, c: '#9c9a94', phase: 175, inc: 97.77, node: 74.01 }
     ],
     Neptune: [
-        { n: 'Proteus',  period: 1.122,  r: 1.5, c: '#8f9aa3', phase: 310 },
-        { n: 'Triton',   period: 5.877,  r: 2.3, c: '#c3cdd4', phase: 100 },
-        { n: 'Nereid',   period: 360.1,  r: 1.2, c: '#9aa2ab', phase: 220 }
+        { n: 'Proteus',  period: 1.122,  r: 1.5, c: '#8f9aa3', phase: 310, inc: 28.32,  node: 131.78 },
+        { n: 'Triton',   period: 5.877,  r: 2.3, c: '#c3cdd4', phase: 100, inc: 156.88, node: 177.40 },
+        { n: 'Nereid',   period: 360.1,  r: 1.2, c: '#9aa2ab', phase: 220, inc: 35.00,  node: 131.78 }
     ]
 };
 
@@ -112,10 +137,10 @@ export const AU_ANCHORS = [
 // m0 — средняя аномалия на J2000 (град., произвольная фаза карты),
 // dia — диаметр (км). Период считается по третьему закону Кеплера.
 export const beltNotables = [
-    { n: 'Ceres',  ru: 'Церера',  a: 2.7675, e: 0.0785, peri: 73.6,  m0: 95,  dia: 939, type: 'dwarf' },
-    { n: 'Vesta',  ru: 'Веста',   a: 2.3615, e: 0.0887, peri: 151.2, m0: 210, dia: 525 },
-    { n: 'Pallas', ru: 'Паллада', a: 2.7727, e: 0.2313, peri: 310.0, m0: 42,  dia: 512 },
-    { n: 'Hygiea', ru: 'Гигея',   a: 3.1395, e: 0.1067, peri: 313.2, m0: 152, dia: 434 }
+    { n: 'Ceres',  ru: 'Церера',  a: 2.7675, e: 0.0785, peri: 73.6,  m0: 95,  dia: 939, inc: 10.59, node: 80.3,  type: 'dwarf' },
+    { n: 'Vesta',  ru: 'Веста',   a: 2.3615, e: 0.0887, peri: 151.2, m0: 210, dia: 525, inc: 7.14,  node: 103.8 },
+    { n: 'Pallas', ru: 'Паллада', a: 2.7727, e: 0.2313, peri: 310.0, m0: 42,  dia: 512, inc: 34.84, node: 173.0 },
+    { n: 'Hygiea', ru: 'Гигея',   a: 3.1395, e: 0.1067, peri: 313.2, m0: 152, dia: 434, inc: 3.83,  node: 283.2 }
 ];
 
 // Околоземные астероиды (реальные элементы; m0 — произвольная фаза карты).
@@ -123,20 +148,20 @@ export const beltNotables = [
 // пересекают; apollo — пересекают орбиту Земли, a > 1 а.е.; aten — пересекают,
 // a < 1 а.е. Тутатис — «переходный»: афелий 4.1 а.е. — заходит в пояс.
 export const neas = [
-    { n: 'Eros',      ru: 'Эрос',      group: 'amor',   a: 1.4582, e: 0.2226, peri: 178.9, m0: 250, dia: 16.8 },
-    { n: 'Amor',      ru: 'Амур',      group: 'amor',   a: 1.9197, e: 0.4351, peri: 26.7,  m0: 120, dia: 1.0 },
-    { n: 'Ganymed',   ru: 'Ганимед',   group: 'amor',   a: 2.6632, e: 0.5339, peri: 132.4, m0: 300, dia: 35 },
-    { n: 'Apollo',    ru: 'Аполлон',   group: 'apollo', a: 1.4704, e: 0.5599, peri: 285.7, m0: 60,  dia: 1.5 },
-    { n: 'Bennu',     ru: 'Бенну',     group: 'apollo', a: 1.1264, e: 0.2038, peri: 66.2,  m0: 101, dia: 0.49 },
-    { n: 'Itokawa',   ru: 'Итокава',   group: 'apollo', a: 1.3241, e: 0.2801, peri: 162.8, m0: 312, dia: 0.33 },
-    { n: 'Toutatis',  ru: 'Тутатис',   group: 'apollo', a: 2.5344, e: 0.6299, peri: 278.8, m0: 190, dia: 4.5 },
-    { n: 'Didymos',   ru: 'Дидим',     group: 'apollo', a: 1.6444, e: 0.3835, peri: 319.3, m0: 340, dia: 0.78 },
-    { n: 'Icarus',    ru: 'Икар',      group: 'apollo', a: 1.0780, e: 0.8265, peri: 31.5,  m0: 210, dia: 1.4 },
-    { n: 'Nereus',    ru: 'Нерей',     group: 'apollo', a: 1.4892, e: 0.3603, peri: 158.0, m0: 15,  dia: 0.33 },
-    { n: 'Aten',      ru: 'Атон',      group: 'aten',   a: 0.9668, e: 0.1826, peri: 147.5, m0: 280, dia: 1.1 },
-    { n: 'Apophis',   ru: 'Апофис',    group: 'aten',   a: 0.9224, e: 0.1914, peri: 126.4, m0: 60,  dia: 0.37 },
-    { n: 'Ra-Shalom', ru: 'Ра-Шалом',  group: 'aten',   a: 0.8322, e: 0.4364, peri: 356.0, m0: 130, dia: 2.3 },
-    { n: 'Cruithne',  ru: 'Круитни',   group: 'aten',   a: 0.9978, e: 0.5148, peri: 12.0,  m0: 220, dia: 5 }
+    { n: 'Eros',      ru: 'Эрос',      group: 'amor',   a: 1.4582, e: 0.2226, peri: 178.9, m0: 250, dia: 16.8, inc: 10.83, node: 304.3 },
+    { n: 'Amor',      ru: 'Амур',      group: 'amor',   a: 1.9197, e: 0.4351, peri: 26.7,  m0: 120, dia: 1.0,  inc: 11.00, node: 171.3 },
+    { n: 'Ganymed',   ru: 'Ганимед',   group: 'amor',   a: 2.6632, e: 0.5339, peri: 132.4, m0: 300, dia: 35,   inc: 26.70, node: 215.5 },
+    { n: 'Apollo',    ru: 'Аполлон',   group: 'apollo', a: 1.4704, e: 0.5599, peri: 285.7, m0: 60,  dia: 1.5,  inc: 6.35,  node: 35.5  },
+    { n: 'Bennu',     ru: 'Бенну',     group: 'apollo', a: 1.1264, e: 0.2038, peri: 66.2,  m0: 101, dia: 0.49, inc: 6.00,  node: 2.0   },
+    { n: 'Itokawa',   ru: 'Итокава',   group: 'apollo', a: 1.3241, e: 0.2801, peri: 162.8, m0: 312, dia: 0.33, inc: 1.62,  node: 69.1  },
+    { n: 'Toutatis',  ru: 'Тутатис',   group: 'apollo', a: 2.5344, e: 0.6299, peri: 278.8, m0: 190, dia: 4.5,  inc: 0.45,  node: 124.3 },
+    { n: 'Didymos',   ru: 'Дидим',     group: 'apollo', a: 1.6444, e: 0.3835, peri: 319.3, m0: 340, dia: 0.78, inc: 3.40,  node: 73.0  },
+    { n: 'Icarus',    ru: 'Икар',      group: 'apollo', a: 1.0780, e: 0.8265, peri: 31.5,  m0: 210, dia: 1.4,  inc: 22.80, node: 88.0  },
+    { n: 'Nereus',    ru: 'Нерей',     group: 'apollo', a: 1.4892, e: 0.3603, peri: 158.0, m0: 15,  dia: 0.33, inc: 1.43,  node: 159.5 },
+    { n: 'Aten',      ru: 'Атон',      group: 'aten',   a: 0.9668, e: 0.1826, peri: 147.5, m0: 280, dia: 1.1,  inc: 6.40,  node: 122.9 },
+    { n: 'Apophis',   ru: 'Апофис',    group: 'aten',   a: 0.9224, e: 0.1914, peri: 126.4, m0: 60,  dia: 0.37, inc: 3.34,  node: 204.4 },
+    { n: 'Ra-Shalom', ru: 'Ра-Шалом',  group: 'aten',   a: 0.8322, e: 0.4364, peri: 356.0, m0: 130, dia: 2.3,  inc: 2.50,  node: 169.9 },
+    { n: 'Cruithne',  ru: 'Круитни',   group: 'aten',   a: 0.9978, e: 0.5148, peri: 12.0,  m0: 220, dia: 5,    inc: 19.80, node: 126.2 }
 ];
 
 // Именованные троянцы Юпитера: camp 4 — L4 (впереди Юпитера), 5 — L5 (позади);
@@ -153,9 +178,11 @@ export const trojanNames = [
 // Энке и Хейла—Боппа — у перигелия. shower — связанный метеорный поток,
 // src — источник (oort — облако Оорта, kuiper — пояс Койпера),
 // tailK — множитель длины хвоста (0.75–1.0, у крупных больше).
+// inc/node — реальное наклонение и долгота узла: по ним комета поднимается
+// над плоскостью карты и её орбита действительно наклонена к эклиптике.
 export const comets = [
-    { n: '1P/Halley',        ru: 'Галлея',         a: 17.834, e: 0.9671, peri: 111.3, m0: 234, dia: 11, shower: 'Ориониды · Эта-Аквариды', src: 'oort',   tailK: 1.0 },
-    { n: '2P/Encke',         ru: 'Энке',           a: 2.2151, e: 0.8483, peri: 187.6, m0: 323, dia: 4.8, shower: 'Тауриды',                src: 'kuiper', tailK: 0.75 },
-    { n: '109P/Swift-Tuttle', ru: 'Свифта—Таттла', a: 26.09,  e: 0.9633, peri: 113.4, m0: 289, dia: 26, shower: 'Персеиды',               src: 'oort',   tailK: 1.0 },
-    { n: 'C/1995 O1',        ru: 'Хейла—Боппа',    a: 186.0,  e: 0.9951, peri: 130.6, m0: 0,   dia: 60, shower: null,                     src: 'oort',   tailK: 0.9 }
+    { n: '1P/Halley',        ru: 'Галлея',         a: 17.834, e: 0.9671, peri: 111.3, m0: 234, dia: 11, inc: 162.26, node: 58.42,  shower: 'Ориониды · Эта-Аквариды', src: 'oort',   tailK: 1.0 },
+    { n: '2P/Encke',         ru: 'Энке',           a: 2.2151, e: 0.8483, peri: 187.6, m0: 323, dia: 4.8, inc: 11.78,  node: 334.57, shower: 'Тауриды',                src: 'kuiper', tailK: 0.75 },
+    { n: '109P/Swift-Tuttle', ru: 'Свифта—Таттла', a: 26.09,  e: 0.9633, peri: 113.4, m0: 289, dia: 26, inc: 113.45, node: 139.40, shower: 'Персеиды',               src: 'oort',   tailK: 1.0 },
+    { n: 'C/1995 O1',        ru: 'Хейла—Боппа',    a: 186.0,  e: 0.9951, peri: 130.6, m0: 0,   dia: 60, inc: 89.43,  node: 282.47, shower: null,                     src: 'oort',   tailK: 0.9 }
 ];

@@ -45,7 +45,11 @@ export const MERGE_PX = 50;
  * Якоря (anchor: планеты и солнце) в чужую группу не входят никогда: иначе их
  * точки мерцали бы, входя и выходя из групп по мере обхода орбит.
  *
- * @param {Array} bodies тела кадра с мировыми x, y: { anchor, x, y, ... }
+ * Группируются только тела одной системы (system: имя планеты у планеты и её
+ * лун, null у малых тел). Иначе луна у Земли могла «прилипнуть» к пролетавшему
+ * астероиду и потерять подпись/выбор, а малые тела — к чужой планете.
+ *
+ * @param {Array} bodies тела кадра с мировыми x, y: { anchor, system, x, y, ... }
  * @param {number} zoom
  * @returns {Array} группы { rep, members }: members включает представителя
  *                  (members[0] === rep), остальные тела группы скрыты — их
@@ -60,6 +64,7 @@ export function clusterBodies(bodies, zoom) {
         if (!b.anchor) {
             let host = null, best = Infinity;
             for (const g of groups) {
+                if ((g.rep.system || null) !== (b.system || null)) continue;
                 const dx = b.x - g.rep.x, dy = b.y - g.rep.y;
                 const d2 = dx * dx + dy * dy;
                 if (d2 < best) { best = d2; host = g; }

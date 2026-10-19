@@ -624,7 +624,7 @@ function newBaseInfoHTML(b) {
         : 'планета ' + (RU[b.planet] || b.planet);
     const removing = b.status === 'removing';   // идёт разбор: имя краснеет, под ним полоска прогресса, кнопки выключены
     const fleet = !!b.fleet;    // стартовая LUNA-ORBIT: в карточке — купленные корабли
-    return '<div class="obj-title' + (removing ? ' danger' : '') + '"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(0,255,255,.6)"></span>' +
+    return '<div class="obj-title' + (removing ? ' danger' : '') + '"><span class="dot" style="background:' + COLORS.base + ';box-shadow:0 0 8px rgba(53,232,216,.6)"></span>' +
             '<strong>База ' + b.name + '</strong></div>' +
         (removing ? removalBarHTML(b) : '') +
         '<div class="obj-kind">Звёздная база · ' + host + '</div>' +

@@ -97,9 +97,12 @@ export function periodFromA(a) {
  * @param {number} m0   средняя аномалия на J2000, градусы
  * @param {number} T    период, сутки
  * @param {number} t    симуляционное время, сутки от J2000
+ * @param {Function} [mapDist] перевод радиуса в единицы карты; по умолчанию
+ *        а.е. -> условные единицы (auToDist). Для планет с уже сжатым
+ *        радиусом p.dist передаётся тождественная функция.
  * @returns {{x: number, y: number, rAu: number}} единицы мира + радиус, а.е.
  */
-export function keplerPos(a, e, peri, m0, T, t) {
+export function keplerPos(a, e, peri, m0, T, t, mapDist = auToDist) {
     let turns = (m0 / 360 + t / T) % 1;
     if (turns < 0) turns += 1;
     const M = turns * 2 * Math.PI;
@@ -111,6 +114,71 @@ export function keplerPos(a, e, peri, m0, T, t) {
     const nu = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
     const rAu = a * (1 - e * Math.cos(E));
     const th = nu + peri * Math.PI / 180;
-    const r = auToDist(rAu);
+    const r = mapDist(rAu);
     return { x: Math.cos(th) * r, y: -Math.sin(th) * r, rAu };
+}
+
+/** Градусы -> радианы для орбитальных элементов. */
+const ORBIT_RAD = Math.PI / 180;
+
+/**
+ * Точка на орбите с наклонением. lon — долгота в плоскости эклиптики
+ * (радианы), inc — наклонение, node — долгота восходящего узла (градусы).
+ * Возвращает уже 3D-точку: x, y (вниз), z (высота над эклиптикой).
+ */
+export function orbitPoint3(radius, lon, incDeg = 0, nodeDeg = 0) {
+    const inc = incDeg * ORBIT_RAD;
+    const node = nodeDeg * ORBIT_RAD;
+    const u = lon - node;                 // аргумент широты от узла
+    const cu = Math.cos(u), su = Math.sin(u);
+    const ci = Math.cos(inc), si = Math.sin(inc);
+    const co = Math.cos(node), so = Math.sin(node);
+
+    // Поворот орбитальной плоскости: Rz(node) * Rx(inc) * Rz(-node),
+    // затем перевод в экранные «y вниз».
+    return {
+        x: radius * (co * cu - so * su * ci),
+        y: -radius * (so * cu + co * su * ci),
+        z: radius * su * si
+    };
+}
+
+/**
+ * Позиция тела на наклонной орбите: те же элементы, что у keplerPos, плюс
+ * реальные inc/node. Плоский случай (inc = node = 0) совпадает с keplerPos.
+ * @returns {{x: number, y: number, z: number, rAu: number}}
+ */
+export function keplerPos3(a, e, peri, m0, T, t, mapDist = auToDist, inc = 0, node = 0) {
+    const flat = keplerPos(a, e, peri, m0, T, t, mapDist);
+    const r = Math.hypot(flat.x, flat.y);
+    const lon = Math.atan2(-flat.y, flat.x);
+    return Object.assign(orbitPoint3(r, lon, inc, node), { rAu: flat.rAu });
+}
+
+/**
+ * Замкнутая полилиния орбиты по элементам: плоский массив x0, y0, x1, y1…
+ * (сырые единицы карты). Нужна для эллиптических орбит, где descriptor
+ * {a,b,rot} после проекции уже неудобен.
+ * @param {Function} [mapDist] как у keplerPos
+ */
+export function keplerPoly(a, e, peri, m0, T, steps = 128, mapDist = auToDist) {
+    const pts = [];
+    for (let k = 0; k <= steps; k++) {
+        const pos = keplerPos(a, e, peri, m0, T, k * T / steps, mapDist);
+        pts.push(pos.x, pos.y);
+    }
+    return pts;
+}
+
+/**
+ * То же, но с наклонением: x0,y0,z0,x1,y1,z1… (сырые единицы карты).
+ * @param {Function} [mapDist] как у keplerPos
+ */
+export function keplerPoly3(a, e, peri, m0, T, steps = 128, mapDist = auToDist, inc = 0, node = 0) {
+    const pts = [];
+    for (let k = 0; k <= steps; k++) {
+        const pos = keplerPos3(a, e, peri, m0, T, k * T / steps, mapDist, inc, node);
+        pts.push(pos.x, pos.y, pos.z);
+    }
+    return pts;
 }

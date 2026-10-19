@@ -46,11 +46,13 @@
 
 import { state } from './state.js';
 import { screenToWorld } from './math.js';
-import { COLORS, SUN_R } from './config.js';
+import { COLORS, SUN_R, ISO_K, LIFT } from './config.js';
 import { planets, moonsByPlanet, moonDist, baseOrbitRadius, basePeriod, moonOrbitRadius } from './data.js';
 import { BASE_NAMES } from './bases_name.js';
 import { archiveBase } from './bases_removed.js';
 import { placeLabel } from './scene.js';
+import { orbitEllipsePath, rawAngle } from './iso.js';
+import { diamond, glow } from './paint.js';
 
 const STORAGE_KEY = 'galaxy_space_bases_v1';
 const NAMES_KEY = 'galaxy_space_base_names_v1';   // реестр имён новых баз
@@ -555,8 +557,15 @@ export function drawBases(ctx, hostPos, quietIds) {
         // позиции над картой) — база встанет туда же после подтверждения.
         let ang = b.phase0 + 2 * Math.PI * simDays / period;
         if (moving && typeof mode.ang === 'number') ang = mode.ang;
-        b.x = hp.x + Math.cos(ang) * orbitR;
-        b.y = hp.y - Math.sin(ang) * orbitR;
+
+        // Точка на полу — по эллипсу 2:1; маркер приподнят над ней, как на
+        // референсах (ромб с ножкой и тенью).
+        const ex = hp.x + Math.cos(ang) * orbitR;
+        const ey = hp.y - Math.sin(ang) * orbitR * ISO_K;
+        b.fx = ex;
+        b.fy = ey;
+        b.x = ex;
+        b.y = ey - LIFT.base / zoom;
 
         // Имя спутника-хозяина для подписи: у переноса — хост режима, иначе
         // запись базы (у базы на планете строки нет).
@@ -564,7 +573,7 @@ export function drawBases(ctx, hostPos, quietIds) {
             ? (moving ? mode.moon : b.moon) || null : null;
         drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quietIds && quietIds.has(b.id), hostMoon);
         targets.push({
-            kind: 'base', name: b.name, x: b.x, y: b.y, r: 4 / zoom,
+            kind: 'base', name: b.name, x: b.x, y: b.y, r: 6 / zoom,
             orbitCx: hp.x, orbitCy: hp.y, orbitR,
             local: b, moons: []
         });
@@ -580,35 +589,46 @@ export function drawBases(ctx, hostPos, quietIds) {
  *  выше имени базы — подпись читается связкой «спутник над базой», как строки
  *  подписи группы лун. */
 function drawBaseMarker(ctx, hp, b, zoom, time, orbitR, quiet, hostMoon) {
-    ctx.strokeStyle = 'rgba(0,255,255,0.27)';
+    // Орбита базы — эллипс 2:1 вокруг хост-тела (view).
+    ctx.strokeStyle = 'rgba(53,232,216,0.27)';
     ctx.lineWidth = 0.5 / zoom;
     ctx.setLineDash([1 / zoom, 1 / zoom]);
     ctx.beginPath();
-    ctx.arc(hp.x, hp.y, orbitR, 0, Math.PI * 2);
+    orbitEllipsePath(ctx, hp.x, hp.y, orbitR);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    const bs = 4 / zoom;
+    const bs = 4 / zoom;          // половина ромба / радиус пульса
+    const ds = 8 / zoom;          // сторона квадрата до поворота на 45°
 
-    const glow = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, bs * 2);
-    glow.addColorStop(0, 'rgba(0,255,255,0.6)');
-    glow.addColorStop(1, 'rgba(0,255,255,0)');
-    ctx.fillStyle = glow;
+    // Ножка от маркера к полу и мягкая тень в точке орбиты.
+    ctx.strokeStyle = 'rgba(53,232,216,0.34)';
+    ctx.lineWidth = 1 / zoom;
     ctx.beginPath();
-    ctx.arc(b.x, b.y, bs * 2, 0, Math.PI * 2);
+    ctx.moveTo(b.x, b.y + ds * 0.55);
+    ctx.lineTo(b.fx, b.fy);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(53,232,216,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(b.fx, b.fy, 6 / zoom, 2.2 / zoom, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    glow(ctx, b.x, b.y, bs * 2.6, COLORS.base, 0.55);
+
+    // Ромб с тёмной заливкой и бирюзовой обводкой — как на референсах.
+    diamond(ctx, b.x, b.y, ds, COLORS.base, '#05060c', zoom);
+
     ctx.fillStyle = COLORS.base;
-    ctx.fillRect(b.x - bs / 2, b.y - bs / 2, bs, bs);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1 / zoom;
-    ctx.strokeRect(b.x - bs / 2, b.y - bs / 2, bs, bs);
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 1.2 / zoom, 0, Math.PI * 2);
+    ctx.fill();
 
     const pulse = (Math.sin(time * 4) + 1) * 0.5;
-    ctx.strokeStyle = `rgba(0,255,255,${0.5 - pulse * 0.5})`;
+    ctx.strokeStyle = `rgba(53,232,216,${0.5 - pulse * 0.5})`;
     ctx.lineWidth = 1 / zoom;
     ctx.beginPath();
-    ctx.arc(b.x, b.y, bs + pulse * 4, 0, Math.PI * 2);
+    ctx.arc(b.x, b.y, bs + pulse * 4 / zoom, 0, Math.PI * 2);
     ctx.stroke();
 
     // Подпись базы: имя — шрифт интерфейса (Manrope, как .b-name в списках),
@@ -737,32 +757,27 @@ function drawBasePreview(ctx, hostPos) {
     const { zoom } = state;
     const r = state.baseRadius;
 
-    ctx.strokeStyle = 'rgba(0,255,255,0.55)';
+    ctx.strokeStyle = 'rgba(53,232,216,0.55)';
     ctx.lineWidth = 1 / zoom;
     ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.beginPath();
-    ctx.arc(hp.x, hp.y, r, 0, Math.PI * 2);
+    orbitEllipsePath(ctx, hp.x, hp.y, r);
     ctx.stroke();
     ctx.setLineDash([]);
 
     const w = screenToWorld(state.mouseX, state.mouseY, state);
-    // луч — направление будущего положения базы: угол от центра хоста к
-    // курсору (mode.ang; до первого движения над картой — по позиции мыши)
-    let ux, uy;
-    if (typeof mode.ang === 'number') {
-        ux = Math.cos(mode.ang);
-        uy = -Math.sin(mode.ang);
-    } else {
-        const dx = w.x - hp.x, dy = w.y - hp.y, d = Math.hypot(dx, dy) || 1;
-        ux = dx / d;
-        uy = dy / d;
-    }
+    // луч — направление будущего положения базы: угол в raw-плоскости от
+    // центра хоста к курсору (mode.ang; до первого движения — по позиции мыши).
+    const ang = typeof mode.ang === 'number'
+        ? mode.ang : rawAngle(w.x - hp.x, w.y - hp.y);
+    const ux = Math.cos(ang);
+    const uy = -Math.sin(ang);
 
-    ctx.strokeStyle = 'rgba(0,255,255,0.25)';
+    ctx.strokeStyle = 'rgba(53,232,216,0.25)';
     ctx.lineWidth = 0.5 / zoom;
     ctx.beginPath();
     ctx.moveTo(hp.x, hp.y);
-    ctx.lineTo(hp.x + ux * r, hp.y + uy * r);
+    ctx.lineTo(hp.x + ux * r, hp.y + uy * r * ISO_K);
     ctx.stroke();
 
     const l1 = 'Орбита: ' + Math.round(r) + ' ед.';
