@@ -299,7 +299,7 @@
     return '<button class="item-row' + (selected ? ' selected' : '') + '" data-action="select-shop" data-id="' + item.id + '">' +
       '<span class="item-icon">' + iconMarkup(item.icon, 22) + '</span>' +
       '<span class="item-copy"><strong>' + item.name + '</strong><span>' +
-      (item.mass ? 'Масса ' + fmt(item.mass) + ' кг' : 'Масса не задана') + '</span></span>' +
+      (item.mass ? 'Масса ' + fmt(item.mass) + ' кг' : 'Единица груза') + '</span></span>' +
       '<span class="item-meta"><small>' + item.categoryName + '</small>' +
       (item.price ? '<b>' + fmt(item.price) + ' ¤</b>' : '') + '</span>' +
       '</button>';
@@ -339,7 +339,8 @@
       return '<div class="trade-empty">' + (shopItems.length ? 'В этой категории пока нет объектов' : 'В базе админки пока нет объектов') + '</div>';
     }
     var lines = '<span class="trade-preview-stats">' + item.categoryPath + '</span>';
-    if (item.mass) lines += '<span class="trade-preview-stats">Масса: ' + fmt(item.mass) + ' кг</span>';
+    lines += '<span class="trade-preview-stats">' +
+      (item.mass ? 'Масса: ' + fmt(item.mass) + ' кг' : 'Единица груза: 1 ед. за штуку') + '</span>';
     item.props.forEach(function (p) {
       lines += '<span class="trade-preview-stats">' + p.name + ': ' + p.value + '</span>';
     });

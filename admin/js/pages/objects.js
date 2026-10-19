@@ -54,7 +54,7 @@
     if (!Store.massProp() || props.indexOf(Store.massProp()) === -1) {
       box.appendChild(h('div', {
         class: 'hint',
-        text: 'В этой категории нет свойства «Масса» — объект будет считаться невесомым при заполнении слотов.'
+        text: 'В этой категории нет свойства «Масса» — каждая единица объекта займёт одну единицу груза.'
       }));
     }
     return { box: box, inputs: inputs };
@@ -380,7 +380,7 @@
         var sum = 0;
         contentRows.forEach(function (cr) {
           var it = Store.byId('objects', cr.itemSelect.value);
-          sum += (parseInt(cr.qtyInput.value, 10) || 0) * Store.massOf(it);
+          sum += (parseInt(cr.qtyInput.value, 10) || 0) * Store.cargoUnits(it);
         });
         return sum;
       }
@@ -391,14 +391,14 @@
         var over = used > cap + 1e-9;
         capBadge.textContent = Store.fmtNum(used) + ' / ' + (isFinite(cap) ? Store.fmtNum(cap) + ' кг' : '∞');
         capBadge.classList.toggle('cap-over', over);
-        capBadge.title = over ? 'Слот перегружен' : 'Занято массы в слоте';
+        capBadge.title = over ? 'Слот перегружен' : 'Занято груза в слоте';
       }
 
       /* Сколько единиц предмета ещё помещается в слот. */
       function maxQtyFor(item) {
         var cap = Store.slotCapacity(currentSlot());
         if (!isFinite(cap)) return Infinity;
-        var m = Store.massOf(item);
+        var m = Store.cargoUnits(item);
         if (m <= 0) return Infinity;
         return Math.max(0, Math.floor((cap - usedNow()) / m));
       }
@@ -438,9 +438,10 @@
           var q = parseInt(cr.qtyInput.value, 10);
           if (!q || q < 1) q = 1;
           var cap = Store.slotCapacity(currentSlot());
-          if (isFinite(cap) && Store.massOf(it) > 0) {
-            var own = q * Store.massOf(it);
-            var limit = Math.max(0, Math.floor((cap - (usedNow() - own)) / Store.massOf(it)));
+          var unit = Store.cargoUnits(it);
+          if (isFinite(cap) && unit > 0) {
+            var own = q * unit;
+            var limit = Math.max(0, Math.floor((cap - (usedNow() - own)) / unit));
             if (q > limit) {
               q = Math.max(1, limit);
               UI.toast('В слоте хватает места только на ' + q + ' шт.', 'warn');
