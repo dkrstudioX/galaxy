@@ -196,9 +196,61 @@
       return true;
     });
   }
+
+  /* Ветка, по которой сейчас собран список: выбранный чип или таб. */
+  function activeBranch() {
+    return state.category === 'all' ? 'all' : (state.subcategory || state.category);
+  }
+  /* Категория-группа объекта: ближайшая подкатегория выбранной ветки. */
+  function groupCategoryId(itemCategoryId, branch) {
+    var chain = window.Store ? Store.categoryChain(itemCategoryId) : [];
+    if (!chain.length) return '';
+    if (branch === 'all') return chain[0].id;
+    for (var i = 0; i < chain.length; i++) {
+      if (chain[i].id === branch) return chain[i + 1] ? chain[i + 1].id : chain[i].id;
+    }
+    return chain[0].id;
+  }
+  /* Порядок категорий в дереве — группы идут как в админке. */
+  var categoryOrder = null;
+  function categoryOrderIndex() {
+    if (categoryOrder) return categoryOrder;
+    categoryOrder = {};
+    var i = 0;
+    if (window.Store) (function walk(parentId) {
+      Store.childCategories(parentId).forEach(function (cat) {
+        categoryOrder[cat.id] = i++;
+        walk(cat.id);
+      });
+    })('');
+    return categoryOrder;
+  }
+  /* Список магазина блоками: позиции собираются под заголовком своей подкатегории. */
+  function groupedShopItems(list) {
+    var branch = activeBranch();
+    var groups = [], index = {};
+    list.forEach(function (it) {
+      var id = groupCategoryId(it.categoryId, branch);
+      if (!index[id]) {
+        index[id] = { cat: window.Store && id ? Store.byId('categories', id) : null, items: [] };
+        groups.push(index[id]);
+      }
+      index[id].items.push(it);
+    });
+    var order = categoryOrderIndex();
+    groups.sort(function (a, b) {
+      var oa = a.cat ? (order[a.cat.id] || 0) : 0;
+      var ob = b.cat ? (order[b.cat.id] || 0) : 0;
+      return oa - ob;
+    });
+    return groups;
+  }
+
   function currentShop() {
     var item = byId(shopItems, state.selectedShop);
-    if (item && inCategory(item, state.category)) return item;
+    var inBranch = item && inCategory(item, state.category) &&
+      (!state.subcategory || inSubtree(item.categoryId, state.subcategory));
+    if (inBranch) return item;
     return filteredItems()[0] || null;
   }
   function currentCargo() { return byId(initialCargo, state.selectedCargo) || initialCargo[0]; }
@@ -490,9 +542,24 @@
     document.getElementById('shopCount').textContent = filtered.length + ' ' + plural(filtered.length, ['позиция', 'позиции', 'позиций']);
     document.getElementById('categoryTabs').innerHTML = categoryTabsHTML();
     renderSubcategories();
+    /* Список блоками по подкатегориям: заголовок = ближайшая подкатегория ветки.
+       Если вся ветка — одна категория, заголовок не нужен, его заменяет чип. */
+    var groups = groupedShopItems(filtered);
+    var showHeads = groups.length > 1 ||
+      (groups.length === 1 && groups[0].cat && groups[0].cat.id !== activeBranch());
     document.getElementById('shopList').innerHTML = filtered.length
-      ? filtered.map(function (it) {
-        return shopItemRowHTML(it, state.selectedShop === it.id);
+      ? groups.map(function (g) {
+        var head = '';
+        if (showHeads && g.cat) {
+          head = '<div class="list-group-head">' +
+            '<span class="list-group-icon">' + iconMarkup(g.cat.icon || iconForCategory(g.cat.name), 13) + '</span>' +
+            '<strong>' + g.cat.name + '</strong>' +
+            '<small>' + g.items.length + '</small></div>';
+        }
+        return '<div class="list-group">' + head +
+          g.items.map(function (it) {
+            return shopItemRowHTML(it, state.selectedShop === it.id);
+          }).join('') + '</div>';
       }).join('')
       : '<div class="list-empty">' + (shopItems.length ? 'В этой категории пока нет объектов' : 'В базе админки пока нет объектов') + '</div>';
     document.getElementById('shopConsole').innerHTML = shopConsoleHTML();

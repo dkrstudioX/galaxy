@@ -334,6 +334,26 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
   border-radius: 8px;
   background: rgba(9, 24, 25, .30);
 }
+/* Блок списка магазина: заголовок подкатегории и её позиции под ним. */
+.list-group + .list-group { margin-top: 6px; }
+.list-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 7px 6px;
+  border-bottom: 1px solid rgba(150, 180, 255, .13);
+}
+.list-group-icon {
+  width: 20px; height: 20px; display: grid; place-items: center;
+  color: #7bdcca; border: 1px solid #274846; background: #0a191a;
+}
+.list-group-head strong {
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .09em;
+}
+.list-group-head small {
+  margin-left: auto; color: #637a7a; font: 9px "IBM Plex Mono"; text-transform: uppercase;
+}
 .item-row {
   width: 100%; min-height: 66px; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto 33px;
   align-items: center; gap: 10px; padding: 7px; color: inherit; text-align: left; border: 1px solid transparent;
