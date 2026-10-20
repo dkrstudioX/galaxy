@@ -401,14 +401,14 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 }
 .trade-preview-icon.weapon { color: #e7b967; }
 .trade-preview-icon.shield { color: #8aaeff; }
-.trade-preview strong { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
-.trade-preview-stats { min-height: 24px; margin-top: 5px; color: #6d7481; font: 7px/1.5 "IBM Plex Mono"; }
-.trade-preview-price { margin-top: 7px; color: #c4a9ff; font: 600 11px "IBM Plex Mono"; }
+.trade-preview strong { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.trade-preview-stats { min-height: 24px; margin-top: 5px; color: #8a909c; font: 10px/1.5 "IBM Plex Mono"; }
+.trade-preview-price { margin-top: 7px; color: #c4a9ff; font: 600 12px "IBM Plex Mono"; }
 .trade-preview-price small { color: #625979; font-size: 7px; }
 /* Состав контейнера в карточке: ресурс и килограммы, без переполнения */
 .trade-cargo-label {
-  width: 100%; margin-top: 9px; color: #6d7481; text-align: left;
-  text-transform: uppercase; letter-spacing: .08em; font: 7px "IBM Plex Mono";
+  width: 100%; margin-top: 9px; color: #8a909c; text-align: left;
+  text-transform: uppercase; letter-spacing: .08em; font: 10px "IBM Plex Mono";
 }
 .trade-cargo-list {
   width: 100%; margin-top: 3px; max-height: 126px; overflow-y: auto;
@@ -424,10 +424,10 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 }
 .trade-cargo-name {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; color: #b8c7c7; font-size: 8px;
+  white-space: nowrap; color: #c9d6d6; font-size: 11px;
 }
-.trade-cargo-kg { flex: none; color: #d7c9f7; font: 600 8px "IBM Plex Mono"; }
-.trade-cargo-total { width: 100%; margin-top: 5px; color: #6d7481; text-align: left; font: 7px "IBM Plex Mono"; }
+.trade-cargo-kg { flex: none; color: #d7c9f7; font: 600 11px "IBM Plex Mono"; }
+.trade-cargo-total { width: 100%; margin-top: 5px; color: #8a909c; text-align: left; font: 10px "IBM Plex Mono"; }
 .hangar-console { padding-top: 18px; }
 .hangar-console .trade-preview { padding-bottom: 18px; }
 .hangar-console .trade-preview strong { white-space: normal; font-size: 11px; }
@@ -569,12 +569,12 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 
 /* Колонка 1 магазина — сведения о выбранном корабле */
 .ship-panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; scrollbar-color: rgba(120, 160, 170, .35) transparent; }
-.ship-title { font-size: 17px; font-weight: 500; }
-.ship-sub { color: #76698f; font: 8px "IBM Plex Mono"; letter-spacing: .08em; text-transform: uppercase; }
+.ship-title { font-size: 20px; font-weight: 500; }
+.ship-sub { color: #8a7ba8; font: 11px "IBM Plex Mono"; letter-spacing: .08em; text-transform: uppercase; }
 .ship-rows { display: grid; gap: 6px; }
 .ship-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 5px; border-bottom: 1px solid rgba(150, 190, 255, .09); }
-.ship-row span { color: #6b8086; font: 8px "IBM Plex Mono"; letter-spacing: .08em; text-transform: uppercase; }
-.ship-row b { font-size: 12px; font-weight: 500; }
+.ship-row span { color: #7d959b; font: 11px "IBM Plex Mono"; letter-spacing: .08em; text-transform: uppercase; }
+.ship-row b { font-size: 15px; font-weight: 500; }
 .ship-slot { display: flex; justify-content: space-between; gap: 10px; font: 8px "IBM Plex Mono"; color: #697a7d; }
 .ship-slot b { color: #cdd9dc; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ship-slot span { flex: none; }
@@ -638,8 +638,8 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
   background: rgba(8, 18, 24, .42);
 }
 .hold-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.hold-head strong { font-size: 12px; font-weight: 500; }
-.hold-head span { color: #7f9aa0; font: 8px "IBM Plex Mono"; letter-spacing: .08em; }
+.hold-head strong { font-size: 15px; font-weight: 500; }
+.hold-head span { color: #93adb2; font: 11px "IBM Plex Mono"; letter-spacing: .08em; }
 .hold-bar { display: block; height: 3px; background: rgba(120, 160, 170, .18); }
 .hold-bar em {
   display: block;
