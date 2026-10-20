@@ -725,6 +725,57 @@
 
   function userShips() { return all('users_ships'); }
 
+  /* Продать предмет с корабля: крепление или трюм, одна запись содержимого.
+     Контейнер с грузом продаётся только вместе с грузом (withCargo): цена
+     складывается из цены предмета и цены ресурсов внутри. */
+  function sellEntry(recordId, place, entryIndex, withCargo) {
+    var d = ensure();
+    var rec = byId('users_ships', recordId);
+    if (!rec) return { ok: false, error: 'Корабль не найден' };
+    var kind = place && place.kind === 'slot' ? 'slot' : 'hold';
+    var list = arr(kind === 'slot' ? rec.slots : rec.holds);
+    var box = list[place && place.index];
+    if (!box) return { ok: false, error: 'Место не найдено' };
+    var contents = arr(box.contents);
+    var pos = Math.floor(Number(entryIndex));
+    var entry = pos >= 0 ? contents[pos] : null;
+    if (!entry) return { ok: false, error: 'Предмет не найден' };
+    var item = byId('objects', entry.itemId);
+    if (!item) return { ok: false, error: 'Объект не найден' };
+
+    /* Реальный груз: пустые строки не считаются и не мешают продаже. */
+    var cargo = arr(entry.cargo).map(function (g) {
+      return { entry: g, res: byId('objects', g.itemId), kg: parseInt(g.qty, 10) || 0 };
+    }).filter(function (g) { return g.res && g.kg > 0; });
+    if (cargo.length && !withCargo) {
+      return { ok: false, error: 'В контейнере есть груз', needsCargo: true };
+    }
+    var amount = Math.max(1, parseInt(entry.qty, 10) || 1);
+    var itemPrice = priceSale(item) * amount;
+    if (!itemPrice) return { ok: false, error: 'Цена продажи не задана' };
+    var cargoPrice = 0;
+    var cargoKg = 0;
+    var noPrice = null;
+    cargo.forEach(function (g) {
+      var p = priceSale(g.res);
+      if (!p) { if (!noPrice) noPrice = g.res; return; }
+      cargoKg += g.kg;
+      cargoPrice += p * g.kg;
+    });
+    if (noPrice) {
+      return { ok: false, error: 'У груза «' + noPrice.name + '» не задана цена продажи' };
+    }
+    var total = itemPrice + cargoPrice;
+
+    contents.splice(pos, 1);
+    d.credits = Math.max(0, d.credits + total);
+    persist();
+    return {
+      ok: true, name: item.name, price: total, itemPrice: itemPrice,
+      cargoPrice: cargoPrice, cargoKg: cargoKg, credits: d.credits
+    };
+  }
+
   /* Купить корабль: списывает цену покупки и пишет запись в users_ships. */
   function buyShip(objectId) {
     var ship = byId('objects', objectId);
@@ -1280,6 +1331,7 @@
     userShips: userShips,
     buyShip: buyShip,
     buyForShip: buyForShip,
+    sellEntry: sellEntry,
     sellShip: sellShip,
     loadDemo: function () { db = demoData(); persist(); },
     counts: counts

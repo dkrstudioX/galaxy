@@ -72,6 +72,48 @@ function changeSubcategory(next) {
   if (list.length) state.selectedShop = list[0].id;
 }
 
+/* ---------- Продажа с корабля ---------- */
+
+/* Состав контейнера в подтверждении: ресурс, килограммы и цена продажи. */
+function confirmSellCargo(row) {
+  var cargoTotal = 0;
+  var lines = ((row.entry && row.entry.cargo) || []).map(function (g) {
+    var res = window.Store ? Store.byId('objects', g.itemId) : null;
+    var kg = parseInt(g.qty, 10) || 0;
+    if (!res || !kg) return '';
+    var value = Store.priceSale(res) * kg;
+    cargoTotal += value;
+    return '<div class="dialog-line"><span>' + res.name + '</span>' +
+      '<b>' + fmt(kg) + ' кг</b><small>' + fmt(value) + ' ¤</small></div>';
+  }).filter(Boolean).join('');
+  var total = (window.Store ? Store.priceSale(row.item) : 0) + cargoTotal;
+  openDialog('ПРОДАЖА', row.item.name + ' — вместе с грузом',
+    '<p class="dialog-text">Контейнер продаётся только вместе с грузом. Внутри:</p>' +
+    '<div class="dialog-lines">' + lines + '</div>' +
+    '<p class="dialog-text">Итого: <strong>' + fmt(total) + ' ¤</strong></p>' +
+    '<div class="dialog-actions">' +
+    '<button class="trade-button sell" data-action="sell-cargo-confirm">Продать вместе с грузом</button>' +
+    '<button class="trade-button ghost" data-action="close-slot">Отмена</button>' +
+    '</div>');
+}
+
+/* Продать выбранную строку «На корабле». Возвращает false, если продажа не прошла. */
+function sellOwnedRow(withCargo) {
+  var rec = activeUserShip();
+  var row = selectedOwnedRow();
+  if (!rec || !row) return false;
+  var res = Store.sellEntry(rec.id, { kind: row.kind, index: row.placeIndex }, row.entryIndex, withCargo);
+  if (!res.ok) {
+    openDialog('ПРОДАЖА', row.item.name + ' — не продано',
+      '<p class="dialog-text">' + res.error + '</p>');
+    return false;
+  }
+  state.notice = row.item.name + (res.cargoKg ? ' с грузом' : '') + ' → ' + fmt(res.price) + ' ¤';
+  state.selectedCargo = '';
+  closeSlotModal();
+  return true;
+}
+
 /* ---------- Обработчик кликов (делегирование) ---------- */
 
 document.addEventListener('click', function (e) {
@@ -143,6 +185,14 @@ document.addEventListener('click', function (e) {
       state.userShipId = '';
     }
   }
+  else if (action === 'sell-cargo') { if (!sellOwnedRow(false)) return; }
+  else if (action === 'sell-cargo-with') {
+    var sellRow = selectedOwnedRow();
+    if (!sellRow) return;
+    confirmSellCargo(sellRow);
+    return;
+  }
+  else if (action === 'sell-cargo-confirm') { if (!sellOwnedRow(true)) return; }
   else if (action === 'open-slot') {
     var tile = el;
     var slotView = activeShipView();

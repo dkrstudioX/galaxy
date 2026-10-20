@@ -37,19 +37,23 @@ export function activeShipView() {
    с ключом (место + позиция) и местом — крепление или трюм. */
 export function shipEquipmentRows(view) {
   var rows = [];
-  function add(contents, place, keyPrefix) {
+  function add(contents, place, kind, placeIndex) {
     (contents || []).forEach(function (c, i) {
       var item = window.Store ? Store.byId('objects', c.itemId) : null;
       if (!item) return;
-      rows.push({ key: keyPrefix + ':' + i, item: item, place: place });
+      rows.push({
+        key: kind + ':' + placeIndex + ':' + i,
+        item: item, place: place,
+        kind: kind, placeIndex: placeIndex, entryIndex: i, entry: c
+      });
     });
   }
   (view.slots || []).forEach(function (s, i) {
     var slot = window.Store ? Store.byId('slots', s.slotId) : null;
-    add(s.contents, slot ? slot.name : 'крепление', 'slot:' + i);
+    add(s.contents, slot ? slot.name : 'крепление', 'slot', i);
   });
   (view.holds || []).forEach(function (h, i) {
-    add(h.contents, h.name, 'hold:' + i);
+    add(h.contents, h.name, 'hold', i);
   });
   return rows;
 }

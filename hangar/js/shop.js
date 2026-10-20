@@ -109,22 +109,41 @@ function ownedShipConsole(rec) {
     '<button class="trade-button sell" data-action="sell-ship">' + icon('arrowLeft') + 'Продать</button>';
 }
 
-/* Консоль выбранного предмета на корабле: где стоит, масса и цена продажи. */
+/* Консоль выбранного предмета на корабле: где стоит, масса, груз и продажа. */
 function ownedItemConsole(row) {
   var item = row.item;
   var mass = window.Store ? Store.massOf(item) : 0;
   var sale = window.Store ? Store.priceSale(item) : 0;
+  var cargoKg = 0;
+  var cargoValue = 0;
+  ((row.entry && row.entry.cargo) || []).forEach(function (g) {
+    var res = window.Store ? Store.byId('objects', g.itemId) : null;
+    var kg = parseInt(g.qty, 10) || 0;
+    if (!res || !kg) return;
+    cargoKg += kg;
+    cargoValue += Store.priceSale(res) * kg;
+  });
   var lines = '<span class="trade-preview-stats">' +
     (window.Store ? Store.categoryPath(item.categoryId) : '') + '</span>';
   lines += '<span class="trade-preview-stats">Место: ' + row.place + '</span>';
   if (mass) lines += '<span class="trade-preview-stats">Масса: ' + fmt(mass) + ' кг</span>';
+  if (cargoKg) {
+    lines += '<span class="trade-preview-stats">Груз: ' + fmt(cargoKg) + ' кг · ' +
+      fmt(cargoValue) + ' ¤</span>';
+  }
   var price = sale
-    ? '<span class="trade-preview-price">' + fmt(sale) + ' ¤<small> / шт.</small></span>'
+    ? '<span class="trade-preview-price">' + fmt(cargoKg ? sale + cargoValue : sale) + ' ¤' +
+      '<small>' + (cargoKg ? ' вместе с грузом' : ' / шт.') + '</small></span>'
     : '<span class="trade-preview-stats">Цена продажи не задана</span>';
+  var sell = sale
+    ? '<button class="trade-button sell" data-action="' +
+      (cargoKg ? 'sell-cargo-with' : 'sell-cargo') + '">' + icon('arrowLeft') +
+      (cargoKg ? 'Продать вместе с грузом' : 'Продать') + '</button>'
+    : '';
   return '<div class="trade-preview">' +
     '<span class="trade-preview-icon">' + iconMarkup(item.icon, 27) + '</span>' +
     '<strong>' + item.name + '</strong>' + lines + price +
-    '</div>';
+    '</div>' + sell;
 }
 
 function shopConsoleHTML() {
