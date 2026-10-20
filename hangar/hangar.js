@@ -858,17 +858,47 @@ function renderSubcategories() {
   }).join('');
 }
 
+/* Свойство вместимости показываем в блоке «Можно положить», а не строкой. */
+function isCapacityName(name) {
+  var n = String(name || '').trim().toLowerCase();
+  return n === 'вместимость' || n === 'ёмкость' || n === 'емкость';
+}
+
 /* Центр: объект из админки — информация и кнопка «Купить». */
 function shopObjectConsole(item) {
   if (!item) {
     return '<div class="trade-empty">' + (shopItems.length ? 'В этой категории пока нет объектов' : 'В базе админки пока нет объектов') + '</div>';
   }
+  var raw = window.Store ? Store.byId('objects', item.id) : null;
+  var capacity = raw && window.Store ? Store.capacityOf(raw) : 0;
+  var allowed = capacity ? Store.prop2List(raw.prop2) : [];
   var lines = '<span class="trade-preview-stats">' + item.categoryPath + '</span>';
   lines += '<span class="trade-preview-stats">' +
     (item.mass ? 'Масса: ' + fmt(item.mass) + ' кг' : 'Единица груза: 1 кг за единицу') + '</span>';
   item.props.forEach(function (p) {
+    if (capacity && isCapacityName(p.name)) return;
     lines += '<span class="trade-preview-stats">' + p.name + ': ' + p.value + '</span>';
   });
+  /* Контейнер: те же стили, что у состава купленного, — что можно положить. */
+  if (capacity) {
+    lines += '<span class="trade-cargo-label">Можно положить</span>';
+    if (allowed.length) {
+      var byName = {};
+      Store.resourceObjects().forEach(function (res) {
+        byName[res.name.trim().toLowerCase()] = res;
+      });
+      lines += '<div class="trade-cargo-list">' + allowed.map(function (name) {
+        var res = byName[name.trim().toLowerCase()];
+        return '<div class="trade-cargo-row">' +
+          '<span class="trade-cargo-icon">' + iconMarkup(res ? res.icon : 'resource', 13) + '</span>' +
+          '<span class="trade-cargo-name">' + (res ? res.name : name) + '</span>' +
+          '</div>';
+      }).join('') + '</div>';
+    } else {
+      lines += '<span class="trade-cargo-total">Материалы не заданы</span>';
+    }
+    lines += '<span class="trade-cargo-total">Вместимость: ' + fmt(capacity) + ' кг</span>';
+  }
   var price = item.price
     ? '<span class="trade-preview-price">' + fmt(item.price) + ' ¤<small> / ' + (item.isResource ? 'кг' : 'шт.') + '</small></span>' +
       (item.sale ? '<span class="trade-preview-stats">продажа: ' + fmt(item.sale) + ' ¤</span>' : '')
