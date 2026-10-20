@@ -473,6 +473,11 @@
     return m > 0 ? m : 1;
   }
 
+  function fmtNum(n) {
+    if (!isFinite(n)) return '∞';
+    return (Math.round(n * 100) / 100).toLocaleString('ru-RU');
+  }
+
   /* Масса оборудования в содержимом: предмет × количество, без груза контейнеров. */
   function contentsMass(contents) {
     var sum = 0;
@@ -711,6 +716,150 @@
       })
     });
     return { ok: true, record: record, price: price, credits: credits() };
+  }
+
+  /* ---------- Покупка на корабль ---------- */
+
+  /* Все экземпляры в креплениях и трюмах записи: у контейнера свой груз. */
+  function shipEntries(record) {
+    var out = [];
+    arr(record && record.slots).forEach(function (s) {
+      arr(s.contents).forEach(function (e) { out.push(e); });
+    });
+    arr(record && record.holds).forEach(function (h) {
+      arr(h.contents).forEach(function (e) { out.push(e); });
+    });
+    return out;
+  }
+
+  function objectName(id) {
+    var it = byId('objects', id);
+    return it ? it.name : '—';
+  }
+
+  /* Первое свободное крепление нужного типа (в креплении — ровно один предмет). */
+  function freeMountFor(record, item) {
+    if (!item || !item.slotId) return null;
+    var list = arr(record && record.slots);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].slotId === item.slotId && !arr(list[i].contents).length) return list[i];
+    }
+    return null;
+  }
+
+  /* Первый трюм, где хватает места по массе оборудования. */
+  function holdFor(record, item, amount) {
+    var need = massValue(item) * amount;
+    var list = arr(record && record.holds);
+    for (var i = 0; i < list.length; i++) {
+      if (holdFree(list[i]) + 1e-9 >= need) return list[i];
+    }
+    return null;
+  }
+
+  /* Первый контейнер, который принимает материал и где есть место. */
+  function containerFor(record, resource, amount) {
+    var list = shipEntries(record);
+    for (var i = 0; i < list.length; i++) {
+      var entry = list[i];
+      var it = byId('objects', entry.itemId);
+      if (!it || !(capacityOf(it) > 0)) continue;
+      if (!prop2Has(it, resource.name)) continue;
+      if (containerFree(entry) + 1e-9 < amount) continue;
+      return entry;
+    }
+    return null;
+  }
+
+  /* Контейнеры не складываются в стопку: у каждого свой груз. */
+  function addToHold(hold, item, amount) {
+    if (!Array.isArray(hold.contents)) hold.contents = [];
+    var stackable = !(capacityOf(item) > 0);
+    if (stackable) {
+      for (var i = 0; i < hold.contents.length; i++) {
+        var c = hold.contents[i];
+        if (c.itemId === item.id && !arr(c.cargo).length) {
+          c.qty = String((parseInt(c.qty, 10) || 0) + amount);
+          return c;
+        }
+      }
+    }
+    var entry = { itemId: item.id, qty: String(amount), cargo: [] };
+    hold.contents.push(entry);
+    return entry;
+  }
+
+  function addCargo(entry, resource, amount) {
+    if (!Array.isArray(entry.cargo)) entry.cargo = [];
+    for (var i = 0; i < entry.cargo.length; i++) {
+      if (entry.cargo[i].itemId === resource.id) {
+        entry.cargo[i].qty = String((parseInt(entry.cargo[i].qty, 10) || 0) + amount);
+        return entry.cargo[i];
+      }
+    }
+    var line = { itemId: resource.id, qty: String(amount) };
+    entry.cargo.push(line);
+    return line;
+  }
+
+  /* Купить предмет на конкретный корабль.
+     Ресурс — в первый подходящий контейнер; оборудование — в свободное
+     крепление, иначе в трюм; если никуда — отказ с причиной. */
+  function buyForShip(recordId, objectId, qty) {
+    var d = ensure();
+    var record = byId('users_ships', recordId);
+    if (!record) return { ok: false, error: 'Корабль не найден' };
+    var item = byId('objects', objectId);
+    if (!item) return { ok: false, error: 'Объект не найден' };
+    if (categoryIsShip(item.categoryId)) return { ok: false, error: 'Корабли покупаются отдельно' };
+
+    var amount = Math.max(1, Math.floor(Number(qty) || 1));
+    var price = priceBuy(item) * amount;
+    if (!price) return { ok: false, error: 'Цена не задана' };
+    if (price > d.credits + 1e-9) {
+      return {
+        ok: false, error: 'Не хватает кредитов: нужно ' + fmtNum(price) + ' ¤, на счету ' + fmtNum(d.credits) + ' ¤',
+        price: price, credits: d.credits
+      };
+    }
+
+    var where = '';
+    if (isResourceObject(item)) {
+      var box = containerFor(record, item, amount);
+      if (!box) {
+        return {
+          ok: false,
+          error: 'Нет подходящего грузового отсека: «' + item.name + '» некуда положить. ' +
+            'Нужен отсек, у которого в prop_2 есть этот материал, и в нём должно хватить места.',
+          price: price
+        };
+      }
+      addCargo(box, item, amount);
+      where = 'контейнер «' + objectName(box.itemId) + '»';
+    } else {
+      var mount = freeMountFor(record, item);
+      if (mount) {
+        mount.contents.push({ itemId: item.id, qty: String(amount), cargo: [] });
+        var slot = byId('slots', mount.slotId);
+        where = 'крепление «' + (slot ? slot.name : '—') + '»';
+      } else {
+        var hold = holdFor(record, item, amount);
+        if (!hold) {
+          return {
+            ok: false,
+            error: 'Нет свободного крепления и нет места в трюме для «' + item.name + '»: ' +
+              (item.slotId ? 'все крепления этого типа заняты, ' : '') + 'а трюмы заполнены.',
+            price: price
+          };
+        }
+        addToHold(hold, item, amount);
+        where = 'трюм «' + hold.name + '»';
+      }
+    }
+
+    d.credits = Math.max(0, d.credits - price);
+    persist();
+    return { ok: true, price: price, credits: d.credits, where: where, qty: amount };
   }
 
   /* ---------- Демонстрационный набор ---------- */
@@ -1093,10 +1242,7 @@
     prop2List: prop2List,
     resourceObjects: resourceObjects,
     isResourceObject: isResourceObject,
-    fmtNum: function (n) {
-      if (!isFinite(n)) return '∞';
-      return String(Math.round(n * 100) / 100);
-    },
+    fmtNum: fmtNum,
 
     exportJSON: exportJSON,
     importJSON: importJSON,
@@ -1105,6 +1251,7 @@
     addCredits: addCredits,
     userShips: userShips,
     buyShip: buyShip,
+    buyForShip: buyForShip,
     sellShip: sellShip,
     loadDemo: function () { db = demoData(); persist(); },
     counts: counts

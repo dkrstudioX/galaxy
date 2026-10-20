@@ -51,7 +51,7 @@
       var slot = o.slotId ? Store.byId('slots', o.slotId) : null;
       var props = Store.categoryProps(o.categoryId).map(function (p) {
         return { name: p.name, value: (o.values && o.values[p.id]) || p.value || '' };
-      }).filter(function (p) { return p.value; });
+      }).filter(function (p) { return p.value && !isMassName(p.name); });
       return {
         id: o.id,
         name: o.name,
@@ -64,6 +64,7 @@
         price: Store.priceBuy(o),
         sale: Store.priceSale(o),
         isShip: Store.categoryIsShip(o.categoryId),
+        isResource: Store.isResourceObject(o),
         slotId: o.slotId || '',
         slotName: slot ? slot.name : '',
         props: props
@@ -116,14 +117,6 @@
     { id: '204', name: 'Наноремкомплект', description: 'Автономный ремонтный модуль для восстановления обшивки в полевых условиях.', stats: 'Ремонт +320 · Цикл 18 сек.' }
   ];
 
-  var purchasedEquipment = [
-    { id: 301, name: 'Импульсный М-4', category: 'weapon', rarity: 'Редкое', stats: 'Урон 48 · 2.4 выстр./с', price: 2450, stock: 2 },
-    { id: 302, name: 'Щит «Эгида»', category: 'shield', rarity: 'Редкое', stats: 'Щит 480 · Реген. 15/с', price: 1850, stock: 1 },
-    { id: 303, name: 'Фазовый контур', category: 'shield', rarity: 'Обычное', stats: 'Щит 340 · Реген. 12/с', price: 1700, stock: 1 },
-    { id: 304, name: 'Лазерный излучатель', category: 'weapon', rarity: 'Улучшенное', stats: 'Урон 34 · 3.1 выстр./с', price: 1220, stock: 2 },
-    { id: 305, name: 'Рельсотрон «Копьё»', category: 'weapon', rarity: 'Эпическое', stats: 'Урон 118 · Пробитие +24%', price: 5200, stock: 1 }
-  ];
-
   /* ---------- Состояние (как useState в App.tsx) ---------- */
 
   var state = {
@@ -156,6 +149,13 @@
     return forms[2];
   }
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  /* «Масса» — свойство корпуса; в панели показываем массу корабля целиком. */
+  function isMassName(name) {
+    var n = String(name).trim().toLowerCase();
+    return n === 'масса' || n === 'вес' || n.indexOf('масса ') === 0 || n.indexOf('вес ') === 0;
+  }
+
   function byId(list, id) {
     for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
     return null;
@@ -333,22 +333,27 @@
     }).join('');
   }
 
-  /* Центр: объект из админки — информация и кнопка «Купить» (оплату подключим позже). */
+  /* Центр: объект из админки — информация и кнопка «Купить». */
   function shopObjectConsole(item) {
     if (!item) {
       return '<div class="trade-empty">' + (shopItems.length ? 'В этой категории пока нет объектов' : 'В базе админки пока нет объектов') + '</div>';
     }
     var lines = '<span class="trade-preview-stats">' + item.categoryPath + '</span>';
     lines += '<span class="trade-preview-stats">' +
-      (item.mass ? 'Масса: ' + fmt(item.mass) + ' кг' : 'Единица груза: 1 ед. за штуку') + '</span>';
+      (item.mass ? 'Масса: ' + fmt(item.mass) + ' кг' : 'Единица груза: 1 кг за единицу') + '</span>';
     item.props.forEach(function (p) {
       lines += '<span class="trade-preview-stats">' + p.name + ': ' + p.value + '</span>';
     });
     var price = item.price
-      ? '<span class="trade-preview-price">' + fmt(item.price) + ' ¤<small> / шт.</small></span>' +
+      ? '<span class="trade-preview-price">' + fmt(item.price) + ' ¤<small> / ' + (item.isResource ? 'кг' : 'шт.') + '</small></span>' +
         (item.sale ? '<span class="trade-preview-stats">продажа: ' + fmt(item.sale) + ' ¤</span>' : '')
       : '<span class="trade-preview-stats">Цена не задана</span>';
     if (item.isShip) lines += '<span class="trade-preview-stats">корабль · покупка попадёт в ангар</span>';
+    else {
+      var target = activeUserShip();
+      lines += '<span class="trade-preview-stats">' +
+        (target ? 'покупка на корабль «' + target.name + '»' : 'нужен корабль — купите его первым') + '</span>';
+    }
     return '<div class="trade-preview">' +
       '<span class="trade-preview-icon">' + iconMarkup(item.icon, 27) + '</span>' +
       '<strong>' + item.name + '</strong>' +
@@ -415,15 +420,16 @@
   /* Колонка 1 магазина: сведения о выбранном корабле (по умолчанию — первый). */
   function shipPanelHTML() {
     if (!window.Store) return '<div class="trade-empty">Данные не загружены</div>';
-    var rec = activeUserShip();
-    var ship = rec ? Store.byId('objects', rec.shipId) : null;
+    var view = activeShipView();
+    var rec = view.rec;
+    var ship = view.ship;
     if (!ship) return '<div class="trade-empty">Кораблей ещё нет — купите в магазине</div>';
 
     var cat = Store.byId('categories', ship.categoryId);
     var props = Store.categoryProps(ship.categoryId).map(function (p) {
       var raw = String((ship.values && ship.values[p.id]) || p.value || '').trim();
       return { name: p.name, value: /^\d+([.,]\d+)?$/.test(raw) ? fmt(Number(raw.replace(',', '.'))) : raw };
-    }).filter(function (p) { return p.value; });
+    }).filter(function (p) { return p.value && !isMassName(p.name); });
 
     var rows = props.map(function (p) {
       return '<div class="ship-row"><span>' + p.name + '</span><b>' + p.value + '</b></div>';
@@ -433,34 +439,70 @@
     if (rec.price) sub.push('куплен за ' + fmt(Number(rec.price)) + ' ¤');
     if (rec.boughtAt) sub.push(new Date(rec.boughtAt).toLocaleDateString('ru-RU'));
 
+    var mass = Store.shipMass(rec);
     return '<span class="ship-sub">' + (cat ? Store.categoryPath(cat.id) : '') + '</span>' +
       '<strong class="ship-title">' + ship.name + '</strong>' +
       '<span class="ship-sub">' + sub.join(' · ') + '</span>' +
-      '<div class="ship-rows">' + rows + '</div>' +
-      '<span class="ship-sub">Слоты · ' + (ship.slots || []).length + '</span>' + slotGridHTML(ship);
+      '<div class="ship-rows">' + rows +
+      '<div class="ship-row"><span>Масса</span><b>' + fmt(Math.round(mass)) + ' кг</b></div>' +
+      '</div>' +
+      '<span class="ship-sub">Трюмы · ' + view.holds.length + '</span>' + holdsListHTML(view) +
+      '<span class="ship-sub">Слоты · ' + view.slots.length + '</span>' + slotGridHTML(view);
+  }
+
+  /* Трюмы: название, загрузка по массе и содержимое. */
+  function holdsListHTML(view) {
+    if (!view.holds.length) {
+      return '<div class="hold-empty">У этого корабля нет трюмов</div>';
+    }
+    return '<div class="hold-list">' + view.holds.map(function (hold) {
+      var cap = Store.slotCapacity(hold);
+      /* Вместимость трюма занимает оборудование; груз в контейнерах — только масса. */
+      var gear = Store.contentsMass(hold.contents);
+      var cargo = Store.cargoMass(hold.contents);
+      var pct = isFinite(cap) && cap > 0 ? Math.min(100, Math.round(gear / cap * 100)) : 0;
+      var items = (hold.contents || []).map(function (c) {
+        var it = Store.byId('objects', c.itemId);
+        if (!it) return '';
+        var qty = Number(c.qty) || 0;
+        var line = it.name + (qty > 1 ? ' ×' + qty : '');
+        var cargoList = (c.cargo || []).map(function (g) {
+          var res = Store.byId('objects', g.itemId);
+          return res ? res.name + ' ' + fmt(Number(g.qty) || 0) + ' кг' : '';
+        }).filter(Boolean);
+        if (cargoList.length) line += ' (' + cargoList.join(', ') + ')';
+        return line;
+      }).filter(Boolean);
+      return '<div class="hold-row">' +
+        '<div class="hold-head"><strong>' + hold.name + '</strong><span>' +
+        fmt(Math.round(gear)) + ' / ' + (isFinite(cap) ? fmt(cap) + ' кг' : '∞') +
+        (cargo ? ' · груз ' + fmt(Math.round(cargo)) + ' кг' : '') + '</span></div>' +
+        '<i class="hold-bar"><em style="width:' + pct + '%"></em></i>' +
+        (items.length ? '<span class="hold-items">' + items.join(' · ') + '</span>' : '') +
+        '</div>';
+    }).join('') + '</div>';
   }
 
   /* ---------- Слоты квадратами: сетка, подсказка, модальное окно ---------- */
 
-  function slotRecord(ship, index) {
-    return ship && ship.slots ? ship.slots[index] : null;
+  function slotRecord(view, index) {
+    return view && view.slots ? view.slots[index] : null;
   }
 
-  function slotTitle(ship, index) {
-    var rec = slotRecord(ship, index);
+  function slotTitle(view, index) {
+    var rec = slotRecord(view, index);
     var slot = rec && window.Store ? Store.byId('slots', rec.slotId) : null;
     return slot ? slot.name : 'Слот';
   }
 
-  function slotContentsList(ship, index) {
-    var rec = slotRecord(ship, index);
+  function slotContentsList(view, index) {
+    var rec = slotRecord(view, index);
     return rec && rec.contents ? rec.contents : [];
   }
 
-  function slotGridHTML(ship) {
-    if (!ship || !ship.slots) return '';
-    var shipId = ship.id;
-    return '<div class="slot-grid">' + ship.slots.map(function (s, i) {
+  function slotGridHTML(view) {
+    if (!view || !view.slots) return '';
+    return '<div class="slot-grid">' + view.slots.map(function (s, i) {
       var contents = s.contents || [];
       var first = contents.length && window.Store ? Store.byId('objects', contents[0].itemId) : null;
       /* Пустой слот с подходящими товарами ведёт в магазин на их категорию. */
@@ -468,17 +510,17 @@
       var cls = 'slot-tile' + (contents.length ? '' : ' empty') + (goods ? ' has-goods' : '');
       var hint = goods ? ' title="Открыть совместимые товары: ' + goods + '"' : '';
       return '<button class="' + cls + '" data-action="open-slot" ' + hint +
-        'data-ship="' + shipId + '" data-index="' + i + '">' +
+        'data-index="' + i + '">' +
         (first ? iconMarkup(first.icon, 22) : '') +
         (contents.length > 1 ? '<span class="slot-qty">×' + contents.length + '</span>' : '') +
         '</button>';
     }).join('') + '</div>';
   }
-  function slotTipHTML(ship, index) {
-    var contents = slotContentsList(ship, index);
-    var name = slotTitle(ship, index);
+  function slotTipHTML(view, index) {
+    var contents = slotContentsList(view, index);
+    var name = slotTitle(view, index);
     if (!contents.length) {
-      var rec = slotRecord(ship, index);
+      var rec = slotRecord(view, index);
       var goods = rec ? slotGoods(rec.slotId).length : 0;
       return '<h4>' + name + '</h4><small>' +
         (goods ? 'Слот пуст · нажмите — откроются совместимые товары' : 'Слот пуст') + '</small>';
@@ -492,8 +534,8 @@
       (contents.length > 4 ? '<small>+ ещё ' + (contents.length - 4) + ' — нажмите на слот</small>' : '');
   }
 
-  function slotModalHTML(ship, index) {
-    var contents = slotContentsList(ship, index);
+  function slotModalHTML(view, index) {
+    var contents = slotContentsList(view, index);
     var cells = contents.map(function (c) {
       var it = window.Store ? Store.byId('objects', c.itemId) : null;
       var qty = Number(c.qty) || 0;
@@ -502,17 +544,28 @@
     }).join('');
     return '<div class="slot-dialog" role="dialog" aria-modal="true">' +
       '<div class="slot-dialog-head"><div><span class="eyebrow">СОДЕРЖИМОЕ СЛОТА</span>' +
-      '<h3>' + slotTitle(ship, index) + '</h3></div>' +
+      '<h3>' + slotTitle(view, index) + '</h3></div>' +
       '<button class="slot-close" data-action="close-slot" aria-label="Закрыть">×</button></div>' +
       '<div class="slot-grid">' + cells + '</div></div>';
   }
 
-  function openSlotModal(shipId, index) {
-    var ship = window.Store ? Store.byId('objects', shipId) : null;
+  /* Общее окно: содержимое слота и отказ в покупке. */
+  function openDialog(eyebrow, title, bodyHTML) {
     var modal = document.getElementById('slotModal');
-    if (!ship || !modal) return;
-    if (!slotContentsList(ship, index).length) return;
-    modal.innerHTML = slotModalHTML(ship, index);
+    if (!modal) return;
+    modal.innerHTML = '<div class="slot-dialog" role="dialog" aria-modal="true">' +
+      '<div class="slot-dialog-head"><div><span class="eyebrow">' + eyebrow + '</span>' +
+      '<h3>' + title + '</h3></div>' +
+      '<button class="slot-close" data-action="close-slot" aria-label="Закрыть">×</button></div>' +
+      '<div class="dialog-body">' + bodyHTML + '</div></div>';
+    modal.hidden = false;
+  }
+
+  function openSlotModal(view, index) {
+    if (!view || !slotContentsList(view, index).length) return;
+    var modal = document.getElementById('slotModal');
+    if (!modal) return;
+    modal.innerHTML = slotModalHTML(view, index);
     modal.hidden = false;
   }
 
@@ -540,8 +593,8 @@
   }
 
   /* Пустой слот: открываем в магазине товары под него — категорию и её подкатегорию. */
-  function openSlotGoods(ship, index) {
-    var rec = slotRecord(ship, index);
+  function openSlotGoods(view, index) {
+    var rec = slotRecord(view, index);
     var items = rec ? slotGoods(rec.slotId) : [];
     if (!items.length) return false;
     var chain = window.Store ? Store.categoryChain(commonCategoryId(items)) : [];
@@ -553,7 +606,7 @@
     state.tradeMode = 'buy';
     state.amount = 1;
     state.ownedShipId = '';
-    state.notice = slotTitle(ship, index) + ': ' + items.length + ' ' +
+    state.notice = slotTitle(view, index) + ': ' + items.length + ' ' +
       plural(items.length, ['совместимый товар', 'совместимых товара', 'совместимых товаров']);
     return true;
   }
@@ -567,9 +620,9 @@
   function showSlotTip(tile) {
     var tip = document.getElementById('slotTip');
     if (!tip || !window.Store) return;
-    var ship = Store.byId('objects', tile.getAttribute('data-ship'));
-    if (!ship) return;
-    tip.innerHTML = slotTipHTML(ship, Number(tile.getAttribute('data-index')));
+    var view = activeShipView();
+    if (!view.ship) return;
+    tip.innerHTML = slotTipHTML(view, Number(tile.getAttribute('data-index')));
     var rect = tile.getBoundingClientRect();
     tip.hidden = false;
     var w = tip.offsetWidth, h = tip.offsetHeight;
@@ -686,10 +739,23 @@
   /* Купленные корабли: записи пользователя и выбранный корабль. */
   function userShipRecords() { return window.Store ? Store.userShips() : []; }
 
+  /* Выбранный корабль — по id записи: два одинаковых корабля не путаются. */
   function activeUserShip() {
     var list = userShipRecords();
-    for (var i = 0; i < list.length; i++) if (list[i].shipId === state.userShipId) return list[i];
+    for (var i = 0; i < list.length; i++) if (list[i].id === state.userShipId) return list[i];
     return list[0] || null;
+  }
+
+  /* Раскладка выбранного корабля: крепления и трюмы живут в записи. */
+  function activeShipView() {
+    var rec = activeUserShip();
+    var ship = rec && window.Store ? Store.byId('objects', rec.shipId) : null;
+    return {
+      rec: rec,
+      ship: ship,
+      slots: (rec && rec.slots) || [],
+      holds: (rec && rec.holds) || []
+    };
   }
 
   /* Полоска купленных кораблей над свойствами — клик выбирает корабль. */
@@ -697,15 +763,16 @@
     var list = userShipRecords();
     if (!list.length) return '';
     return '<div class="user-ships">' + list.map(function (rec) {
-      var on = active && active.shipId === rec.shipId;
-      return '<button class="user-ship' + (on ? ' active' : '') + '" data-action="select-user-ship" data-id="' + rec.shipId + '">' +
+      var on = !!(active && active.id === rec.id);
+      return '<button class="user-ship' + (on ? ' active' : '') + '" data-action="select-user-ship" data-id="' + rec.id + '">' +
         '<small>КУПЛЕН</small><strong>' + rec.name + '</strong></button>';
     }).join('') + '</div>';
   }
 
   function shipViewHTML() {
-    var rec = activeUserShip();
-    var ship = rec && window.Store ? Store.byId('objects', rec.shipId) : null;
+    var view = activeShipView();
+    var rec = view.rec;
+    var ship = view.ship;
     var strip = userShipStrip(rec);
 
     if (!ship) {
@@ -718,12 +785,12 @@
     var cat = Store.byId('categories', ship.categoryId);
     var props = Store.categoryProps(ship.categoryId).map(function (p) {
       return { name: p.name, value: (ship.values && ship.values[p.id]) || p.value || '' };
-    }).filter(function (p) { return p.value; });
+    }).filter(function (p) { return p.value && !isMassName(p.name); });
     var statRows = props.map(function (p) {
       var raw = String(p.value).trim();
       var v = /^\d+([.,]\d+)?$/.test(raw) ? fmt(Number(raw.replace(',', '.'))) : raw;
       return '<div><span>' + p.name + '</span><b>' + v + '</b></div>';
-    }).join('');
+    }).join('') + '<div><span>Масса</span><b>' + fmt(Math.round(Store.shipMass(rec))) + ' кг</b></div>';
 
     var bought = rec.boughtAt ? new Date(rec.boughtAt).toLocaleDateString('ru-RU') : '';
     var subtitle = (cat ? Store.categoryPath(cat.id) : '');
@@ -740,16 +807,33 @@
       '<p>' + subtitle + '</p>' +
       '<div class="stat-grid">' + (statRows || '<div><span>Свойства</span><b>—</b></div>') + '</div>' +
       '</div></div>' +
-      equipmentHTML(ship.name) +
-      slotsPanelHTML(ship);
+      equipmentHTML(view) +
+      holdsPanelHTML(view) +
+      slotsPanelHTML(view);
   }
 
   /* Панель слотов: квадраты, клик — модальное окно с содержимым. */
-  function slotsPanelHTML(ship) {
+  function slotsPanelHTML(view) {
     return '<div class="collection-panel"><div class="collection-head"><div>' +
       '<span class="eyebrow">СЛОТЫ</span><h2>Слоты и содержимое</h2></div>' +
-      '<span>' + (ship.slots || []).length + ' слотов</span></div>' +
-      '<div class="slots-body">' + slotGridHTML(ship) + '</div></div>';
+      '<span>' + view.slots.length + ' слотов</span></div>' +
+      '<div class="slots-body">' + (view.slots.length ? slotGridHTML(view) : '<div class="hold-empty">У этого корабля нет креплений</div>') +
+      '</div></div>';
+  }
+
+  /* Панель трюмов: загрузка по массе и состав. */
+  function holdsPanelHTML(view) {
+    if (!view.holds.length) return '';
+    var total = view.holds.reduce(function (n, h) {
+      var cap = Store.slotCapacity(h);
+      return n + (isFinite(cap) ? cap : 0);
+    }, 0);
+    var mass = Store.shipMass(view.rec);
+    return '<div class="collection-panel"><div class="collection-head"><div>' +
+      '<span class="eyebrow">ТРЮМЫ</span><h2>Грузовые трюмы</h2></div>' +
+      '<span>' + view.holds.length + ' · ' + fmt(Math.round(total)) + ' кг · масса корабля ' +
+      fmt(Math.round(mass)) + ' кг</span></div>' +
+      '<div class="slots-body">' + holdsListHTML(view) + '</div></div>';
   }
 
   /* Вкладка «Информация о базе»: только сама база и ресурсы. */
@@ -771,22 +855,53 @@
       resourcesInfoHTML();
   }
 
-  function equipmentHTML(shipName) {
-    var rows = purchasedEquipment.map(function (item, index) {
+  /* Оборудование на корабле — из креплений и трюмов записи, без выдуманных данных. */
+  function equipmentHTML(view) {
+    var map = {}, order = [];
+
+    function add(list, where) {
+      (list || []).forEach(function (c) {
+        var it = window.Store ? Store.byId('objects', c.itemId) : null;
+        if (!it) return;
+        if (!map[it.id]) {
+          map[it.id] = { item: it, count: 0, places: [] };
+          order.push(it.id);
+        }
+        map[it.id].count += parseInt(c.qty, 10) || 1;
+        if (where && map[it.id].places.indexOf(where) < 0) map[it.id].places.push(where);
+      });
+    }
+
+    view.slots.forEach(function (s) {
+      var slot = window.Store ? Store.byId('slots', s.slotId) : null;
+      add(s.contents, slot ? slot.name : '');
+    });
+    view.holds.forEach(function (h) { add(h.contents, h.name); });
+
+    var rows = order.map(function (id, index) {
+      var line = map[id];
+      var it = line.item;
+      var cat = window.Store ? Store.byId('categories', it.categoryId) : null;
+      var details = [];
+      if (cat) details.push(cat.name);
+      var mass = Store.massOf(it);
+      if (mass) details.push(fmt(mass) + ' кг');
+      if (line.places.length) details.push(line.places.join(', '));
       return '<div class="collection-row">' +
-        '<span class="item-icon ' + item.category + '">' + icon(item.category, 22) + '</span>' +
+        '<span class="item-icon">' + iconMarkup(it.icon, 22) + '</span>' +
         '<div class="collection-copy"><small>МОДУЛЬ // ' + pad2(index + 1) + '</small>' +
-        '<strong>' + item.name + '</strong><span>' + item.stats + '</span></div>' +
-        '<span class="equipment-rarity">' + item.rarity + '</span>' +
-        '<div class="collection-count"><b>×' + item.stock + '</b><span>Куплено</span></div>' +
+        '<strong>' + it.name + '</strong><span>' + details.join(' · ') + '</span></div>' +
+        '<div class="collection-count"><b>×' + line.count + '</b><span>На корабле</span></div>' +
         '</div>';
     }).join('');
-    var modules = purchasedEquipment.reduce(function (n, it) { return n + it.stock; }, 0);
+
+    var modules = order.reduce(function (n, id) { return n + map[id].count; }, 0);
+    var shipName = view.ship ? view.ship.name : '';
     return '<div class="collection-panel">' +
       '<div class="collection-head"><div>' +
-      '<span class="eyebrow">ИНВЕНТАРЬ' + (shipName ? ' · ' + shipName : '') + '</span><h2>Купленное оборудование</h2></div>' +
-      '<span>' + purchasedEquipment.length + ' типов · ' + modules + ' модулей</span></div>' +
-      '<div class="collection-list">' + rows + '</div></div>';
+      '<span class="eyebrow">ИНВЕНТАРЬ' + (shipName ? ' · ' + shipName : '') + '</span><h2>Оборудование корабля</h2></div>' +
+      '<span>' + order.length + ' типов · ' + modules + ' модулей</span></div>' +
+      '<div class="collection-list">' + (rows || '<div class="hold-empty">Пока ничего не куплено</div>') + '</div></div>';
   }
 
   function resourcesInfoHTML() {
@@ -833,10 +948,10 @@
     var cards = list.map(function (rec) {
       var ship = window.Store ? Store.byId('objects', rec.shipId) : null;
       var cat = ship ? Store.byId('categories', ship.categoryId) : null;
-      var on = !!(active && active.shipId === rec.shipId);
+      var on = !!(active && active.id === rec.id);
       var sub = cat ? cat.name : '';
       if (rec.price) sub += (sub ? ' · ' : '') + fmt(Number(rec.price)) + ' ¤';
-      return '<button class="ship-card' + (on ? ' active' : '') + '" data-action="select-user-ship" data-id="' + rec.shipId + '" data-rec="' + rec.id + '">' +
+      return '<button class="ship-card' + (on ? ' active' : '') + '" data-action="select-user-ship" data-id="' + rec.id + '" data-rec="' + rec.id + '">' +
         '<div class="ship-visual">' + shipGlyph(true) +
         (on ? '<span class="active-tag">Выбран</span>' : '') + '</div>' +
         '<div class="ship-meta"><strong>' + rec.name + '</strong><span>' + sub + '</span></div>' +
@@ -924,15 +1039,29 @@
     }
     else if (action === 'buy') {
       var buyItem = currentShop();
-      if (buyItem && buyItem.isShip) {
-        var res = Store.buyShip(buyItem.id);
-        state.notice = res.ok
-          ? 'Корабль «' + buyItem.name + '» куплен за ' + fmt(res.price) + ' ¤'
-          : (res.error === 'Недостаточно кредитов'
-            ? 'Не хватает кредитов: нужно ' + fmt(res.price) + ' ¤'
-            : 'Не удалось купить: ' + res.error);
+      if (!buyItem) return;
+      if (buyItem.isShip) {
+        var boughtShip = Store.buyShip(buyItem.id);
+        state.notice = boughtShip.ok
+          ? 'Корабль «' + buyItem.name + '» куплен за ' + fmt(boughtShip.price) + ' ¤'
+          : (boughtShip.error === 'Недостаточно кредитов'
+            ? 'Не хватает кредитов: нужно ' + fmt(boughtShip.price) + ' ¤'
+            : 'Не удалось купить: ' + boughtShip.error);
       } else {
-        state.notice = buyItem ? 'Покупка «' + buyItem.name + '» появится позже' : 'Покупка пока не настроена';
+        var target = activeUserShip();
+        if (!target) {
+          openDialog('ПОКУПКА', 'Нет корабля',
+            '<p class="dialog-text">Сначала купите корабль: покупка идёт на конкретный корабль, а не на склад.</p>');
+          return;
+        }
+        var boughtItem = Store.buyForShip(target.id, buyItem.id, 1);
+        if (!boughtItem.ok) {
+          openDialog('ПОКУПКА', buyItem.name + ' — не куплено',
+            '<p class="dialog-text">' + boughtItem.error + '</p>');
+          return;
+        }
+        state.notice = buyItem.name + ' ×' + boughtItem.qty + ' → ' + boughtItem.where +
+          ' · ' + fmt(boughtItem.price) + ' ¤';
       }
     }
     else if (action === 'transact') transact();
@@ -962,15 +1091,15 @@
     }
     else if (action === 'open-slot') {
       var tile = el;
-      var slotShip = window.Store ? Store.byId('objects', tile.getAttribute('data-ship')) : null;
+      var slotView = activeShipView();
       var slotIndex = Number(tile.getAttribute('data-index'));
-      if (!slotShip) return;
+      if (!slotView.ship) return;
       /* Заполненный слот показывает содержимое, пустой — открывает подходящие товары. */
-      if (slotContentsList(slotShip, slotIndex).length) {
-        openSlotModal(slotShip.id, slotIndex);
+      if (slotContentsList(slotView, slotIndex).length) {
+        openSlotModal(slotView, slotIndex);
         return;
       }
-      if (!openSlotGoods(slotShip, slotIndex)) return;
+      if (!openSlotGoods(slotView, slotIndex)) return;
     }
     else if (action === 'close-slot') {
       closeSlotModal();

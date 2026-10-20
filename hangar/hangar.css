@@ -594,6 +594,37 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 .slot-dialog .slot-grid { grid-template-columns: repeat(4, 1fr); }
 .slot-dialog .slot-tile { cursor: default; }
 .slot-dialog .slot-tile:hover { border-color: rgba(150, 190, 255, .18); background: rgba(8, 18, 24, .5); }
+
+/* Трюмы: загрузка по массе и состав */
+.hold-list { display: grid; gap: 8px; }
+.hold-row {
+  display: grid;
+  gap: 4px;
+  padding: 7px 8px;
+  border: 1px solid rgba(150, 190, 255, .14);
+  background: rgba(8, 18, 24, .42);
+}
+.hold-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.hold-head strong { font-size: 12px; font-weight: 500; }
+.hold-head span { color: #7f9aa0; font: 8px "IBM Plex Mono"; letter-spacing: .08em; }
+.hold-bar { display: block; height: 3px; background: rgba(120, 160, 170, .18); }
+.hold-bar em {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(117, 223, 210, .75), rgba(170, 136, 246, .75));
+}
+.hold-items { color: #8aa0a4; font-size: 10px; }
+.hold-empty {
+  color: #6b8086;
+  font: 9px "IBM Plex Mono";
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 8px 0;
+}
+
+/* Отказ в покупке */
+.dialog-body { display: grid; gap: 10px; }
+.dialog-text { margin: 0; color: #c3d3d7; font-size: 13px; line-height: 1.55; }
 .collection-copy { min-width: 0; display: flex; flex-direction: column; }
 .collection-copy small { color: #635779; font: 7px "IBM Plex Mono"; letter-spacing: .1em; }
 .collection-copy strong { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
