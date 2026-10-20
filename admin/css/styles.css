@@ -571,6 +571,30 @@ select.input { cursor: pointer; }
 .slot-add-row { margin-top: 8px; }
 .slot-add-row .input { border-style: dashed; color: var(--muted); }
 
+/* Трюм: название и вместимость в одну строку с бейджем загрузки */
+.slot-item-head .hold-name { flex: 1; min-width: 0; }
+.slot-item-head .hold-cap { flex: none; width: 150px; }
+
+/* prop_2: выбор материалов кнопками; «0» — не задано */
+.prop2-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.prop2-chip {
+  border: 1px solid var(--border);
+  background: rgba(13, 10, 30, 0.55);
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.prop2-chip:hover { color: var(--text); border-color: rgba(124, 92, 255, 0.45); }
+.prop2-chip.active {
+  color: #fff;
+  border-color: rgba(124, 92, 255, 0.65);
+  background: rgba(124, 92, 255, 0.22);
+}
+.prop2-cell { display: inline-block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+
 .form-error {
   color: #ff8fa3;
   font-size: 12.5px;

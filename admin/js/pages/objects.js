@@ -16,6 +16,43 @@
     );
   }
 
+  /* `prop_2` — материалы объекта: у грузового отсека — что принимает,
+     у добывающего оборудования — что добывает. «0» — не задано (у ресурсов
+     всегда 0). Варианты — названия ресурсов каталога. */
+  function prop2Picker(selected) {
+    var values = (selected || []).slice();
+    var chips = {};
+    var el = h('div', { class: 'prop2-picker' });
+
+    function refresh() {
+      Object.keys(chips).forEach(function (key) {
+        chips[key].classList.toggle('active', key === '0' ? !values.length : values.indexOf(key) > -1);
+      });
+    }
+
+    function addChip(key, label) {
+      var btn = h('button', {
+        type: 'button', class: 'prop2-chip', text: label,
+        onclick: function () {
+          if (key === '0') { values = []; refresh(); return; }
+          var i = values.indexOf(key);
+          if (i > -1) values.splice(i, 1); else values.push(key);
+          refresh();
+        }
+      });
+      chips[key] = btn;
+      el.appendChild(btn);
+    }
+
+    addChip('0', '0');
+    Store.resourceObjects().map(function (o) { return o.name; })
+      .filter(function (name, i, list) { return list.indexOf(name) === i; })
+      .forEach(function (name) { addChip(name, name); });
+
+    refresh();
+    return { el: el, value: function () { return values.slice(); } };
+  }
+
   /* Блок полей «свойства категории»: для каждого свойства категории (своё или
      унаследованное от родительской) — поле значения. Значение подставляется из
      свойства (значение по умолчанию), его можно изменить. */
@@ -244,6 +281,14 @@
             }
           },
           {
+            title: 'prop_2',
+            render: function (o) {
+              var list = o.prop2 || [];
+              if (!list.length) return h('span', { class: 'muted', text: '0' });
+              return h('span', { class: 'prop2-cell', text: list.join(', '), title: list.join(', ') });
+            }
+          },
+          {
             title: 'Покупка',
             render: function (o) {
               var p = Store.priceBuy(o);
@@ -279,15 +324,23 @@
       var itemText = sl ? 'слот «' + sl.name + '»' : 'любой слот';
       return h('span', { class: (sl ? '' : 'muted') + ' slots-cell', text: itemText, title: itemText });
     }
-    var parts = (o.slots || []).map(function (e) {
-      var slot = Store.byId('slots', e.slotId);
-      if (!slot) return null;
-      var names = e.contents.map(function (c) {
+    function namesOf(contents) {
+      return contents.map(function (c) {
         var it = Store.byId('objects', c.itemId);
         return it ? it.name + ' ×' + c.qty : null;
       }).filter(Boolean);
+    }
+    var parts = (o.slots || []).map(function (e) {
+      var slot = Store.byId('slots', e.slotId);
+      if (!slot) return null;
+      var names = namesOf(e.contents);
       return names.length ? slot.name + ' (' + names.join(', ') + ')' : slot.name;
     }).filter(Boolean);
+    (o.holds || []).forEach(function (hd) {
+      var names = namesOf(hd.contents);
+      parts.push('трюм «' + hd.name + '» ' + Store.fmtNum(Store.contentsMass(hd.contents)) + '/' +
+        Store.fmtNum(Store.slotCapacity(hd)) + ' кг' + (names.length ? ' (' + names.join(', ') + ')' : ''));
+    });
     var text = parts.join(', ');
     return h('span', { class: (parts.length ? '' : 'muted') + ' slots-cell', text: parts.length ? text : '—', title: text });
   }
@@ -313,15 +366,11 @@
     });
   }
 
-  /* Предметы, подходящие в слот. Грузовой слот принимает любой груз, кроме кораблей;
-     крепление — только оборудование со своим слотом (одинаковый slotId). */
+  /* Предметы, подходящие в крепление: оборудование со своим слотом (тот же slotId). */
   function compatibleItems(slotId, excludeId) {
-    var slot = slotId ? Store.byId('slots', slotId) : null;
-    var isCargo = !!(slot && slot.kind === 'cargo');
     return Store.objects().filter(function (it) {
       if (it.id === excludeId) return false;
       if (Store.categoryIsShip(it.categoryId)) return false;
-      if (isCargo) return true;
       return it.slotId === slotId;
     });
   }
@@ -635,6 +684,161 @@
     };
   }
 
+  /* Редактор трюмов корабля: название, вместимость (кг) и содержимое.
+     В трюм можно положить любое оборудование, кроме кораблей; сумма масс
+     не должна превышать вместимость. Груз контейнеров не считается. */
+  function buildHoldsSection(holdEntries, excludeId) {
+    var listEl = h('div', { class: 'slot-edit-list' });
+    var rows = [];
+
+    function itemsForHold() {
+      return Store.objects().filter(function (it) {
+        return it.id !== excludeId && !Store.categoryIsShip(it.categoryId);
+      });
+    }
+
+    function addRow(hold) {
+      var st = { contentRows: [] };
+      st.nameInput = UI.input({ value: hold ? hold.name : 'Трюм', placeholder: 'Название' });
+      st.nameInput.classList.add('hold-name');
+      st.capInput = UI.input({
+        type: 'number', min: 0, step: 'any',
+        value: hold ? hold.capacity : '', placeholder: 'Вместимость, кг'
+      });
+      st.capInput.classList.add('hold-cap');
+      st.badge = h('span', { class: 'cap-badge' });
+
+      function capacity() {
+        var n = parseFloat(String(st.capInput.value).replace(',', '.'));
+        return isFinite(n) && n >= 0 ? n : Infinity;
+      }
+
+      function usedNow() {
+        var sum = 0;
+        st.contentRows.forEach(function (cr) {
+          var it = Store.byId('objects', cr.select.value);
+          sum += (parseInt(cr.qty.value, 10) || 0) * Store.cargoUnits(it);
+        });
+        return sum;
+      }
+
+      function refreshBadge() {
+        var cap = capacity();
+        var used = usedNow();
+        st.badge.textContent = Store.fmtNum(used) + ' / ' + (isFinite(cap) ? Store.fmtNum(cap) + ' кг' : '∞');
+        st.badge.classList.toggle('cap-over', used > cap + 1e-9);
+        st.badge.title = used > cap + 1e-9 ? 'Трюм перегружен' : 'Масса оборудования в трюме';
+      }
+
+      function addContentRow(itemId, qty) {
+        var cr = {};
+        cr.select = UI.select({
+          options: [{ value: '', label: '— выберите предмет —' }].concat(itemsForHold().map(function (it) {
+            return { value: it.id, label: itemLabel(it) };
+          })),
+          value: itemId || ''
+        });
+        cr.select.classList.add('content-item');
+        cr.qty = UI.input({ type: 'number', min: 1, step: 1, value: qty || 1 });
+        cr.qty.classList.add('content-qty');
+        cr.qty.title = 'Количество единиц';
+        cr.select.addEventListener('change', refreshBadge);
+        cr.qty.addEventListener('change', refreshBadge);
+        cr.el = h('div', { class: 'content-row' }, cr.select, cr.qty,
+          h('button', {
+            class: 'icon-btn', text: '\u2715', title: 'Убрать содержимое',
+            onclick: function () {
+              var i = st.contentRows.indexOf(cr);
+              if (i > -1) st.contentRows.splice(i, 1);
+              if (cr.el.parentNode) cr.el.parentNode.removeChild(cr.el);
+              refreshBadge();
+            }
+          })
+        );
+        st.contentRows.push(cr);
+        st.contentsEl.insertBefore(cr.el, st.addRowEl);
+        refreshBadge();
+      }
+
+      var addSelect = UI.select({
+        options: [{ value: '', label: '+ добавить предмет…' }].concat(itemsForHold().map(function (it) {
+          return { value: it.id, label: itemLabel(it) };
+        })),
+        value: ''
+      });
+      addSelect.classList.add('content-item');
+      addSelect.addEventListener('change', function () {
+        if (!addSelect.value) return;
+        addContentRow(addSelect.value, 1);
+        addSelect.value = '';
+      });
+
+      st.addRowEl = h('div', { class: 'content-row content-new' }, addSelect);
+      st.contentsEl = h('div', { class: 'slot-contents' }, st.addRowEl);
+
+      st.capInput.addEventListener('input', refreshBadge);
+      st.el = h('div', { class: 'slot-item' },
+        h('div', { class: 'slot-item-head' },
+          st.nameInput, st.capInput, st.badge,
+          h('button', {
+            class: 'icon-btn', text: '\u2715', title: 'Убрать трюм',
+            onclick: function () {
+              var i = rows.indexOf(st);
+              if (i > -1) rows.splice(i, 1);
+              if (st.el.parentNode) st.el.parentNode.removeChild(st.el);
+            }
+          })
+        ),
+        st.contentsEl
+      );
+      rows.push(st);
+      listEl.appendChild(st.el);
+
+      ((hold && hold.contents) || []).forEach(function (c) { addContentRow(c.itemId, c.qty); });
+      refreshBadge();
+    }
+
+    (holdEntries || []).forEach(addRow);
+
+    function collect() {
+      return rows.map(function (st) {
+        return {
+          name: st.nameInput.value.trim() || 'Трюм',
+          capacity: st.capInput.value.trim(),
+          contents: st.contentRows.map(function (cr) {
+            return { itemId: cr.select.value, qty: String(Math.max(1, parseInt(cr.qty.value, 10) || 1)) };
+          }).filter(function (c) { return c.itemId; })
+        };
+      });
+    }
+
+    return {
+      el: h('div', {},
+        listEl,
+        h('div', { class: 'slot-add-row' },
+          h('button', { class: 'btn btn-sm', text: '+ Добавить трюм', onclick: function () { addRow(null); } })
+        ),
+        h('div', {
+          class: 'hint',
+          text: 'Трюмы фиксированы у корабля: у каждого своё название и вместимость. В трюм помещается любое оборудование; сумма масс не должна превышать вместимость, груз контейнеров не считается.'
+        })
+      ),
+      collect: collect,
+      validate: function () {
+        var list = collect();
+        for (var i = 0; i < list.length; i++) {
+          var cap = parseFloat(String(list[i].capacity).replace(',', '.'));
+          if (!isFinite(cap) || cap < 0) continue;
+          var used = Store.contentsMass(list[i].contents);
+          if (used > cap + 1e-9) {
+            return 'Трюм «' + list[i].name + '» перегружен: ' + Store.fmtNum(used) + ' кг из ' + Store.fmtNum(cap) + ' кг.';
+          }
+        }
+        return null;
+      }
+    };
+  }
+
   function openObjectModal(existing, presetCategoryId) {
     var isEdit = !!existing;
     var categories = Store.categoryTree();
@@ -690,6 +894,22 @@
       isEdit ? existing.id : null
     );
 
+    var holdsSection = buildHoldsSection(
+      existingIsShip ? (existing.holds || []) : [],
+      isEdit ? existing.id : null
+    );
+
+    /* `prop_2` — только у предметов: у корабля его нет. */
+    var prop2Field = prop2Picker(isEdit ? (existing.prop2 || []) : []);
+    var prop2Block = h('div', { class: 'field' },
+      h('label', { class: 'field-label', text: 'prop_2 — материалы' }),
+      prop2Field.el,
+      h('div', {
+        class: 'hint',
+        text: 'Для грузового отсека — какие материалы принимает, для добывающего оборудования — что добывает. «0» — не задано; у ресурсов всегда 0.'
+      })
+    );
+
     var slots = Store.slots();
     var slotSelect = UI.select({
       options: [{ value: '', label: '— любой слот —' }].concat(slots.map(function (sl) {
@@ -712,6 +932,11 @@
       slotsSection.el
     );
 
+    var holdsBlock = h('div', { class: 'field' },
+      h('label', { class: 'field-label', text: 'Трюмы корабля' }),
+      holdsSection.el
+    );
+
     var itemBlock = h('div', { class: 'field' },
       h('label', { class: 'field-label', text: 'Куда вставляется' }),
       h('div', { class: 'slot-row' }, slotSelect, anySlotRow.el),
@@ -730,6 +955,8 @@
       var known = !!catSelect.value;
       var isShip = known && Store.categoryIsShip(catSelect.value);
       shipBlock.hidden = !isShip;
+      holdsBlock.hidden = !isShip;
+      prop2Block.hidden = isShip || !known;
       itemBlock.hidden = isShip || !known;
       if (!known) {
         typeHint.textContent = 'Выберите подкатегорию: у ветки кораблей объект получает слоты, у остальных — слот вставки.';
@@ -755,7 +982,9 @@
         iconField.el
       ),
       shipBlock,
+      holdsBlock,
       itemBlock,
+      prop2Block,
       UI.field('Цена покупки, ¤', priceBuyInput, 'Сколько объект стоит в магазине. Пусто — цена не задана.'),
       UI.field('Цена продажи, ¤', priceSaleInput, 'Сколько дадут за объект при продаже. Пусто — как цена покупки.'),
       h('div', { class: 'field' },
@@ -788,6 +1017,12 @@
           }
         }
 
+        var holdEntries = isShip ? holdsSection.collect() : [];
+        if (isShip) {
+          var holdError = holdsSection.validate();
+          if (holdError) return holdError;
+        }
+
         var chosenCat = Store.byId('categories', catSelect.value);
         var data = {
           name: name,
@@ -798,7 +1033,9 @@
           icon: iconField.value(),
           values: collectInputs(inputs),
           slotId: isShip || anySlotRow.input.checked ? null : slotSelect.value,
-          slots: slotEntries
+          prop2: isShip ? [] : prop2Field.value(),
+          slots: slotEntries,
+          holds: holdEntries
         };
         if (isEdit) {
           Store.patch('objects', existing.id, data);

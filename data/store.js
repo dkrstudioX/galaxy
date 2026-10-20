@@ -25,6 +25,49 @@
   function str(v) { return typeof v === 'string' ? v : (v === null || v === undefined ? '' : String(v)); }
   function uid() { return 'id' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
+  /* `prop_2` — материалы, с которыми работает объект: у ресурсов пусто,
+     у грузовых отсеков и добывающего оборудования — список материалов.
+     Пусто и «0» — «не задано». */
+  function prop2List(v) {
+    var list = Array.isArray(v) ? v : str(v).split(',');
+    return list.map(function (x) { return str(x).trim(); })
+      .filter(function (x) { return x && x !== '0'; });
+  }
+
+  /* Содержимое крепления или трюма: предмет, количество и (у контейнера) груз.
+     Груз — список «ресурс + количество», глубже вложенности нет. */
+  function makeContents(list) {
+    return arr(list).filter(isObj).map(function (c) {
+      var qty = Math.floor(Number(str(c.qty).replace(',', '.')));
+      if (!isFinite(qty) || qty < 1) qty = 1;
+      return { itemId: str(c.itemId), qty: String(qty), cargo: makeContents(c.cargo) };
+    }).filter(function (c) { return c.itemId; });
+  }
+
+  /* Крепления корабля: [{slotId, contents}]. Старый формат (slotIds: [id])
+     мигрирует — содержимое остаётся пустым. */
+  function makeSlots(o) {
+    var entries = arr(o.slots);
+    if (!entries.length && Array.isArray(o.slotIds)) {
+      entries = o.slotIds.map(function (id) { return { slotId: str(id), contents: [] }; });
+    }
+    return entries.filter(isObj).map(function (e) {
+      return { slotId: str(e.slotId), contents: makeContents(e.contents) };
+    }).filter(function (e) { return e.slotId; });
+  }
+
+  /* Трюмы корабля: [{name, capacity, contents}]. У каждого своя вместимость в кг. */
+  function makeHolds(o) {
+    return arr(o.holds).filter(isObj).map(function (h) {
+      var cap = Number(str(h.capacity).replace(',', '.'));
+      return {
+        name: str(h.name).trim() || 'Трюм',
+        capacity: isFinite(cap) && cap >= 0 ? String(Math.floor(cap)) : '0',
+        contents: makeContents(h.contents)
+      };
+    });
+  }
+
   function obj(v) {
     var out = {};
     if (isObj(v)) Object.keys(v).forEach(function (k) { out[k] = str(v[k]); });
@@ -95,7 +138,11 @@
       .concat(collect(data.equipments))
       .filter(function (o) { return o.name; });
 
-    /* Купленные корабли — записи пользователя, независимые от каталога. */
+    /* Купленные корабли — записи пользователя, независимые от каталога:
+       у каждой свой набор креплений и трюмов. Старая запись без раскладки
+       получает пустую копию раскладки корабля. */
+    /* Раскладка записи, которой ещё нет, копируется позже — после того как
+       у корабля-каталога «грузовые слоты» станут трюмами (pruneRefs). */
     out.users_ships = arr(data.users_ships).filter(isObj).map(function (u) {
       return {
         id: str(u.id) || uid(),
@@ -103,7 +150,9 @@
         name: str(u.name).trim(),
         categoryId: str(u.categoryId),
         price: str(u.price).trim(),
-        boughtAt: str(u.boughtAt)
+        boughtAt: str(u.boughtAt),
+        slots: Array.isArray(u.slots) ? makeSlots(u) : null,
+        holds: Array.isArray(u.holds) ? makeHolds(u) : null
       };
     }).filter(function (u) { return u.shipId || u.name; });
 
@@ -124,28 +173,10 @@
         price_sale: str(o.price_sale).trim() || str(o.price).trim(),
         icon: str(o.icon),
         slotId: o.slotId ? str(o.slotId) : null,
-        slots: makeSlots(o)
+        prop2: prop2List(o.prop2),
+        slots: makeSlots(o),
+        holds: makeHolds(o)
       };
-    }
-
-    /* Слоты корабля: [{slotId, contents:[{itemId, qty}]}].
-       Старый формат (slotIds: [id]) мигрирует — содержимое остаётся пустым;
-       поле kind из прежних выгрузок отбрасывается (id объектов уникальны). */
-    function makeSlots(o) {
-      var entries = arr(o.slots);
-      if (!entries.length && Array.isArray(o.slotIds)) {
-        entries = o.slotIds.map(function (id) { return { slotId: str(id), contents: [] }; });
-      }
-      return entries.filter(isObj).map(function (e) {
-        return {
-          slotId: str(e.slotId),
-          contents: arr(e.contents).filter(isObj).map(function (c) {
-            var qty = Math.floor(Number(str(c.qty).replace(',', '.')));
-            if (!isFinite(qty) || qty < 1) qty = 1;
-            return { itemId: str(c.itemId), qty: String(qty) };
-          }).filter(function (c) { return c.itemId; })
-        };
-      });
     }
   }
 
@@ -169,11 +200,20 @@
 
   /* Убираем ссылки на несуществующие записи, чтобы база всегда была согласованной. */
   function pruneRefs(out) {
-    var propIds = {}, catById = {}, slotIds = {}, objIds = {};
+    var propIds = {}, catById = {}, slotIds = {}, objIds = {}, slotById = {};
     out.props.forEach(function (p) { propIds[p.id] = true; });
     out.categories.forEach(function (c) { catById[c.id] = c; });
-    out.slots.forEach(function (s) { slotIds[s.id] = true; });
+    out.slots.forEach(function (s) { slotIds[s.id] = true; slotById[s.id] = s; });
     out.objects.forEach(function (o) { objIds[o.id] = true; });
+
+    /* Содержимое без ссылок на существующие предметы (и без самого корабля). */
+    function cleanContents(list, owner) {
+      return arr(list).filter(isObj).map(function (c) {
+        return { itemId: str(c.itemId), qty: str(c.qty), cargo: cleanContents(c.cargo, owner) };
+      }).filter(function (c) {
+        return objIds[c.itemId] && (!owner || c.itemId !== owner.id);
+      });
+    }
 
     out.categories.forEach(function (c) {
       c.propIds = c.propIds.filter(function (id) { return propIds[id]; });
@@ -193,16 +233,52 @@
       if (massProp && !str(o.values[massProp.id]) && o.mass) o.values[massProp.id] = o.mass;
       delete o.mass;
       if (isShipIn(catById, o.categoryId)) {
-        /* Корабль никуда не вставляется, у него только свои слоты. */
+        /* Корабль никуда не вставляется, у него свои крепления и трюмы. */
         o.slotId = null;
-        o.slots = o.slots.filter(function (e) { return slotIds[e.slotId]; });
+        /* Прежние «грузовые слоты» стали трюмами корабля. */
+        var kept = [];
         o.slots.forEach(function (e) {
-          e.contents = e.contents.filter(function (c) { return objIds[c.itemId] && c.itemId !== o.id; });
+          if (!slotIds[e.slotId]) return;
+          var tpl = slotById[e.slotId];
+          if (tpl && tpl.kind === 'cargo') {
+            o.holds.push({ name: tpl.name, capacity: tpl.capacity, contents: cleanContents(e.contents, o) });
+            return;
+          }
+          e.contents = cleanContents(e.contents, o);
+          kept.push(e);
         });
+        o.slots = kept;
+        o.holds.forEach(function (h) { h.contents = cleanContents(h.contents, o); });
       } else {
         o.slots = [];
+        o.holds = [];
         if (o.slotId && !slotIds[o.slotId]) o.slotId = null;
       }
+    });
+
+    /* У купленных кораблей — своя раскладка. Старой записи без неё копируем
+       пустую раскладку корабля-каталога (уже с трюмами вместо грузовых слотов). */
+    var objById = {};
+    out.objects.forEach(function (o) { objById[o.id] = o; });
+
+    out.users_ships.forEach(function (r) {
+      var ship = objById[r.shipId] || null;
+      if (!r.slots) {
+        r.slots = ship ? arr(ship.slots).map(function (e) {
+          return { slotId: str(e.slotId), contents: [] };
+        }) : [];
+      }
+      if (!r.holds) {
+        r.holds = ship ? arr(ship.holds).map(function (h) {
+          return { name: h.name, capacity: h.capacity, contents: [] };
+        }) : [];
+      }
+      r.slots = arr(r.slots).filter(function (e) { return slotIds[e.slotId]; });
+      r.slots.forEach(function (e) { e.contents = cleanContents(e.contents, r); });
+      r.holds = arr(r.holds).map(function (h) {
+        h.contents = cleanContents(h.contents, r);
+        return h;
+      });
     });
   }
 
@@ -376,6 +452,124 @@
     });
   }
 
+  /* ---------- Масса и содержимое ---------- */
+
+  /* Масса одной единицы: значение свойства «Масса»/«Вес» из категории объекта.
+     Старое поле mass читается как запасной вариант. */
+  function massValue(item) {
+    if (!item) return 0;
+    var prop = null;
+    all('props').forEach(function (p) { if (!prop && isMassPropName(p.name)) prop = p; });
+    var raw = prop && item.values ? item.values[prop.id] : '';
+    if (raw === undefined || raw === '') raw = item.mass;
+    var n = parseFloat(str(raw).replace(',', '.'));
+    return isFinite(n) && n > 0 ? n : 0;
+  }
+
+  /* Единица груза: у оборудования — масса в кг; у ресурсов массы нет,
+     поэтому одна единица ресурса занимает один килограмм груза. */
+  function cargoUnitsOf(item) {
+    var m = massValue(item);
+    return m > 0 ? m : 1;
+  }
+
+  /* Масса оборудования в содержимом: предмет × количество, без груза контейнеров. */
+  function contentsMass(contents) {
+    var sum = 0;
+    arr(contents).forEach(function (c) {
+      var it = byId('objects', c.itemId);
+      sum += (parseInt(c.qty, 10) || 0) * cargoUnitsOf(it);
+    });
+    return sum;
+  }
+
+  /* Масса груза внутри контейнеров: ресурс меряется килограммами (1 ед. = 1 кг). */
+  function cargoMass(contents) {
+    var sum = 0;
+    arr(contents).forEach(function (c) {
+      arr(c.cargo).forEach(function (g) {
+        var it = byId('objects', g.itemId);
+        sum += (parseInt(g.qty, 10) || 0) * cargoUnitsOf(it);
+      });
+    });
+    return sum;
+  }
+
+  /* Масса корабля: корпус + всё в креплениях и трюмах. Один рекурсивный обход,
+     поэтому каждый объект учитывается ровно один раз. */
+  function shipMass(ship) {
+    if (!ship) return 0;
+    var total = massValue(ship);
+    /* У записи купленного корабля своей массы нет — берём корпус из каталога. */
+    if (!total && ship.shipId) total = massValue(byId('objects', ship.shipId));
+    arr(ship.slots).concat(arr(ship.holds)).forEach(function (e) {
+      total += contentsMass(e.contents) + cargoMass(e.contents);
+    });
+    return total;
+  }
+
+  /* Свободная вместимость трюма по массе оборудования (груз контейнеров не в счёт). */
+  function holdFree(hold) {
+    var cap = parseFloat(str(hold && hold.capacity).replace(',', '.'));
+    if (!isFinite(cap) || cap < 0) return Infinity;
+    return Math.max(0, cap - contentsMass(hold && hold.contents));
+  }
+
+  /* Свободная вместимость контейнера: «Вместимость» минус его груз. */
+  function containerFree(entry) {
+    if (!entry) return 0;
+    return Math.max(0, capacityOf(byId('objects', entry.itemId)) - cargoMass([entry]));
+  }
+
+  /* Свойство «Вместимость»/«Ёмкость» — им задаётся вместимость контейнера. */
+  function capacityProp() {
+    var found = null;
+    all('props').forEach(function (p) {
+      var n = str(p.name).trim().toLowerCase();
+      if (!found && (n === 'вместимость' || n === 'ёмкость' || n === 'емкость')) found = p;
+    });
+    return found;
+  }
+
+  function capacityOf(item) {
+    var prop = capacityProp();
+    var raw = prop && item && item.values ? item.values[prop.id] : '';
+    var n = parseFloat(str(raw).replace(',', '.'));
+    return isFinite(n) && n >= 0 ? n : 0;
+  }
+
+  /* Есть ли материал в `prop_2` объекта (сравнение без регистра). */
+  function prop2Has(item, name) {
+    var n = str(name).trim().toLowerCase();
+    if (!n) return false;
+    return arr(item && item.prop2).some(function (x) { return str(x).trim().toLowerCase() === n; });
+  }
+
+  /* Корень «Ресурсы»: по нему отличаем ресурсы от оборудования. */
+  function resourceRoot() {
+    var found = null;
+    all('categories').forEach(function (c) {
+      if (!found && !c.parentId && str(c.name).trim().toLowerCase() === 'ресурсы') found = c;
+    });
+    return found;
+  }
+
+  /* Все ресурсы каталога: объекты во всём поддереве «Ресурсы». */
+  function resourceObjects() {
+    var root = resourceRoot();
+    if (!root) return [];
+    var ids = {};
+    ids[root.id] = true;
+    categoryDescendants(root.id).forEach(function (c) { ids[c.id] = true; });
+    return all('objects').filter(function (o) { return ids[o.categoryId]; });
+  }
+
+  function isResourceObject(item) {
+    var root = resourceRoot();
+    if (!root || !item) return false;
+    return categoryChain(item.categoryId).some(function (c) { return c.id === root.id; });
+  }
+
   /* ---------- Проверки использования ---------- */
 
   function propUsage(propId) {
@@ -396,13 +590,23 @@
     };
   }
 
-  /* Где используется объект: имена объектов, в чьих слотах он лежит. */
+  /* Где используется объект: корабли каталога и купленные, в чьих креплениях,
+     трюмах или контейнерах он лежит. */
   function objectUsage(id) {
-    return all('objects').filter(function (o) {
-      return o.slots.some(function (e) {
-        return e.contents.some(function (c) { return c.itemId === id; });
+    function hasItem(entries) {
+      return arr(entries).some(function (e) {
+        return arr(e.contents).some(function (c) {
+          return c.itemId === id || arr(c.cargo).some(function (g) { return g.itemId === id; });
+        });
       });
+    }
+    var names = all('objects').filter(function (o) {
+      return hasItem(arr(o.slots).concat(arr(o.holds)));
     }).map(function (o) { return o.name; });
+    all('users_ships').forEach(function (r) {
+      if (hasItem(arr(r.slots).concat(arr(r.holds)))) names.push('корабль «' + r.name + '»');
+    });
+    return names;
   }
 
   function categoryUsage(categoryId) {
@@ -494,28 +698,32 @@
     if (price > credits()) return { ok: false, error: 'Недостаточно кредитов', price: price, credits: credits() };
 
     addCredits(-price);
+    /* Своя раскладка на каждый купленный корабль: крепления и трюмы пустые. */
     var record = insert('users_ships', {
       shipId: ship.id,
       name: ship.name,
       categoryId: ship.categoryId,
       price: String(price),
-      boughtAt: new Date().toISOString()
+      boughtAt: new Date().toISOString(),
+      slots: arr(ship.slots).map(function (e) { return { slotId: e.slotId, contents: [] }; }),
+      holds: arr(ship.holds).map(function (h) {
+        return { name: h.name, capacity: h.capacity, contents: [] };
+      })
     });
     return { ok: true, record: record, price: price, credits: credits() };
   }
 
   /* ---------- Демонстрационный набор ---------- */
 
-  /* Набор для быстрого старта: груз мерят единицами и массой.
-     Масса — обычное свойство категорий («Масса»), у каждого объекта своё значение.
-     У ресурсов массы нет: одна единица ресурса занимает одну единицу груза.
+  /* Набор для быстрого старта. Масса — обычное свойство категорий («Масса»),
+     у каждого объекта своё значение. У ресурсов массы нет: их количество
+     измеряется в килограммах, и килограмм — это и есть груз.
      Три корневые категории: «Оборудование», «Ресурсы», «Корабли».
-     «Топливо» вложено в ресурсы, «Расходники» — в оборудование.
-     Шесть кораблей — по одному на класс, все начального уровня (слабые
-     характеристики и низкая цена), но с полным набором слотов своего класса.
-     Двадцать добытых ресурсов, топливо в баках на 1/5/10 тонн, по десять лазеров,
-     пулемётов и щитов, добывающее и перерабатывающее оборудование,
-     радары со сканерами и грузовые отсеки.
+     Ресурсы — четыре материала без подкатегорий; «Топливо» оставлено пустым
+     на будущее. Баки, грузовые отсеки и добывающее оборудование — оборудование
+     с заполненным `prop_2`.
+     У кораблей свои крепления и трюмы: трюмы больше не шаблоны слотов,
+     у каждого своя вместимость.
      Свойство «Редкость» намеренно не используется. */
   function demoData() {
     var d = blank();
@@ -550,16 +758,20 @@
       return { buy: String(b), sale: String(sale) };
     }
     /* Предмет: масса — значение свойства «Масса», плюс свойства категории.
-       Ресурсам масса не нужна: их мерят единицами, и единица — это и есть груз. */
-    function addItem(name, cat, mass, valuePairs, slot, buy, icon) {
-      var p = prices(buy);
+       `prop2` — материалы объекта (грузовые отсеки, добывающее оборудование).
+       `rawPrices` — готовые цены: ресурсы продаются за килограмм и в общий
+       диапазон оборудования не попадают. */
+    function addItem(name, cat, mass, valuePairs, slot, buy, icon, prop2, rawPrices) {
+      var p = rawPrices || prices(buy);
       var values = (valuePairs || []).slice();
       if (mass) values.unshift([massProp, String(mass)]);
       var item = {
         id: uid(), name: name, categoryId: cat.id, parentCategoryId: cat.parentId || '',
         values: vals(values),
         price_buy: p.buy, price_sale: p.sale, icon: icon || '',
-        slotId: slot ? slot.id : null, slots: []
+        slotId: slot ? slot.id : null,
+        prop2: prop2List(prop2),
+        slots: [], holds: []
       };
       d.objects.push(item);
       return item;
@@ -580,7 +792,8 @@
     var thrust = addProp('Тяга', '100');
     var fuelUse = addProp('Расход топлива', '2');
 
-    /* Крепления под оборудование и грузовые слоты (вместимость — в кг). */
+    /* Крепления под оборудование (вместимость — в кг).
+       Трюмы больше не шаблоны слотов: они задаются у корабля. */
     var slotTurret = addSlot('Орудийная башня', '120');
     var slotGun = addSlot('Пулемётная точка', '60');
     var slotShield = addSlot('Щитовой генератор', '150');
@@ -588,9 +801,9 @@
     var slotRadar = addSlot('Радар', '80');
     var slotMining = addSlot('Добывающий модуль', '400');
     var slotRefinery = addSlot('Перерабатывающий модуль', '600');
-    var slotHold1 = addSlot('Трюм 1 т', '1000', 'cargo');
-    var slotHold5 = addSlot('Трюм 5 т', '5000', 'cargo');
-    var slotHold10 = addSlot('Трюм 10 т', '10000', 'cargo');
+    /* Отдельное крепление под грузовой отсек: контейнер встаёт сюда,
+       а если оно занято — в трюм. */
+    var slotCargoBay = addSlot('Грузовой отсек', '');
 
     /* ---------- Категории: три корня — оборудование, ресурсы, корабли ---------- */
 
@@ -607,11 +820,11 @@
 
     /* У ресурсов свойства «Масса» нет: количество ресурса и есть масса груза. */
     var catResources = addCat('Ресурсы', [], null, false, 'gem');
-    var catOres = addCat('Руды', [], catResources, false, 'crate');
-    var catMinerals = addCat('Минералы', [], catResources, false, 'gem');
+    /* «Топливо» пока пустое: бак — оборудование, его `prop_2` разрешает топливо. */
+    var catFuel = addCat('Топливо', [], catResources, false, 'fuel');
 
-    var catFuel = addCat('Топливо', [massProp.id], catResources, false, 'fuel');
-    var catFuelTanks = addCat('Топливные баки', [], catFuel, false, 'fuel');
+    /* Бак — контейнер: своя масса и своя вместимость, `prop_2` = топливо. */
+    var catFuelTanks = addCat('Топливные баки', [massProp.id, holdCapacity.id], catEquipment, false, 'fuel');
 
     var catShips = addCat('Корабли', [durability.id, speed.id, massProp.id], null, true, 'ship');
     var catLiners = addCat('Линкоры', [], catShips, false, 'ship');
@@ -621,27 +834,24 @@
     var catShuttles = addCat('Шаттлы', [], catShips, false, 'rocket');
     var catFreighters = addCat('Грузовозы', [], catShips, false, 'hangar');
 
-    /* ---------- Ресурсы: двадцать добытых позиций ---------- */
+    /* ---------- Ресурсы: четыре материала, цена за килограмм ---------- */
 
-    var ores = [
-      ['Железная руда', '350'], ['Медная руда', '360'], ['Титановая руда', '380'],
-      ['Вольфрамовая руда', '400'], ['Урановая руда', '450'], ['Кобальтовая руда', '420'],
-      ['Никелевая руда', '370'], ['Хромовая руда', '390'], ['Боксит', '355'],
-      ['Кварцевая руда', '351']
+    var materials = [
+      { name: 'Железо', buy: '6', sale: '4', icon: 'crate' },
+      { name: 'Медь', buy: '9', sale: '6', icon: 'crate' },
+      { name: 'Золото', buy: '25', sale: '18', icon: 'gem' },
+      { name: 'Камень', buy: '3', sale: '2', icon: 'gem' }
     ];
-    var minerals = [
-      ['Иридий', '520'], ['Платина', '640'], ['Золото', '700'], ['Серебро', '480'],
-      ['Литий', '420'], ['Магний', '400'], ['Цинк', '380'], ['Олово', '370'],
-      ['Графит', '360'], ['Кремний', '355']
-    ];
-    ores.forEach(function (r) { addItem(r[0], catOres, '', [], null, r[1], 'crate'); });
-    minerals.forEach(function (r) { addItem(r[0], catMinerals, '', [], null, r[1], 'gem'); });
+    materials.forEach(function (m) {
+      addItem(m.name, catResources, '', [], null, m.buy, m.icon, null, { buy: m.buy, sale: m.sale });
+    });
+    var materialNames = materials.map(function (m) { return m.name; });
 
-    /* ---------- Топливо: баки на 1, 5 и 10 тонн; чем больше объём, тем дешевле тонна ---------- */
+    /* ---------- Топливо: баки на 1, 5 и 10 тонн; вместимость — в кг ---------- */
 
-    addItem('Топливный бак, 1 т', catFuelTanks, '1000', [], null, '400', 'fuel');
-    addItem('Топливный бак, 5 т', catFuelTanks, '5000', [], null, '800', 'fuel');
-    addItem('Топливный бак, 10 т', catFuelTanks, '10000', [], null, '1000', 'fuel');
+    addItem('Топливный бак, 1 т', catFuelTanks, '120', [[holdCapacity, '1000']], null, '400', 'fuel', ['Топливо']);
+    addItem('Топливный бак, 5 т', catFuelTanks, '350', [[holdCapacity, '5000']], null, '800', 'fuel', ['Топливо']);
+    addItem('Топливный бак, 10 т', catFuelTanks, '600', [[holdCapacity, '10000']], null, '1000', 'fuel', ['Топливо']);
 
     /* ---------- Оружие и защита: по десять позиций ---------- */
 
@@ -671,9 +881,10 @@
 
     /* ---------- Добыча и переработка ---------- */
 
+    /* Добывающее оборудование: `prop_2` — какие материалы оно добывает. */
     for (i = 1; i <= 5; i++) {
       addItem('Бур D-' + i, catMining, 120 + i * 50, [[mineSpeed, String(4 + i * 4)]],
-        slotMining, String(400 + i * 100), 'tool');
+        slotMining, String(400 + i * 100), 'tool', materialNames);
     }
     for (i = 1; i <= 5; i++) {
       addItem('Переработчик R-' + i, catRefining, 200 + i * 70, [[refineSpeed, String(1 + i * 2)]],
@@ -691,12 +902,13 @@
         slotRadar, String(290 + i * 80), 'radar');
     }
 
-    /* ---------- Грузовые отсеки: продаются как модули ---------- */
+    /* ---------- Грузовые отсеки: оборудование-контейнер ----------
+       `prop_2` — какие материалы отсек принимает; вместимость — своя. */
 
-    addItem('Грузовой отсек 500 кг', catHolds, '60', [[holdCapacity, '500']], null, '350', 'crate');
-    addItem('Грузовой отсек 2 т', catHolds, '140', [[holdCapacity, '2000']], null, '500', 'crate');
-    addItem('Грузовой отсек 5 т', catHolds, '260', [[holdCapacity, '5000']], null, '700', 'crate');
-    addItem('Грузовой отсек 10 т', catHolds, '450', [[holdCapacity, '10000']], null, '900', 'crate');
+    addItem('Грузовой отсек 500 кг', catHolds, '60', [[holdCapacity, '500']], slotCargoBay, '350', 'crate', ['Камень']);
+    addItem('Грузовой отсек 2 т', catHolds, '140', [[holdCapacity, '2000']], slotCargoBay, '500', 'crate', ['Железо', 'Медь']);
+    addItem('Грузовой отсек 5 т', catHolds, '260', [[holdCapacity, '5000']], slotCargoBay, '700', 'crate', ['Медь', 'Золото']);
+    addItem('Грузовой отсек 10 т', catHolds, '450', [[holdCapacity, '10000']], slotCargoBay, '900', 'crate', materialNames);
 
     /* ---------- Расходники ---------- */
 
@@ -706,14 +918,19 @@
 
     /* ---------- Корабли: шесть классов — по одному стартовому кораблю ---------- */
 
-    /* Раскладка класса: [шаблон слота, сколько таких]. У стартового корабля
-       на месте все крепления и трюмы класса — они просто пустые. */
+    /* Раскладка креплений: [шаблон, сколько таких]. У стартового корабля
+       на месте все крепления класса — они просто пустые. */
     function layout(parts) {
       var out = [];
       parts.forEach(function (pair) {
         for (var n = 0; n < pair[1]; n++) out.push({ slotId: pair[0].id, contents: [] });
       });
       return out;
+    }
+
+    /* Трюмы корабля: у каждого своя вместимость в кг. */
+    function holds(list) {
+      return list.map(function (h) { return { name: h[0], capacity: String(h[1]), contents: [] }; });
     }
 
     /* Стартовые корабли: слабые характеристики и низкая цена — первые машины
@@ -723,31 +940,36 @@
       /* Линкор: четыре орудийные башни, два пулемёта, два щита, трюм 5 т */
       { name: 'Гром', cat: catLiners, hp: '2200', sp: '10', mass: '12000', buy: '600', sale: '420',
         layout: [[slotTurret, 4], [slotGun, 2], [slotShield, 2], [slotEngine, 1],
-          [slotRadar, 1], [slotHold5, 1]] },
+          [slotRadar, 1], [slotCargoBay, 1]],
+        holds: [['Трюм', 5000]] },
 
-      /* Фрегат: универсал — башни, пулемёты, щит, радар, трюм 1 т */
+      /* Фрегат: универсал — башни, пулемёты, щит, радар, два трюма по 1 т */
       { name: 'Сокол', cat: catFrigates, hp: '900', sp: '22', mass: '3200', buy: '450', sale: '320',
         layout: [[slotTurret, 2], [slotGun, 2], [slotShield, 1], [slotEngine, 1],
-          [slotRadar, 1], [slotHold1, 1]] },
+          [slotRadar, 1]],
+        holds: [['Трюм 1', 1000], ['Трюм 2', 1000]] },
 
       /* Корвет: быстрый — две башни, пулемёт, щит, радар и трюм 1 т */
       { name: 'Оса', cat: catCorvettes, hp: '620', sp: '30', mass: '1700', buy: '410', sale: '290',
         layout: [[slotTurret, 2], [slotGun, 1], [slotShield, 1], [slotEngine, 1],
-          [slotRadar, 1], [slotHold1, 1]] },
+          [slotRadar, 1]],
+        holds: [['Трюм', 1000]] },
 
       /* Перехватчик: две башни, пулемёт, двигатель и радар, без трюма и щита */
       { name: 'Стриж', cat: catInterceptors, hp: '380', sp: '48', mass: '460', buy: '380', sale: '260',
-        layout: [[slotTurret, 2], [slotGun, 1], [slotEngine, 1], [slotRadar, 1]] },
+        layout: [[slotTurret, 2], [slotGun, 1], [slotEngine, 1], [slotRadar, 1]],
+        holds: [] },
 
       /* Шаттл: лёгкий возчик — пулемёт, щит, радар и два трюма по 1 т */
       { name: 'Челнок', cat: catShuttles, hp: '260', sp: '26', mass: '320', buy: '350', sale: '240',
-        layout: [[slotGun, 1], [slotShield, 1], [slotEngine, 1], [slotRadar, 1],
-          [slotHold1, 2]] },
+        layout: [[slotGun, 1], [slotShield, 1], [slotEngine, 1], [slotRadar, 1]],
+        holds: [['Трюм 1', 1000], ['Трюм 2', 1000]] },
 
       /* Грузовоз: два двигателя, добыча с переработкой, трюмы 10 и 5 т */
       { name: 'Баржа', cat: catFreighters, hp: '1400', sp: '8', mass: '7000', buy: '520', sale: '380',
         layout: [[slotGun, 1], [slotShield, 1], [slotEngine, 2], [slotRadar, 1],
-          [slotMining, 1], [slotRefinery, 1], [slotHold10, 1], [slotHold5, 1]] }
+          [slotMining, 1], [slotRefinery, 1]],
+        holds: [['Трюм 1', 10000], ['Трюм 2', 5000]] }
     ];
 
     var shipRefs = {};
@@ -756,7 +978,9 @@
         id: uid(), name: spec.name, categoryId: spec.cat.id, parentCategoryId: spec.cat.parentId || '',
         values: vals([[durability, spec.hp], [speed, spec.sp], [massProp, spec.mass]]),
         price_buy: spec.buy, price_sale: spec.sale, icon: 'ship', slotId: null,
-        slots: layout(spec.layout)
+        prop2: [],
+        slots: layout(spec.layout),
+        holds: holds(spec.holds || [])
       };
       d.objects.push(ship);
       shipRefs[spec.name] = ship;
@@ -770,7 +994,9 @@
       var day = new Date(Date.UTC(2026, 8, 20 + index));
       d.users_ships.push({
         id: uid(), shipId: ship.id, name: ship.name, categoryId: ship.categoryId,
-        price: ship.price_buy, boughtAt: day.toISOString()
+        price: ship.price_buy, boughtAt: day.toISOString(),
+        slots: ship.slots.map(function (e) { return { slotId: e.slotId, contents: [] }; }),
+        holds: ship.holds.map(function (h) { return { name: h.name, capacity: h.capacity, contents: [] }; })
       });
     });
 
@@ -814,12 +1040,9 @@
         price_sale: data.price_sale || '',
         icon: data.icon || '',
         slotId: isShip ? null : (data.slotId || null),
-        slots: isShip ? (data.slots || []).map(function (e) {
-          return {
-            slotId: e.slotId,
-            contents: (e.contents || []).map(function (c) { return { itemId: c.itemId, qty: String(c.qty) }; })
-          };
-        }) : []
+        prop2: prop2List(data.prop2),
+        slots: isShip ? makeSlots(data) : [],
+        holds: isShip ? makeHolds(data) : []
       });
     },
 
@@ -846,23 +1069,8 @@
       var n = parseFloat(str(slot.capacity).replace(',', '.'));
       return isFinite(n) && n >= 0 ? n : Infinity;
     },
-    /* Масса одной единицы: значение свойства «Масса»/«Вес» из категории объекта.
-       Старое поле mass читается как запасной вариант. */
-    massOf: function (item) {
-      if (!item) return 0;
-      var prop = null;
-      all('props').forEach(function (p) { if (!prop && isMassPropName(p.name)) prop = p; });
-      var raw = prop && item.values ? item.values[prop.id] : '';
-      if (raw === undefined || raw === '') raw = item.mass;
-      var n = parseFloat(str(raw).replace(',', '.'));
-      return isFinite(n) && n > 0 ? n : 0;
-    },
-    /* Единица груза: у оборудования — масса в кг, у ресурсов массы нет,
-       поэтому одна единица ресурса занимает одну единицу груза. */
-    cargoUnits: function (item) {
-      var m = Store.massOf(item);
-      return m > 0 ? m : 1;
-    },
+    massOf: massValue,
+    cargoUnits: cargoUnitsOf,
     /* Свойство, которым задаётся масса (для форм и подсказок). */
     massProp: function () {
       var found = null;
@@ -873,14 +1081,18 @@
     priceBuy: priceBuy,
     /* Цена продажи: если не задана, считаем равной цене покупки. */
     priceSale: priceSale,
-    /* Суммарный груз содержимого слота: единиц груза × количество. */
-    usedMass: function (contents) {
-      var sum = 0;
-      (contents || []).forEach(function (c) {
-        sum += (parseInt(c.qty, 10) || 0) * Store.cargoUnits(byId('objects', c.itemId));
-      });
-      return sum;
-    },
+    /* Суммарная масса содержимого слота/трюма: единиц груза × количество. */
+    usedMass: contentsMass,
+    contentsMass: contentsMass,
+    cargoMass: cargoMass,
+    shipMass: shipMass,
+    holdFree: holdFree,
+    containerFree: containerFree,
+    capacityOf: capacityOf,
+    prop2Has: prop2Has,
+    prop2List: prop2List,
+    resourceObjects: resourceObjects,
+    isResourceObject: isResourceObject,
     fmtNum: function (n) {
       if (!isFinite(n)) return '∞';
       return String(Math.round(n * 100) / 100);
