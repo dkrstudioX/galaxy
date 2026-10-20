@@ -76,13 +76,14 @@ function changeSubcategory(next) {
 
 /* Клик по квадрату слота или трюма = выбор этого предмета в «На корабле».
    Открываем магазин на верхней категории предмета, чтобы строка точно была
-   видна, и подсвечиваем её в списке. */
+   видна. В витрине ничего не выделяем: выбранная строка — только «На корабле»,
+   справа показываем карточку этого предмета с продажей. */
 function selectCargoItem(item, key) {
   var chain = window.Store ? Store.categoryChain(item.categoryId) : [];
   state.tab = 'shop';
   state.category = chain.length ? chain[0].id : 'all';
   state.subcategory = '';
-  state.selectedShop = item.id || '';
+  state.selectedShop = '';
   state.selectedCargo = key;
   state.ownedShipId = '';
   closeSlotModal();
