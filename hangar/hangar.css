@@ -610,31 +610,9 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
   height: 100%;
   background: linear-gradient(90deg, rgba(117, 223, 210, .75), rgba(170, 136, 246, .75));
 }
-.hold-contents { display: grid; gap: 1px; margin: 2px 0 0; padding: 0; list-style: none; }
-.hold-item {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 0;
-  border-top: 1px solid rgba(150, 190, 255, .08);
-}
-.hold-item-icon { display: flex; flex: 0 0 auto; color: #75dfd2; }
-.hold-item-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.hold-item-copy strong { font-size: 11px; font-weight: 500; }
-.hold-item-copy small {
-  color: #7f9aa0;
-  font-size: 9px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hold-item-meta {
-  margin-left: auto;
-  color: #7f9aa0;
-  font: 8px "IBM Plex Mono";
-  letter-spacing: .06em;
-  white-space: nowrap;
-}
+/* Предметы в трюме — те же квадраты, что и слоты; клика нет, подробности в подсказке. */
+.hold-grid { margin-top: 4px; }
+.hold-tile { cursor: default; }
 .hold-empty {
   color: #6b8086;
   font: 9px "IBM Plex Mono";
