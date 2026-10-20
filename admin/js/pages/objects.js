@@ -7,6 +7,19 @@
 
   /* ---------- Общие части форм ---------- */
 
+  /* Каждый предмет — отдельная запись: количество разворачивается в строки
+     с qty = 1, чтобы одинаковые предметы не хранились стопкой. */
+  function spreadContents(rows, idOf, qtyOf) {
+    var out = [];
+    (rows || []).forEach(function (r) {
+      var id = idOf(r);
+      if (!id) return;
+      var n = Math.max(1, parseInt(qtyOf(r), 10) || 1);
+      for (var i = 0; i < n; i++) out.push({ itemId: id, qty: '1' });
+    });
+    return out;
+  }
+
   /* В объекте выбирается только подкатегория (2-й уровень): она задаёт ветку. */
   function categoryOptions(emptyLabel) {
     return [{ value: '', label: emptyLabel }].concat(
@@ -327,7 +340,9 @@
     function namesOf(contents) {
       return contents.map(function (c) {
         var it = Store.byId('objects', c.itemId);
-        return it ? it.name + ' ×' + c.qty : null;
+        if (!it) return null;
+        var n = parseInt(c.qty, 10) || 1;
+        return it.name + (n > 1 ? ' ×' + n : '');
       }).filter(Boolean);
     }
     var parts = (o.slots || []).map(function (e) {
@@ -478,7 +493,7 @@
         cr.preferredId = itemId || '';
         cr.qtyInput = UI.input({ type: 'number', min: 1, step: 1, value: qty || 1 });
         cr.qtyInput.classList.add('content-qty');
-        cr.qtyInput.title = 'Количество единиц';
+        cr.qtyInput.title = 'Сколько одинаковых добавить: каждый станет отдельной строкой';
 
         /* Количество не должно превышать остаток вместимости. */
         function syncQty() {
@@ -523,7 +538,7 @@
       addItemSel.classList.add('content-item');
       var addQty = UI.input({ type: 'number', min: 1, step: 1, value: 1 });
       addQty.classList.add('content-qty');
-      addQty.title = 'Количество единиц';
+      addQty.title = 'Сколько одинаковых добавить: каждый станет отдельной строкой';
       var addBtn = h('button', { class: 'btn btn-sm content-add-btn', text: '+ Добавить', onclick: tryAdd, disabled: true });
 
       function refreshAddOptions() {
@@ -672,12 +687,9 @@
         return rowStates.map(function (st) {
           return {
             slotId: st.slotSelect.value,
-            contents: st.contentRows.map(function (cr) {
-              return {
-                itemId: cr.itemSelect.value,
-                qty: String(parseInt(cr.qtyInput.value, 10) || 1)
-              };
-            }).filter(function (c) { return c.itemId; })
+            contents: spreadContents(st.contentRows,
+              function (cr) { return cr.itemSelect.value; },
+              function (cr) { return cr.qtyInput.value; })
           };
         }).filter(function (e) { return e.slotId; });
       }
@@ -741,7 +753,7 @@
         cr.select.classList.add('content-item');
         cr.qty = UI.input({ type: 'number', min: 1, step: 1, value: qty || 1 });
         cr.qty.classList.add('content-qty');
-        cr.qty.title = 'Количество единиц';
+        cr.qty.title = 'Сколько одинаковых добавить: каждый станет отдельной строкой';
         cr.select.addEventListener('change', refreshBadge);
         cr.qty.addEventListener('change', refreshBadge);
         cr.el = h('div', { class: 'content-row' }, cr.select, cr.qty,
@@ -805,9 +817,9 @@
         return {
           name: st.nameInput.value.trim() || 'Трюм',
           capacity: st.capInput.value.trim(),
-          contents: st.contentRows.map(function (cr) {
-            return { itemId: cr.select.value, qty: String(Math.max(1, parseInt(cr.qty.value, 10) || 1)) };
-          }).filter(function (c) { return c.itemId; })
+          contents: spreadContents(st.contentRows,
+            function (cr) { return cr.select.value; },
+            function (cr) { return cr.qty.value; })
         };
       });
     }
@@ -820,7 +832,7 @@
         ),
         h('div', {
           class: 'hint',
-          text: 'Трюмы фиксированы у корабля: у каждого своё название и вместимость. В трюм помещается любое оборудование; сумма масс не должна превышать вместимость, груз контейнеров не считается.'
+          text: 'Трюмы фиксированы у корабля: у каждого своё название и вместимость. В трюм помещается любое оборудование; сумма масс не должна превышать вместимость, груз контейнеров не считается. Одинаковые предметы хранятся отдельными строками.'
         })
       ),
       collect: collect,

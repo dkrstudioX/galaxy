@@ -34,14 +34,32 @@
       .filter(function (x) { return x && x !== '0'; });
   }
 
-  /* Содержимое крепления или трюма: предмет, количество и (у контейнера) груз.
-     Груз — список «ресурс + количество», глубже вложенности нет. */
+  /* Груз контейнера: ресурс и количество в кг. Строки не разделяются. */
+  function makeCargo(list) {
+    return arr(list).filter(isObj).map(function (g) {
+      var qty = Math.floor(Number(str(g.qty).replace(',', '.')));
+      if (!isFinite(qty) || qty < 1) qty = 1;
+      return { itemId: str(g.itemId), qty: String(qty) };
+    }).filter(function (g) { return g.itemId; });
+  }
+
+  /* Содержимое крепления или трюма: каждый предмет — отдельная запись,
+     поэтому количество больше единицы разворачивается в несколько записей. */
   function makeContents(list) {
-    return arr(list).filter(isObj).map(function (c) {
+    var out = [];
+    arr(list).filter(isObj).forEach(function (c) {
+      var itemId = str(c.itemId);
+      if (!itemId) return;
       var qty = Math.floor(Number(str(c.qty).replace(',', '.')));
       if (!isFinite(qty) || qty < 1) qty = 1;
-      return { itemId: str(c.itemId), qty: String(qty), cargo: makeContents(c.cargo) };
-    }).filter(function (c) { return c.itemId; });
+      var cargo = makeCargo(c.cargo);
+      /* Контейнер с грузом неделим: иначе груз размножился бы вместе с ним. */
+      var copies = cargo.length ? 1 : qty;
+      for (var i = 0; i < copies; i++) {
+        out.push({ itemId: itemId, qty: '1', cargo: i === 0 ? cargo : [] });
+      }
+    });
+    return out;
   }
 
   /* Крепления корабля: [{slotId, contents}]. Старый формат (slotIds: [id])
@@ -206,13 +224,27 @@
     out.slots.forEach(function (s) { slotIds[s.id] = true; slotById[s.id] = s; });
     out.objects.forEach(function (o) { objIds[o.id] = true; });
 
-    /* Содержимое без ссылок на существующие предметы (и без самого корабля). */
+    /* Содержимое без ссылок на существующие предметы (и без самого корабля).
+       Одинаковые предметы — разные записи: qty > 1 разворачивается. */
+    function cleanCargo(list) {
+      return arr(list).filter(isObj).map(function (g) {
+        return { itemId: str(g.itemId), qty: str(Math.max(1, parseInt(str(g.qty), 10) || 1)) };
+      }).filter(function (g) { return objIds[g.itemId]; });
+    }
     function cleanContents(list, owner) {
-      return arr(list).filter(isObj).map(function (c) {
-        return { itemId: str(c.itemId), qty: str(c.qty), cargo: cleanContents(c.cargo, owner) };
-      }).filter(function (c) {
-        return objIds[c.itemId] && (!owner || c.itemId !== owner.id);
+      var out = [];
+      arr(list).filter(isObj).forEach(function (c) {
+        var itemId = str(c.itemId);
+        if (!objIds[itemId] || (owner && itemId === owner.id)) return;
+        var qty = Math.max(1, parseInt(str(c.qty), 10) || 1);
+        var cargo = cleanCargo(c.cargo);
+        /* Контейнер с грузом неделим: груз остаётся у одной записи. */
+        var copies = cargo.length ? 1 : qty;
+        for (var i = 0; i < copies; i++) {
+          out.push({ itemId: itemId, qty: '1', cargo: i === 0 ? cargo : [] });
+        }
       });
+      return out;
     }
 
     out.categories.forEach(function (c) {
@@ -771,21 +803,15 @@
     return null;
   }
 
-  /* Контейнеры не складываются в стопку: у каждого свой груз. */
+  /* Каждый купленный предмет — отдельная запись: одинаковые не складываются.
+     У контейнера тоже своя запись: у каждого свой груз. */
   function addToHold(hold, item, amount) {
     if (!Array.isArray(hold.contents)) hold.contents = [];
-    var stackable = !(capacityOf(item) > 0);
-    if (stackable) {
-      for (var i = 0; i < hold.contents.length; i++) {
-        var c = hold.contents[i];
-        if (c.itemId === item.id && !arr(c.cargo).length) {
-          c.qty = String((parseInt(c.qty, 10) || 0) + amount);
-          return c;
-        }
-      }
+    var entry = null;
+    for (var i = 0; i < amount; i++) {
+      entry = { itemId: item.id, qty: '1', cargo: [] };
+      hold.contents.push(entry);
     }
-    var entry = { itemId: item.id, qty: String(amount), cargo: [] };
-    hold.contents.push(entry);
     return entry;
   }
 
@@ -841,7 +867,7 @@
     } else {
       var mount = freeMountFor(record, item);
       if (mount) {
-        mount.contents.push({ itemId: item.id, qty: String(amount), cargo: [] });
+        mount.contents.push({ itemId: item.id, qty: '1', cargo: [] });
         var slot = byId('slots', mount.slotId);
         where = 'крепление «' + (slot ? slot.name : '—') + '»';
       } else {

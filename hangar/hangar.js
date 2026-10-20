@@ -450,7 +450,8 @@
       '<span class="ship-sub">Слоты · ' + view.slots.length + '</span>' + slotGridHTML(view);
   }
 
-  /* Трюмы: название, загрузка по массе и содержимое. */
+  /* Трюмы: название, загрузка по массе и содержимое списком — каждый предмет
+     отдельной строкой. */
   function holdsListHTML(view) {
     if (!view.holds.length) {
       return '<div class="hold-empty">У этого корабля нет трюмов</div>';
@@ -464,21 +465,35 @@
       var items = (hold.contents || []).map(function (c) {
         var it = Store.byId('objects', c.itemId);
         if (!it) return '';
-        var qty = Number(c.qty) || 0;
-        var line = it.name + (qty > 1 ? ' ×' + qty : '');
-        var cargoList = (c.cargo || []).map(function (g) {
+        var cat = Store.byId('categories', it.categoryId);
+        var notes = [];
+        if (cat) notes.push(cat.name);
+        var mass = Store.massOf(it);
+        if (mass) notes.push(fmt(mass) + ' кг');
+        var box = Store.capacityOf(it);
+        var loads = (c.cargo || []).map(function (g) {
           var res = Store.byId('objects', g.itemId);
           return res ? res.name + ' ' + fmt(Number(g.qty) || 0) + ' кг' : '';
         }).filter(Boolean);
-        if (cargoList.length) line += ' (' + cargoList.join(', ') + ')';
-        return line;
+        if (loads.length) notes.push('груз: ' + loads.join(', '));
+        return '<li class="hold-item">' +
+          '<span class="hold-item-icon">' + iconMarkup(it.icon, 16) + '</span>' +
+          '<span class="hold-item-copy"><strong>' + it.name + '</strong>' +
+          (notes.length ? '<small>' + notes.join(' · ') + '</small>' : '') + '</span>' +
+          (isFinite(box) && box > 0
+            ? '<span class="hold-item-meta">' + fmt(Math.round(Store.cargoMass([c]))) +
+              ' / ' + fmt(box) + ' кг</span>'
+            : '') +
+          '</li>';
       }).filter(Boolean);
       return '<div class="hold-row">' +
         '<div class="hold-head"><strong>' + hold.name + '</strong><span>' +
         fmt(Math.round(gear)) + ' / ' + (isFinite(cap) ? fmt(cap) + ' кг' : '∞') +
         (cargo ? ' · груз ' + fmt(Math.round(cargo)) + ' кг' : '') + '</span></div>' +
         '<i class="hold-bar"><em style="width:' + pct + '%"></em></i>' +
-        (items.length ? '<span class="hold-items">' + items.join(' · ') + '</span>' : '') +
+        (items.length
+          ? '<ul class="hold-contents">' + items.join('') + '</ul>'
+          : '<span class="hold-empty">Пусто</span>') +
         '</div>';
     }).join('') + '</div>';
   }
