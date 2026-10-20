@@ -183,7 +183,7 @@ export function holdsListHTML(view) {
       var it = Store.byId('objects', c.itemId);
       if (!it) return '';
       var load = Store.cargoMass([c]);
-      return '<button type="button" class="slot-tile hold-tile" data-hold="' + hi +
+      return '<button type="button" class="slot-tile hold-tile" data-action="select-hold-item" data-hold="' + hi +
         '" data-item="' + ci + '">' +
         iconMarkup(it.icon, 22) +
         (load ? '<span class="slot-qty">' + fmt(Math.round(load)) + ' кг</span>' : '') +

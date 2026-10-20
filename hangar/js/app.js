@@ -11,7 +11,7 @@ import { renderShop, ownedShipRecord } from './shop.js';
 import { renderHangar, transferResource } from './hangar-tab.js';
 import { renderInfo } from './info.js';
 import { shipViewHTML } from './ship-view.js';
-import { activeUserShip, activeShipView, slotContentsList, openSlotModal, openSlotGoods, closeSlotModal, showSlotTip, showHoldTip, hideSlotTip } from './ship.js';
+import { activeUserShip, activeShipView, slotContentsList, openSlotGoods, closeSlotModal, showSlotTip, showHoldTip, hideSlotTip } from './ship.js';
 import { renderDock } from './dock.js';
 
 /* ---------- Рендер: шапка и вкладки ---------- */
@@ -73,6 +73,25 @@ function changeSubcategory(next) {
 }
 
 /* ---------- Продажа с корабля ---------- */
+
+/* Клик по квадрату слота или трюма = выбор этого предмета в «На корабле».
+   Открываем магазин на верхней категории предмета, чтобы строка точно была
+   видна, и подсвечиваем её в списке. */
+function selectCargoItem(item, key) {
+  var chain = window.Store ? Store.categoryChain(item.categoryId) : [];
+  state.tab = 'shop';
+  state.category = chain.length ? chain[0].id : 'all';
+  state.subcategory = '';
+  state.selectedShop = item.id || '';
+  state.selectedCargo = key;
+  state.ownedShipId = '';
+  closeSlotModal();
+  hideSlotTip();
+  render();
+  renderDock();
+  var row = document.querySelector('#cargoList .item-row.selected');
+  if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+}
 
 /* Состав контейнера в подтверждении: ресурс, килограммы и цена продажи. */
 function confirmSellCargo(row) {
@@ -161,6 +180,17 @@ document.addEventListener('click', function (e) {
     }
   }
   else if (action === 'select-cargo') { state.selectedCargo = id; state.ownedShipId = ''; }
+  else if (action === 'select-hold-item') {
+    var holdView = activeShipView();
+    var hi = Number(el.getAttribute('data-hold'));
+    var ii = Number(el.getAttribute('data-item'));
+    var hold = holdView.holds[hi];
+    var entry = hold && hold.contents ? hold.contents[ii] : null;
+    var held = entry && window.Store ? Store.byId('objects', entry.itemId) : null;
+    if (!held) return;
+    selectCargoItem(held, 'hold:' + hi + ':' + ii);
+    return;
+  }
   else if (action === 'select-resource') {
     state.selectedResource = id;
     state.transferMode = el.getAttribute('data-mode');
@@ -198,9 +228,13 @@ document.addEventListener('click', function (e) {
     var slotView = activeShipView();
     var slotIndex = Number(tile.getAttribute('data-index'));
     if (!slotView.ship) return;
-    /* Заполненный слот показывает содержимое, пустой — открывает подходящие товары. */
-    if (slotContentsList(slotView, slotIndex).length) {
-      openSlotModal(slotView, slotIndex);
+    /* Заполненный слот — это клик по оборудованию: выбираем его в «На корабле».
+       Пустой — по-прежнему открывает подходящие товары. */
+    var contents = slotContentsList(slotView, slotIndex);
+    if (contents.length) {
+      var owned = window.Store ? Store.byId('objects', contents[0].itemId) : null;
+      if (!owned) return;
+      selectCargoItem(owned, 'slot:' + slotIndex + ':0');
       return;
     }
     if (!openSlotGoods(slotView, slotIndex)) return;

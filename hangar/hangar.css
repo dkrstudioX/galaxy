@@ -610,9 +610,10 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
   height: 100%;
   background: linear-gradient(90deg, rgba(117, 223, 210, .75), rgba(170, 136, 246, .75));
 }
-/* Предметы в трюме — те же квадраты, что и слоты; клика нет, подробности в подсказке. */
+/* Предметы в трюме — те же квадраты, что и слоты; клик выбирает предмет
+   в «На корабле», подробности — в подсказке. */
 .hold-grid { margin-top: 4px; }
-.hold-tile { cursor: default; }
+.hold-tile { cursor: pointer; }
 .hold-empty {
   color: #6b8086;
   font: 9px "IBM Plex Mono";
