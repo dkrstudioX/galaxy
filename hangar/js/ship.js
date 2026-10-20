@@ -58,9 +58,39 @@ export function shipEquipmentRows(view) {
   return rows;
 }
 
+/* Груз контейнеров — отдельными строками «На корабле»: ресурс, кг и место.
+   Ключ строки — cargo:<kind>:<место>:<предмет>:<строка груза>. */
+export function shipCargoRows(view) {
+  var rows = [];
+  function add(contents, kind, placeIndex, placeName) {
+    (contents || []).forEach(function (c, ci) {
+      var box = window.Store ? Store.byId('objects', c.itemId) : null;
+      (c.cargo || []).forEach(function (g, gi) {
+        var res = window.Store ? Store.byId('objects', g.itemId) : null;
+        var kg = parseInt(g.qty, 10) || 0;
+        if (!box || !res || !kg) return;
+        rows.push({
+          key: 'cargo:' + kind + ':' + placeIndex + ':' + ci + ':' + gi,
+          item: res, place: placeName, boxName: box.name,
+          kind: kind, placeIndex: placeIndex, entryIndex: ci,
+          cargoIndex: gi, amount: kg, isCargo: true
+        });
+      });
+    });
+  }
+  (view.slots || []).forEach(function (s, i) {
+    var slot = window.Store ? Store.byId('slots', s.slotId) : null;
+    add(s.contents, 'slot', i, slot ? slot.name : 'крепление');
+  });
+  (view.holds || []).forEach(function (h, i) {
+    add(h.contents, 'hold', i, h.name);
+  });
+  return rows;
+}
+
 /* Оборудование корабля в текущей ветке магазина — тот же фильтр, что у витрины. */
 export function shipEquipmentInBranch(view) {
-  return shipEquipmentRows(view).filter(function (r) {
+  return shipEquipmentRows(view).concat(shipCargoRows(view)).filter(function (r) {
     if (!inCategory(r.item, state.category)) return false;
     if (state.subcategory && !inSubtree(r.item.categoryId, state.subcategory)) return false;
     return true;
@@ -77,17 +107,19 @@ export function selectedOwnedRow() {
   return null;
 }
 
-/* Строка «На корабле» — как строка витрины: иконка, имя, масса, место и цена. */
+/* Строка «На корабле» — как строка витрины: иконка, имя, масса/груз, место и цена. */
 function cargoRowHTML(row, selected) {
   var item = row.item;
   var cat = window.Store ? Store.byId('categories', item.categoryId) : null;
   var mass = window.Store ? Store.massOf(item) : 0;
   var sale = window.Store ? Store.priceSale(item) : 0;
+  var sub = row.isCargo
+    ? 'В контейнере «' + row.boxName + '» · ' + fmt(row.amount) + ' кг'
+    : (mass ? 'Масса ' + fmt(mass) + ' кг · ' : '') + row.place;
   return '<button class="item-row' + (selected ? ' selected' : '') +
     '" data-action="select-cargo" data-id="' + row.key + '">' +
     '<span class="item-icon">' + iconMarkup(item.icon, 22) + '</span>' +
-    '<span class="item-copy"><strong>' + item.name + '</strong><span>' +
-    (mass ? 'Масса ' + fmt(mass) + ' кг · ' : '') + row.place + '</span></span>' +
+    '<span class="item-copy"><strong>' + item.name + '</strong><span>' + sub + '</span></span>' +
     '<span class="item-meta"><small>' + (cat ? cat.name : '') + '</small>' +
     (sale ? '<b>' + fmt(sale) + ' ¤</b>' : '') + '</span>' +
     '</button>';
@@ -168,6 +200,28 @@ export function shipPanelHTML() {
     '<span class="ship-sub">Слоты · ' + view.slots.length + '</span>' + slotGridHTML(view);
 }
 
+/* Значки груза контейнера в квадрате: по одному на ресурс. Наведение даёт
+   подсказку, клик выбирает этот груз в «На корабле» (продажа 1 кг). */
+function cargoChipsHTML(c, keyPrefix, boxName) {
+  var chips = ((c && c.cargo) || []).map(function (g, gi) {
+    var res = window.Store ? Store.byId('objects', g.itemId) : null;
+    var kg = parseInt(g.qty, 10) || 0;
+    if (!res || !kg) return '';
+    var sale = window.Store ? Store.priceSale(res) : 0;
+    return '<span class="slot-cargo-chip" data-cargo-key="' + keyPrefix + ':' + gi + '"' +
+      ' data-cargo-id="' + res.id + '" data-cargo-name="' + res.name + '"' +
+      ' data-cargo-box="' + boxName + '" data-cargo-kg="' + kg + '"' +
+      ' data-cargo-sale="' + sale + '" data-cargo-icon="' + (res.icon || 'resource') + '">' +
+      iconMarkup(res.icon || 'resource', 11) + '</span>';
+  }).filter(Boolean);
+  if (!chips.length) return '';
+  if (chips.length > 3) {
+    var rest = chips.length - 2;
+    chips = chips.slice(0, 2).concat('<span class="slot-cargo-more">+' + rest + '</span>');
+  }
+  return '<span class="slot-cargo-chips">' + chips.join('') + '</span>';
+}
+
 /* Трюмы: название, загрузка по массе и содержимое квадратами — как слоты. */
 export function holdsListHTML(view) {
   if (!view.holds.length) {
@@ -186,6 +240,7 @@ export function holdsListHTML(view) {
       return '<button type="button" class="slot-tile hold-tile" data-action="select-hold-item" data-hold="' + hi +
         '" data-item="' + ci + '">' +
         iconMarkup(it.icon, 22) +
+        cargoChipsHTML(c, 'cargo:hold:' + hi + ':' + ci, it.name) +
         (load ? '<span class="slot-qty">' + fmt(Math.round(load)) + ' кг</span>' : '') +
         '</button>';
     }).filter(Boolean);
@@ -258,6 +313,7 @@ export function slotGridHTML(view) {
     return '<button class="' + cls + '" data-action="open-slot" ' + hint +
       'data-index="' + i + '">' +
       (first ? iconMarkup(first.icon, 22) : '') +
+      (first ? cargoChipsHTML(contents[0], 'cargo:slot:' + i + ':0', first.name) : '') +
       (contents.length > 1 ? '<span class="slot-qty">×' + contents.length + '</span>' : '') +
       '</button>';
   }).join('') + '</div>';
@@ -419,6 +475,23 @@ export function showHoldTip(tile) {
   if (!view.ship) return;
   tip.innerHTML = holdTipHTML(view, Number(tile.getAttribute('data-hold')), Number(tile.getAttribute('data-item')));
   placeSlotTip(tip, tile);
+}
+
+/* Подсказка над значком груза: ресурс, контейнер, килограммы и цена. */
+export function showCargoTip(chip) {
+  var tip = document.getElementById('slotTip');
+  if (!tip) return;
+  var name = chip.getAttribute('data-cargo-name') || 'Груз';
+  var box = chip.getAttribute('data-cargo-box') || '';
+  var kg = Number(chip.getAttribute('data-cargo-kg')) || 0;
+  var sale = Number(chip.getAttribute('data-cargo-sale')) || 0;
+  var iconName = chip.getAttribute('data-cargo-icon') || 'resource';
+  tip.innerHTML = '<h4>' + name + '</h4>' +
+    '<div class="tip-item"><span class="tip-icon">' + iconMarkup(iconName, 16) + '</span>' +
+    '<span class="tip-copy"><strong>' + (box ? 'Контейнер «' + box + '»' : 'Груз') + '</strong>' +
+    '<small>' + fmt(kg) + ' кг' + (sale ? ' · ' + fmt(sale) + ' ¤/кг' : ' · цена не задана') + '</small>' +
+    '<small>нажмите, чтобы продать 1 кг</small></span></div>';
+  placeSlotTip(tip, chip);
 }
 
 export function hideSlotTip() {

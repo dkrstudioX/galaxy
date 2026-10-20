@@ -11,7 +11,7 @@ import { renderShop, ownedShipRecord } from './shop.js';
 import { renderHangar, transferResource } from './hangar-tab.js';
 import { renderInfo } from './info.js';
 import { shipViewHTML } from './ship-view.js';
-import { activeUserShip, activeShipView, slotContentsList, openSlotGoods, closeSlotModal, showSlotTip, showHoldTip, hideSlotTip } from './ship.js';
+import { activeUserShip, activeShipView, slotContentsList, openSlotGoods, closeSlotModal, showSlotTip, showHoldTip, showCargoTip, hideSlotTip } from './ship.js';
 import { renderDock } from './dock.js';
 
 /* ---------- Рендер: шапка и вкладки ---------- */
@@ -133,11 +133,35 @@ function sellOwnedRow(withCargo) {
   return true;
 }
 
+/* Продать 1 кг груза из контейнера, выбранного в «На корабле». */
+function sellCargoUnit() {
+  var rec = activeUserShip();
+  var row = selectedOwnedRow();
+  if (!rec || !row || !row.isCargo) return false;
+  var res = Store.sellCargo(rec.id, { kind: row.kind, index: row.placeIndex },
+    row.entryIndex, row.cargoIndex, 1);
+  if (!res.ok) {
+    openDialog('ПРОДАЖА', row.item.name + ' — не продано',
+      '<p class="dialog-text">' + res.error + '</p>');
+    return false;
+  }
+  state.notice = row.item.name + ' 1 кг → ' + fmt(res.price) + ' ¤';
+  if (!res.remaining) state.selectedCargo = '';
+  return true;
+}
+
 /* ---------- Обработчик кликов (делегирование) ---------- */
 
 document.addEventListener('click', function (e) {
   var modal = document.getElementById('slotModal');
   if (modal && !modal.hidden && e.target === modal) { closeSlotModal(); return; }
+  /* Значок груза внутри контейнера: выбираем ресурс, а не весь контейнер. */
+  var cargoChip = e.target.closest ? e.target.closest('.slot-cargo-chip') : null;
+  if (cargoChip) {
+    var chipItem = window.Store ? Store.byId('objects', cargoChip.getAttribute('data-cargo-id')) : null;
+    if (chipItem) selectCargoItem(chipItem, cargoChip.getAttribute('data-cargo-key'));
+    return;
+  }
   var el = e.target.closest ? e.target.closest('[data-action]') : null;
   if (!el) return;
   var action = el.getAttribute('data-action');
@@ -223,6 +247,7 @@ document.addEventListener('click', function (e) {
     return;
   }
   else if (action === 'sell-cargo-confirm') { if (!sellOwnedRow(true)) return; }
+  else if (action === 'sell-cargo-unit') { if (!sellCargoUnit()) return; }
   else if (action === 'open-slot') {
     var tile = el;
     var slotView = activeShipView();
@@ -252,6 +277,8 @@ document.addEventListener('click', function (e) {
 /* ---------- Подсказки и закрытие модального окна ---------- */
 
 document.addEventListener('mouseover', function (e) {
+  var cargoChip = e.target.closest ? e.target.closest('.slot-cargo-chip') : null;
+  if (cargoChip) { showCargoTip(cargoChip); return; }
   var holdTile = e.target.closest ? e.target.closest('.hold-tile') : null;
   if (holdTile) { showHoldTip(holdTile); return; }
   var tile = e.target.closest ? e.target.closest('.slot-tile') : null;

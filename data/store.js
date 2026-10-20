@@ -776,6 +776,42 @@
     };
   }
 
+  /* Продать груз из контейнера: одна строка, 1 кг за раз (как в PLAN).
+     Цена — priceSale ресурса за килограмм; ноль — отказ. */
+  function sellCargo(recordId, place, entryIndex, cargoIndex, amount) {
+    var d = ensure();
+    var rec = byId('users_ships', recordId);
+    if (!rec) return { ok: false, error: 'Корабль не найден' };
+    var kind = place && place.kind === 'slot' ? 'slot' : 'hold';
+    var box = arr(kind === 'slot' ? rec.slots : rec.holds)[place && place.index];
+    if (!box) return { ok: false, error: 'Место не найдено' };
+    var entry = arr(box.contents)[Math.floor(Number(entryIndex))];
+    if (!entry) return { ok: false, error: 'Контейнер не найден' };
+    var cargo = arr(entry.cargo);
+    var pos = Math.floor(Number(cargoIndex));
+    var line = pos >= 0 ? cargo[pos] : null;
+    if (!line) return { ok: false, error: 'Груз не найден' };
+    var res = byId('objects', line.itemId);
+    if (!res) return { ok: false, error: 'Ресурс не найден' };
+    var price = priceSale(res);
+    if (!price) return { ok: false, error: 'Цена продажи не задана' };
+    var have = parseInt(line.qty, 10) || 0;
+    var want = Math.max(1, Math.floor(Number(amount) || 1));
+    var kg = Math.min(want, have);
+    if (!kg) return { ok: false, error: 'Груз закончился' };
+
+    var left = have - kg;
+    if (left > 0) line.qty = String(left);
+    else cargo.splice(pos, 1);
+    var total = price * kg;
+    d.credits = Math.max(0, d.credits + total);
+    persist();
+    return {
+      ok: true, name: res.name, kg: kg, price: total,
+      remaining: left, credits: d.credits
+    };
+  }
+
   /* Купить корабль: списывает цену покупки и пишет запись в users_ships. */
   function buyShip(objectId) {
     var ship = byId('objects', objectId);
@@ -1332,6 +1368,7 @@
     buyShip: buyShip,
     buyForShip: buyForShip,
     sellEntry: sellEntry,
+    sellCargo: sellCargo,
     sellShip: sellShip,
     loadDemo: function () { db = demoData(); persist(); },
     counts: counts

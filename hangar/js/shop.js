@@ -109,8 +109,33 @@ function ownedShipConsole(rec) {
     '<button class="trade-button sell" data-action="sell-ship">' + icon('arrowLeft') + 'Продать</button>';
 }
 
+/* Карточка груза контейнера: ресурс, где лежит, сколько и продажа 1 кг. */
+function ownedCargoConsole(row) {
+  var item = row.item;
+  var sale = window.Store ? Store.priceSale(item) : 0;
+  var total = sale * row.amount;
+  var lines = '<span class="trade-preview-stats">' +
+    (window.Store ? Store.categoryPath(item.categoryId) : '') + '</span>';
+  lines += '<span class="trade-preview-stats">Контейнер: «' + row.boxName + '»</span>';
+  lines += '<span class="trade-preview-stats">Место: ' + row.place + '</span>';
+  lines += '<span class="trade-preview-stats">В наличии: ' + fmt(row.amount) + ' кг · ' +
+    fmt(total) + ' ¤</span>';
+  var price = sale
+    ? '<span class="trade-preview-price">' + fmt(sale) + ' ¤<small> / кг</small></span>'
+    : '<span class="trade-preview-stats">Цена продажи не задана</span>';
+  var sell = sale
+    ? '<button class="trade-button sell" data-action="sell-cargo-unit">' +
+      icon('arrowLeft') + 'Продать 1 кг</button>'
+    : '';
+  return '<div class="trade-preview">' +
+    '<span class="trade-preview-icon resource">' + iconMarkup(item.icon || 'resource', 27) + '</span>' +
+    '<strong>' + item.name + '</strong>' + lines + price +
+    '</div>' + sell;
+}
+
 /* Консоль выбранного предмета на корабле: где стоит, масса, груз и продажа. */
 function ownedItemConsole(row) {
+  if (row.isCargo) return ownedCargoConsole(row);
   var item = row.item;
   var mass = window.Store ? Store.massOf(item) : 0;
   var sale = window.Store ? Store.priceSale(item) : 0;
@@ -197,9 +222,9 @@ export function renderShop() {
   document.getElementById('cargoList').innerHTML = cargoListHTML();
   var cargoCount = document.getElementById('cargoCount');
   if (cargoCount) {
-    var modules = shipEquipmentInBranch(activeShipView()).length;
-    cargoCount.textContent = modules
-      ? modules + ' ' + plural(modules, ['модуль', 'модуля', 'модулей'])
+    var positions = shipEquipmentInBranch(activeShipView()).length;
+    cargoCount.textContent = positions
+      ? positions + ' ' + plural(positions, ['позиция', 'позиции', 'позиций'])
       : 'пусто';
   }
   document.getElementById('noticeShop').textContent = state.notice;
