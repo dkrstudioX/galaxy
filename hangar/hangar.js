@@ -531,6 +531,7 @@
         '</button>';
     }).join('') + '</div>';
   }
+  /* Подсказка над слотом: что установлено — название, масса, груз контейнера. */
   function slotTipHTML(view, index) {
     var contents = slotContentsList(view, index);
     var name = slotTitle(view, index);
@@ -540,13 +541,34 @@
       return '<h4>' + name + '</h4><small>' +
         (goods ? 'Слот пуст · нажмите — откроются совместимые товары' : 'Слот пуст') + '</small>';
     }
-    var cells = contents.slice(0, 4).map(function (c) {
+
+    var rows = contents.slice(0, 3).map(function (c) {
       var it = window.Store ? Store.byId('objects', c.itemId) : null;
-      return '<span class="tip-cell">' + iconMarkup(it ? it.icon : 'grid', 16) + '</span>';
-    }).join('');
-    return '<h4>' + name + ' · ' + contents.length + ' шт.</h4>' +
-      '<div class="tip-grid">' + cells + '</div>' +
-      (contents.length > 4 ? '<small>+ ещё ' + (contents.length - 4) + ' — нажмите на слот</small>' : '');
+      if (!it) return '';
+      var cat = window.Store ? Store.byId('categories', it.categoryId) : null;
+      var meta = [];
+      if (cat) meta.push(cat.name);
+      var mass = Store.massOf(it);
+      if (mass) meta.push(fmt(mass) + ' кг');
+      var loads = (c.cargo || []).map(function (g) {
+        var res = Store.byId('objects', g.itemId);
+        return res ? res.name + ' ' + fmt(Number(g.qty) || 0) + ' кг' : '';
+      }).filter(Boolean);
+      var box = Store.capacityOf(it);
+      return '<div class="tip-item">' +
+        '<span class="tip-icon">' + iconMarkup(it.icon, 16) + '</span>' +
+        '<span class="tip-copy"><strong>' + it.name + '</strong>' +
+        (meta.length ? '<small>' + meta.join(' · ') + '</small>' : '') +
+        (loads.length ? '<small>груз: ' + loads.join(', ') + '</small>' : '') +
+        (isFinite(box) && box > 0
+          ? '<small>' + fmt(Math.round(Store.cargoMass([c]))) + ' / ' + fmt(box) + ' кг</small>'
+          : '') +
+        '</span></div>';
+    }).filter(Boolean);
+
+    return '<h4>' + name + (contents.length > 1 ? ' · ' + contents.length + ' шт.' : '') + '</h4>' +
+      '<div class="tip-list">' + rows.join('') + '</div>' +
+      (contents.length > 3 ? '<small>+ ещё ' + (contents.length - 3) + ' — нажмите на слот</small>' : '');
   }
 
   function slotModalHTML(view, index) {

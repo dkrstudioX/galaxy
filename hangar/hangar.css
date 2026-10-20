@@ -583,8 +583,12 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 .slot-tip { position: fixed; z-index: 80; min-width: 140px; max-width: 240px; padding: 10px 12px; border: 1px solid rgba(143, 245, 227, .35); background: rgba(6, 14, 20, .97); box-shadow: 0 14px 32px rgba(0, 0, 0, .55); pointer-events: none; }
 .slot-tip h4 { margin: 0 0 8px; font: 9px "IBM Plex Mono"; letter-spacing: .1em; text-transform: uppercase; color: #8ff5e3; }
 .slot-tip small { display: block; margin-top: 7px; font: 8px "IBM Plex Mono"; color: #7b8e93; }
-.tip-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
-.tip-cell { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid rgba(150, 190, 255, .18); background: rgba(255, 255, 255, .04); color: #9fe3d6; }
+.tip-list { display: grid; gap: 7px; }
+.tip-item { display: flex; align-items: flex-start; gap: 7px; }
+.tip-icon { display: flex; flex: 0 0 auto; color: #9fe3d6; }
+.tip-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tip-copy strong { font-size: 11px; font-weight: 500; }
+.tip-copy small { margin-top: 0; font: 8px "IBM Plex Mono"; letter-spacing: .04em; color: #7b8e93; }
 .slot-modal { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 24px; background: rgba(3, 7, 12, .62); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .slot-dialog { width: min(480px, 100%); max-height: 78vh; overflow: auto; padding: 18px 20px 20px; border: 1px solid rgba(150, 190, 255, .2); background: linear-gradient(150deg, rgba(10, 26, 30, .96), rgba(20, 14, 36, .96)); box-shadow: 0 24px 60px rgba(2, 4, 12, .6); }
 .slot-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
