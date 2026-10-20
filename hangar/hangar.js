@@ -542,11 +542,30 @@
       return '<div class="slot-tile" title="' + (it ? it.name : '—') + '">' + iconMarkup(it ? it.icon : 'grid', 22) +
         (qty > 1 ? '<span class="slot-qty">×' + fmt(qty) + '</span>' : '') + '</div>';
     }).join('');
+
+    /* У контейнера — его собственный груз: он не занимает место в трюме. */
+    var cargo = contents.filter(function (c) { return c.cargo && c.cargo.length; }).map(function (c) {
+      var box = window.Store ? Store.byId('objects', c.itemId) : null;
+      if (!box) return '';
+      var lines = c.cargo.map(function (g) {
+        var res = window.Store ? Store.byId('objects', g.itemId) : null;
+        return res ? '<span>' + res.name + ' — ' + fmt(Number(g.qty) || 0) + ' кг</span>' : '';
+      }).filter(Boolean).join('');
+      var cap = Store.capacityOf(box);
+      return '<div class="slot-cargo">' +
+        '<div class="slot-cargo-head"><strong>' + box.name + '</strong>' +
+        '<span>груз ' + fmt(Math.round(Store.cargoMass([c]))) + ' / ' +
+        (isFinite(cap) ? fmt(cap) : '∞') + ' кг</span></div>' +
+        '<div class="slot-cargo-list">' + lines + '</div></div>';
+    }).filter(Boolean).join('');
+
     return '<div class="slot-dialog" role="dialog" aria-modal="true">' +
       '<div class="slot-dialog-head"><div><span class="eyebrow">СОДЕРЖИМОЕ СЛОТА</span>' +
       '<h3>' + slotTitle(view, index) + '</h3></div>' +
       '<button class="slot-close" data-action="close-slot" aria-label="Закрыть">×</button></div>' +
-      '<div class="slot-grid">' + cells + '</div></div>';
+      '<div class="slot-grid">' + cells + '</div>' +
+      (cargo ? '<div class="slot-cargo-wrap">' + cargo + '</div>' : '') +
+      '</div>';
   }
 
   /* Общее окно: содержимое слота и отказ в покупке. */

@@ -813,7 +813,9 @@
     if (!item) return { ok: false, error: 'Объект не найден' };
     if (categoryIsShip(item.categoryId)) return { ok: false, error: 'Корабли покупаются отдельно' };
 
+    /* Одна покупка = одна штука; количество позже — только для ресурсов (кг). */
     var amount = Math.max(1, Math.floor(Number(qty) || 1));
+    if (!isResourceObject(item)) amount = 1;
     var price = priceBuy(item) * amount;
     if (!price) return { ok: false, error: 'Цена не задана' };
     if (price > d.credits + 1e-9) {

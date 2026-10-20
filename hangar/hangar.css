@@ -622,6 +622,26 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
   padding: 8px 0;
 }
 
+/* Груз контейнера в модалке слота */
+.slot-cargo-wrap { display: grid; gap: 8px; margin-top: 14px; }
+.slot-cargo {
+  display: grid;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid rgba(150, 190, 255, .14);
+  background: rgba(8, 18, 24, .42);
+}
+.slot-cargo-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.slot-cargo-head strong { font-size: 12px; font-weight: 500; }
+.slot-cargo-head span { color: #7f9aa0; font: 8px "IBM Plex Mono"; letter-spacing: .08em; }
+.slot-cargo-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.slot-cargo-list span {
+  color: #cfe9e3;
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid rgba(117, 223, 210, .25);
+}
+
 /* Отказ в покупке */
 .dialog-body { display: grid; gap: 10px; }
 .dialog-text { margin: 0; color: #c3d3d7; font-size: 13px; line-height: 1.55; }
