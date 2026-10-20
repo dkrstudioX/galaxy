@@ -814,25 +814,13 @@
     };
   }
 
-  /* Полоска купленных кораблей над свойствами — клик выбирает корабль. */
-  function userShipStrip(active) {
-    var list = userShipRecords();
-    if (!list.length) return '';
-    return '<div class="user-ships">' + list.map(function (rec) {
-      var on = !!(active && active.id === rec.id);
-      return '<button class="user-ship' + (on ? ' active' : '') + '" data-action="select-user-ship" data-id="' + rec.id + '">' +
-        '<small>КУПЛЕН</small><strong>' + rec.name + '</strong></button>';
-    }).join('') + '</div>';
-  }
-
   function shipViewHTML() {
     var view = activeShipView();
     var rec = view.rec;
     var ship = view.ship;
-    var strip = userShipStrip(rec);
 
     if (!ship) {
-      return strip + '<div class="collection-panel"><div class="collection-head"><div>' +
+      return '<div class="collection-panel"><div class="collection-head"><div>' +
         '<span class="eyebrow">АНГАР</span><h2>Купленных кораблей нет</h2></div></div>' +
         '<div class="collection-row"><div class="collection-copy"><strong>Купите корабль в магазине</strong>' +
         '<span>Он появится здесь со своими свойствами и слотами.</span></div></div></div>';
@@ -853,7 +841,7 @@
     if (rec.price) subtitle += ' · куплен за ' + fmt(Number(rec.price)) + ' ¤';
     if (bought) subtitle += ' · ' + bought;
 
-    return strip + '<div class="info-grid">' +
+    return '<div class="info-grid">' +
       '<div class="hero-ship"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>' +
       shipGlyph(false) +
       '<span class="axis-label left">КОРМA</span><span class="axis-label right">НОС</span></div>' +
