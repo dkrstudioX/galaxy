@@ -948,19 +948,27 @@ function ownedItemConsole(row) {
   var sale = window.Store ? Store.priceSale(item) : 0;
   var cargoKg = 0;
   var cargoValue = 0;
+  var cargoRows = '';
   ((row.entry && row.entry.cargo) || []).forEach(function (g) {
     var res = window.Store ? Store.byId('objects', g.itemId) : null;
     var kg = parseInt(g.qty, 10) || 0;
     if (!res || !kg) return;
     cargoKg += kg;
     cargoValue += Store.priceSale(res) * kg;
+    cargoRows += '<div class="trade-cargo-row">' +
+      '<span class="trade-cargo-icon">' + iconMarkup(res.icon || 'resource', 13) + '</span>' +
+      '<span class="trade-cargo-name">' + res.name + '</span>' +
+      '<span class="trade-cargo-kg">' + fmt(kg) + ' кг</span>' +
+      '</div>';
   });
   var lines = '<span class="trade-preview-stats">' +
     (window.Store ? Store.categoryPath(item.categoryId) : '') + '</span>';
   lines += '<span class="trade-preview-stats">Место: ' + row.place + '</span>';
   if (mass) lines += '<span class="trade-preview-stats">Масса: ' + fmt(mass) + ' кг</span>';
   if (cargoKg) {
-    lines += '<span class="trade-preview-stats">Груз: ' + fmt(cargoKg) + ' кг · ' +
+    lines += '<span class="trade-cargo-label">Груз в контейнере</span>' +
+      '<div class="trade-cargo-list">' + cargoRows + '</div>' +
+      '<span class="trade-cargo-total">Итого груз: ' + fmt(cargoKg) + ' кг · ' +
       fmt(cargoValue) + ' ¤</span>';
   }
   var price = sale

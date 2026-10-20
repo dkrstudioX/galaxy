@@ -405,6 +405,29 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 .trade-preview-stats { min-height: 24px; margin-top: 5px; color: #6d7481; font: 7px/1.5 "IBM Plex Mono"; }
 .trade-preview-price { margin-top: 7px; color: #c4a9ff; font: 600 11px "IBM Plex Mono"; }
 .trade-preview-price small { color: #625979; font-size: 7px; }
+/* Состав контейнера в карточке: ресурс и килограммы, без переполнения */
+.trade-cargo-label {
+  width: 100%; margin-top: 9px; color: #6d7481; text-align: left;
+  text-transform: uppercase; letter-spacing: .08em; font: 7px "IBM Plex Mono";
+}
+.trade-cargo-list {
+  width: 100%; margin-top: 3px; max-height: 126px; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: rgba(120, 160, 170, .35) transparent;
+}
+.trade-cargo-row {
+  display: flex; align-items: center; gap: 6px; padding: 4px 0;
+  border-top: 1px solid rgba(120, 160, 170, .08); text-align: left;
+}
+.trade-cargo-icon {
+  flex: none; width: 17px; height: 17px; display: grid; place-items: center;
+  color: #9fe3d6; border: 1px solid rgba(117, 223, 210, .22); background: rgba(8, 20, 24, .6);
+}
+.trade-cargo-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: #b8c7c7; font-size: 8px;
+}
+.trade-cargo-kg { flex: none; color: #d7c9f7; font: 600 8px "IBM Plex Mono"; }
+.trade-cargo-total { width: 100%; margin-top: 5px; color: #6d7481; text-align: left; font: 7px "IBM Plex Mono"; }
 .hangar-console { padding-top: 18px; }
 .hangar-console .trade-preview { padding-bottom: 18px; }
 .hangar-console .trade-preview strong { white-space: normal; font-size: 11px; }
