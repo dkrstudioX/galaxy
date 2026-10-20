@@ -74,12 +74,6 @@
 
   var shopItems = buildShopItems();
 
-  var initialCargo = [
-    { id: '101', name: 'Лазерный излучатель', category: 'weapon', rarity: 'Улучшенное', stats: 'Урон 34 · 3.1 выстр./с', price: 1220, stock: 2 },
-    { id: '102', name: 'Щит «Эгида»', category: 'shield', rarity: 'Редкое', stats: 'Щит 480 · Реген. 15/с', price: 1850, stock: 1 },
-    { id: '103', name: 'Плазменные ячейки', category: 'resource', rarity: 'Ресурс', stats: 'Боезапас · 8 ед.', price: 190, stock: 16 }
-  ];
-
   /* ---------- Категории магазина ---------- */
 
   /* Запасной набор: если в базе админки ещё нет ни одной категории. */
@@ -124,9 +118,6 @@
     category: 'all',
     subcategory: '',
     selectedShop: '',
-    selectedCargo: '',
-    amount: 1,
-    tradeMode: 'buy',
     notice: 'Торговый терминал подключён',
     infoSection: 'properties',
     userShipId: '',
@@ -256,7 +247,6 @@
     if (inBranch) return item;
     return filteredItems()[0] || null;
   }
-  function currentCargo() { return byId(initialCargo, state.selectedCargo) || initialCargo[0]; }
   function activeResource() { return byId(hangarResources, state.selectedResource) || hangarResources[0]; }
 
   /* ---------- Рендер: шапка и вкладки ---------- */
@@ -278,15 +268,6 @@
   }
 
   /* ---------- Рендер: магазин ---------- */
-
-  function itemRowHTML(item, selected, action) {
-    return '<button class="item-row' + (selected ? ' selected' : '') + '" data-action="' + action + '" data-id="' + item.id + '">' +
-      '<span class="item-icon ' + item.category + '">' + icon(item.category === 'resource' ? 'resource' : item.category, 22) + '</span>' +
-      '<span class="item-copy"><strong>' + item.name + '</strong><span>' + item.stats + '</span></span>' +
-      '<span class="item-meta"><small>' + item.rarity + '</small><b>' + fmt(item.price) + ' ¤</b></span>' +
-      '<span class="stock">×' + item.stock + '</span>' +
-      '</button>';
-  }
 
   /* Иконка объекта: из общего каталога data/icons.js, с запасным вариантом. */
   function iconMarkup(name, size) {
@@ -362,25 +343,6 @@
       '<button class="trade-button buy" data-action="buy">' + (item.isShip ? 'Купить корабль' : 'Купить') + icon('arrowRight') + '</button>';
   }
 
-  /* Центр: груз на корабле — прежний вид с ценой и продажей. */
-  function cargoConsole(item) {
-    if (!item) return '<div class="trade-empty">Груз пока пуст</div>';
-    var total = Math.round(item.price * state.amount * 0.65);
-    return '<div class="trade-preview">' +
-      '<span class="trade-preview-icon ' + item.category + '">' + icon(item.category === 'resource' ? 'resource' : item.category, 27) + '</span>' +
-      '<strong>' + item.name + '</strong>' +
-      '<span class="trade-preview-stats">' + item.stats + '</span>' +
-      '<span class="trade-preview-price">' + fmt(item.price) + ' ¤<small> / шт.</small></span>' +
-      '</div>' +
-      '<div class="amount-control">' +
-      '<button aria-label="Уменьшить количество" data-action="amount" data-dir="-1">' + icon('minus') + '</button>' +
-      '<div><strong>' + state.amount + '</strong><span>КОЛ-ВО</span></div>' +
-      '<button aria-label="Увеличить количество" data-action="amount" data-dir="1">' + icon('plus') + '</button>' +
-      '</div>' +
-      '<div class="trade-total"><span>К продаже</span><strong>' + fmt(total) + ' ¤</strong></div>' +
-      '<button class="trade-button sell" data-action="transact">' + icon('arrowLeft') + 'Продать</button>';
-  }
-
   /* Запись о выбранном в доке корабле: пока она есть, консоль предлагает продать. */
   function ownedShipRecord() {
     if (!state.ownedShipId || !window.Store) return null;
@@ -411,7 +373,6 @@
   }
 
   function shopConsoleHTML() {
-    if (state.tradeMode !== 'buy') return cargoConsole(currentCargo());
     var owned = ownedShipRecord();
     if (owned) return ownedShipConsole(owned);
     return shopObjectConsole(currentShop());
@@ -659,8 +620,6 @@
     state.category = chain[0].id;
     state.subcategory = chain.length > 1 ? chain[chain.length - 1].id : '';
     state.selectedShop = items[0].id;
-    state.tradeMode = 'buy';
-    state.amount = 1;
     state.ownedShipId = '';
     state.notice = slotTitle(view, index) + ': ' + items.length + ' ' +
       plural(items.length, ['совместимый товар', 'совместимых товара', 'совместимых товаров']);
@@ -734,9 +693,14 @@
       var shipsTotal = userShipRecords().length;
       shipMeta.textContent = shipsTotal ? shipsTotal + ' в ангаре' : 'нет кораблей';
     }
-    document.getElementById('cargoList').innerHTML = initialCargo.map(function (it) {
-      return itemRowHTML(it, state.selectedCargo === it.id, 'select-cargo');
-    }).join('');
+    document.getElementById('cargoList').innerHTML = cargoListHTML();
+    var cargoCount = document.getElementById('cargoCount');
+    if (cargoCount) {
+      var modules = shipEquipmentRows(activeShipView()).length;
+      cargoCount.textContent = modules
+        ? modules + ' ' + plural(modules, ['модуль', 'модуля', 'модулей'])
+        : 'пусто';
+    }
     document.getElementById('noticeShop').textContent = state.notice;
   }
 
@@ -812,6 +776,63 @@
       slots: (rec && rec.slots) || [],
       holds: (rec && rec.holds) || []
     };
+  }
+
+  /* Оборудование выбранного корабля: каждая установленная единица отдельно,
+     с местом — крепление или трюм. */
+  function shipEquipmentRows(view) {
+    var rows = [];
+    function add(contents, place) {
+      (contents || []).forEach(function (c) {
+        var item = window.Store ? Store.byId('objects', c.itemId) : null;
+        if (!item) return;
+        rows.push({ item: item, place: place });
+      });
+    }
+    (view.slots || []).forEach(function (s) {
+      var slot = window.Store ? Store.byId('slots', s.slotId) : null;
+      add(s.contents, slot ? slot.name : 'крепление');
+    });
+    (view.holds || []).forEach(function (h) { add(h.contents, h.name); });
+    return rows;
+  }
+
+  /* Колонка 03 «На корабле»: оборудование блоками по категориям, как в магазине. */
+  function cargoListHTML() {
+    var view = activeShipView();
+    if (!view.ship) return '<div class="list-empty">Сначала купите корабль</div>';
+    var rows = shipEquipmentRows(view);
+    if (!rows.length) return '<div class="list-empty">На корабле пока ничего нет</div>';
+
+    var groups = [], index = {};
+    rows.forEach(function (r) {
+      var id = r.item.categoryId || '';
+      if (!index[id]) {
+        index[id] = { cat: id ? Store.byId('categories', id) : null, rows: [] };
+        groups.push(index[id]);
+      }
+      index[id].rows.push(r);
+    });
+    var order = categoryOrderIndex();
+    groups.sort(function (a, b) {
+      return (a.cat ? (order[a.cat.id] || 0) : 0) - (b.cat ? (order[b.cat.id] || 0) : 0);
+    });
+
+    return groups.map(function (g) {
+      var head = '<div class="list-group-head">' +
+        '<span class="list-group-icon">' + iconMarkup(g.cat ? (g.cat.icon || iconForCategory(g.cat.name)) : 'grid', 13) + '</span>' +
+        '<strong>' + (g.cat ? g.cat.name : 'Без категории') + '</strong>' +
+        '<small>' + g.rows.length + '</small></div>';
+      var list = g.rows.map(function (r) {
+        var mass = Store.massOf(r.item);
+        return '<div class="cargo-row">' +
+          '<span class="item-icon">' + iconMarkup(r.item.icon, 18) + '</span>' +
+          '<span class="item-copy"><strong>' + r.item.name + '</strong>' +
+          '<span>' + (mass ? fmt(mass) + ' кг · ' : '') + r.place + '</span></span>' +
+          '</div>';
+      }).join('');
+      return '<div class="list-group">' + head + list + '</div>';
+    }).join('');
   }
 
   function shipViewHTML() {
@@ -1025,8 +1046,6 @@
     state.subcategory = '';
     var list = filteredItems();
     if (list.length) state.selectedShop = list[0].id;
-    state.tradeMode = 'buy';
-    state.amount = 1;
   }
 
   /* Клик по чипу: повторный клик снимает фильтр подкатегории. */
@@ -1034,16 +1053,6 @@
     state.subcategory = state.subcategory === next ? '' : next;
     var list = filteredItems();
     if (list.length) state.selectedShop = list[0].id;
-    state.tradeMode = 'buy';
-    state.amount = 1;
-  }
-
-  /* Продажа груза: цены живут в статичном списке «На корабле». */
-  function transact() {
-    var item = currentCargo();
-    if (!item) return;
-    Store.addCredits(Math.round(item.price * state.amount * 0.65));
-    state.notice = item.name + ': продано ×' + state.amount;
   }
 
   function transferResource() {
@@ -1074,9 +1083,7 @@
     if (action === 'tab') state.tab = el.getAttribute('data-tab');
     else if (action === 'category') changeCategory(el.getAttribute('data-cat'));
     else if (action === 'subcategory') changeSubcategory(el.getAttribute('data-sub'));
-    else if (action === 'select-shop') { state.selectedShop = id; state.tradeMode = 'buy'; state.amount = 1; state.ownedShipId = ''; }
-    else if (action === 'select-cargo') { state.selectedCargo = id; state.tradeMode = 'sell'; state.amount = 1; }
-    else if (action === 'amount') state.amount = Math.min(99, Math.max(1, state.amount + dir));
+    else if (action === 'select-shop') { state.selectedShop = id; state.ownedShipId = ''; }
     else if (action === 'add-credits') {
       var total = Store.addCredits(1000);
       state.notice = 'Баланс пополнен на 1 000 ¤ — теперь ' + fmt(total) + ' ¤';
@@ -1108,7 +1115,6 @@
           ' · ' + fmt(boughtItem.price) + ' ¤';
       }
     }
-    else if (action === 'transact') transact();
     else if (action === 'select-resource') {
       state.selectedResource = id;
       state.transferMode = el.getAttribute('data-mode');
@@ -1120,7 +1126,6 @@
     else if (action === 'select-user-ship') {
       state.userShipId = el.getAttribute('data-id');
       state.ownedShipId = el.getAttribute('data-rec') || '';
-      state.tradeMode = 'buy';
     }
     else if (action === 'sell-ship') {
       var rec = ownedShipRecord();
