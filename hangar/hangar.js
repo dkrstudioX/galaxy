@@ -118,6 +118,7 @@
     category: 'all',
     subcategory: '',
     selectedShop: '',
+    selectedCargo: '',
     notice: 'Торговый терминал подключён',
     infoSection: 'properties',
     userShipId: '',
@@ -372,7 +373,27 @@
       '<button class="trade-button sell" data-action="sell-ship">' + icon('arrowLeft') + 'Продать</button>';
   }
 
+  /* Консоль выбранного предмета на корабле: где стоит, масса и цена продажи. */
+  function ownedItemConsole(row) {
+    var item = row.item;
+    var mass = window.Store ? Store.massOf(item) : 0;
+    var sale = window.Store ? Store.priceSale(item) : 0;
+    var lines = '<span class="trade-preview-stats">' +
+      (window.Store ? Store.categoryPath(item.categoryId) : '') + '</span>';
+    lines += '<span class="trade-preview-stats">Место: ' + row.place + '</span>';
+    if (mass) lines += '<span class="trade-preview-stats">Масса: ' + fmt(mass) + ' кг</span>';
+    var price = sale
+      ? '<span class="trade-preview-price">' + fmt(sale) + ' ¤<small> / шт.</small></span>'
+      : '<span class="trade-preview-stats">Цена продажи не задана</span>';
+    return '<div class="trade-preview">' +
+      '<span class="trade-preview-icon">' + iconMarkup(item.icon, 27) + '</span>' +
+      '<strong>' + item.name + '</strong>' + lines + price +
+      '</div>';
+  }
+
   function shopConsoleHTML() {
+    var cargo = selectedOwnedRow();
+    if (cargo) return ownedItemConsole(cargo);
     var owned = ownedShipRecord();
     if (owned) return ownedShipConsole(owned);
     return shopObjectConsole(currentShop());
@@ -696,7 +717,7 @@
     document.getElementById('cargoList').innerHTML = cargoListHTML();
     var cargoCount = document.getElementById('cargoCount');
     if (cargoCount) {
-      var modules = shipEquipmentRows(activeShipView()).length;
+      var modules = shipEquipmentInBranch(activeShipView()).length;
       cargoCount.textContent = modules
         ? modules + ' ' + plural(modules, ['модуль', 'модуля', 'модулей'])
         : 'пусто';
@@ -779,36 +800,76 @@
   }
 
   /* Оборудование выбранного корабля: каждая установленная единица отдельно,
-     с местом — крепление или трюм. */
+     с ключом (место + позиция) и местом — крепление или трюм. */
   function shipEquipmentRows(view) {
     var rows = [];
-    function add(contents, place) {
-      (contents || []).forEach(function (c) {
+    function add(contents, place, keyPrefix) {
+      (contents || []).forEach(function (c, i) {
         var item = window.Store ? Store.byId('objects', c.itemId) : null;
         if (!item) return;
-        rows.push({ item: item, place: place });
+        rows.push({ key: keyPrefix + ':' + i, item: item, place: place });
       });
     }
-    (view.slots || []).forEach(function (s) {
+    (view.slots || []).forEach(function (s, i) {
       var slot = window.Store ? Store.byId('slots', s.slotId) : null;
-      add(s.contents, slot ? slot.name : 'крепление');
+      add(s.contents, slot ? slot.name : 'крепление', 'slot:' + i);
     });
-    (view.holds || []).forEach(function (h) { add(h.contents, h.name); });
+    (view.holds || []).forEach(function (h, i) {
+      add(h.contents, h.name, 'hold:' + i);
+    });
     return rows;
   }
 
-  /* Колонка 03 «На корабле»: оборудование блоками по категориям, как в магазине. */
+  /* Оборудование корабля в текущей ветке магазина — тот же фильтр, что у витрины. */
+  function shipEquipmentInBranch(view) {
+    return shipEquipmentRows(view).filter(function (r) {
+      if (!inCategory(r.item, state.category)) return false;
+      if (state.subcategory && !inSubtree(r.item.categoryId, state.subcategory)) return false;
+      return true;
+    });
+  }
+
+  /* Выбранная строка «На корабле»: ключ живёт до смены корабля или ветки. */
+  function selectedOwnedRow() {
+    if (!state.selectedCargo) return null;
+    var rows = shipEquipmentInBranch(activeShipView());
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].key === state.selectedCargo) return rows[i];
+    }
+    return null;
+  }
+
+  /* Строка «На корабле» — как строка витрины: иконка, имя, масса, место и цена. */
+  function cargoRowHTML(row, selected) {
+    var item = row.item;
+    var cat = window.Store ? Store.byId('categories', item.categoryId) : null;
+    var mass = window.Store ? Store.massOf(item) : 0;
+    var sale = window.Store ? Store.priceSale(item) : 0;
+    return '<button class="item-row' + (selected ? ' selected' : '') +
+      '" data-action="select-cargo" data-id="' + row.key + '">' +
+      '<span class="item-icon">' + iconMarkup(item.icon, 22) + '</span>' +
+      '<span class="item-copy"><strong>' + item.name + '</strong><span>' +
+      (mass ? 'Масса ' + fmt(mass) + ' кг · ' : '') + row.place + '</span></span>' +
+      '<span class="item-meta"><small>' + (cat ? cat.name : '') + '</small>' +
+      (sale ? '<b>' + fmt(sale) + ' ¤</b>' : '') + '</span>' +
+      '</button>';
+  }
+
+  /* Колонка 03 «На корабле»: оборудование блоками, как список «В продаже». */
   function cargoListHTML() {
     var view = activeShipView();
     if (!view.ship) return '<div class="list-empty">Сначала купите корабль</div>';
-    var rows = shipEquipmentRows(view);
-    if (!rows.length) return '<div class="list-empty">На корабле пока ничего нет</div>';
+    var all = shipEquipmentRows(view);
+    if (!all.length) return '<div class="list-empty">На корабле пока ничего нет</div>';
+    var rows = shipEquipmentInBranch(view);
+    if (!rows.length) return '<div class="list-empty">В этой категории на корабле ничего нет</div>';
 
+    var branch = activeBranch();
     var groups = [], index = {};
     rows.forEach(function (r) {
-      var id = r.item.categoryId || '';
+      var id = groupCategoryId(r.item.categoryId, branch);
       if (!index[id]) {
-        index[id] = { cat: id ? Store.byId('categories', id) : null, rows: [] };
+        index[id] = { cat: window.Store && id ? Store.byId('categories', id) : null, rows: [] };
         groups.push(index[id]);
       }
       index[id].rows.push(r);
@@ -818,20 +879,21 @@
       return (a.cat ? (order[a.cat.id] || 0) : 0) - (b.cat ? (order[b.cat.id] || 0) : 0);
     });
 
+    /* Заголовок группы, как в витрине: он не нужен, если ветка — одна категория. */
+    var showHeads = groups.length > 1 ||
+      (groups.length === 1 && groups[0].cat && groups[0].cat.id !== branch);
     return groups.map(function (g) {
-      var head = '<div class="list-group-head">' +
-        '<span class="list-group-icon">' + iconMarkup(g.cat ? (g.cat.icon || iconForCategory(g.cat.name)) : 'grid', 13) + '</span>' +
-        '<strong>' + (g.cat ? g.cat.name : 'Без категории') + '</strong>' +
-        '<small>' + g.rows.length + '</small></div>';
-      var list = g.rows.map(function (r) {
-        var mass = Store.massOf(r.item);
-        return '<div class="cargo-row">' +
-          '<span class="item-icon">' + iconMarkup(r.item.icon, 18) + '</span>' +
-          '<span class="item-copy"><strong>' + r.item.name + '</strong>' +
-          '<span>' + (mass ? fmt(mass) + ' кг · ' : '') + r.place + '</span></span>' +
-          '</div>';
-      }).join('');
-      return '<div class="list-group">' + head + list + '</div>';
+      var head = '';
+      if (showHeads && g.cat) {
+        head = '<div class="list-group-head">' +
+          '<span class="list-group-icon">' + iconMarkup(g.cat.icon || iconForCategory(g.cat.name), 13) + '</span>' +
+          '<strong>' + g.cat.name + '</strong>' +
+          '<small>' + g.rows.length + '</small></div>';
+      }
+      return '<div class="list-group">' + head +
+        g.rows.map(function (r) {
+          return cargoRowHTML(r, state.selectedCargo === r.key);
+        }).join('') + '</div>';
     }).join('');
   }
 
@@ -1044,6 +1106,7 @@
     state.category = next;
     /* Смена ветки сбрасывает выбранную подкатегорию. */
     state.subcategory = '';
+    state.selectedCargo = '';
     var list = filteredItems();
     if (list.length) state.selectedShop = list[0].id;
   }
@@ -1051,6 +1114,7 @@
   /* Клик по чипу: повторный клик снимает фильтр подкатегории. */
   function changeSubcategory(next) {
     state.subcategory = state.subcategory === next ? '' : next;
+    state.selectedCargo = '';
     var list = filteredItems();
     if (list.length) state.selectedShop = list[0].id;
   }
@@ -1083,7 +1147,7 @@
     if (action === 'tab') state.tab = el.getAttribute('data-tab');
     else if (action === 'category') changeCategory(el.getAttribute('data-cat'));
     else if (action === 'subcategory') changeSubcategory(el.getAttribute('data-sub'));
-    else if (action === 'select-shop') { state.selectedShop = id; state.ownedShipId = ''; }
+    else if (action === 'select-shop') { state.selectedShop = id; state.selectedCargo = ''; state.ownedShipId = ''; }
     else if (action === 'add-credits') {
       var total = Store.addCredits(1000);
       state.notice = 'Баланс пополнен на 1 000 ¤ — теперь ' + fmt(total) + ' ¤';
@@ -1115,6 +1179,7 @@
           ' · ' + fmt(boughtItem.price) + ' ¤';
       }
     }
+    else if (action === 'select-cargo') { state.selectedCargo = id; state.ownedShipId = ''; }
     else if (action === 'select-resource') {
       state.selectedResource = id;
       state.transferMode = el.getAttribute('data-mode');
@@ -1126,6 +1191,7 @@
     else if (action === 'select-user-ship') {
       state.userShipId = el.getAttribute('data-id');
       state.ownedShipId = el.getAttribute('data-rec') || '';
+      state.selectedCargo = '';
     }
     else if (action === 'sell-ship') {
       var rec = ownedShipRecord();
