@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HOLO-9 // ассистент ангара — пример дизайна</title>
+<link rel="stylesheet" href="holo.css">
+</head>
+<body>
+
+<!-- Общие иконки: те же линейные глифы, что в hangar.css -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+  <symbol id="i-ship" viewBox="0 0 24 24"><path d="m12 3 5 7-1 8-4-2-4 2-1-8 5-7Z"/><path d="M10 12h4M12 3v7"/></symbol>
+  <symbol id="i-shop" viewBox="0 0 24 24"><path d="M4 9h16l-1-5H5L4 9Z"/><path d="M6 9v11h12V9M9 20v-6h6v6"/></symbol>
+  <symbol id="i-hangar" viewBox="0 0 24 24"><path d="M3 20V9l9-6 9 6v11M7 20v-8h10v8"/><path d="M9 16h6M9 12h6"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 5 13h6l-1 9 8-12h-6l1-8Z"/></symbol>
+  <symbol id="i-gun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 20 6v6c0 5-4 8-8 9-4-1-8-4-8-9V6l8-3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-engine" viewBox="0 0 24 24"><path d="M4 8h9l4-4v16l-4-4H4Z"/><path d="M4 10H2M4 14H2"/></symbol>
+  <symbol id="i-radar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 12 18 6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-crate" viewBox="0 0 24 24"><path d="M4 8h16v12H4zM4 8l3-4h10l3 4M9 8v12M15 8v12"/></symbol>
+  <symbol id="i-tool" viewBox="0 0 24 24"><path d="M14 4a4 4 0 0 0-4 6L4 16l4 4 6-6a4 4 0 0 0 6-4l-3 3-3-3 3-3a4 4 0 0 0-3-3Z"/></symbol>
+  <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.6-1-1.5-1.5-3-1.5-2 0-3 1-3 2.2 0 3.1 6 1 6 4 0 1.2-1 2.3-3 2.3-1.5 0-2.6-.5-3.2-1.5M12 6v2m0 8.5V19"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></symbol>
+</svg>
+
+<!-- Сцена: голографическая сетка, свечение горизонта, пыль -->
+<div class="scene" aria-hidden="true">
+  <div class="scene-glow"></div>
+  <div class="grid-floor"></div>
+  <div class="grid-horizon"></div>
+  <div class="scene-beam beam-a"></div>
+  <div class="scene-beam beam-b"></div>
+  <div class="particles">
+    <i style="--x:8%;--y:62%;--d:0s;--s:2px"></i>
+    <i style="--x:17%;--y:38%;--d:-2.4s;--s:1px"></i>
+    <i style="--x:26%;--y:74%;--d:-5s;--s:2px"></i>
+    <i style="--x:33%;--y:48%;--d:-1.2s;--s:1px"></i>
+    <i style="--x:44%;--y:66%;--d:-6.4s;--s:2px"></i>
+    <i style="--x:52%;--y:30%;--d:-3.1s;--s:1px"></i>
+    <i style="--x:61%;--y:57%;--d:-7.8s;--s:2px"></i>
+    <i style="--x:68%;--y:80%;--d:-4.2s;--s:1px"></i>
+    <i style="--x:74%;--y:42%;--d:-0.8s;--s:2px"></i>
+    <i style="--x:83%;--y:69%;--d:-5.7s;--s:1px"></i>
+    <i style="--x:91%;--y:34%;--d:-2.9s;--s:2px"></i>
+    <i style="--x:95%;--y:78%;--d:-6.9s;--s:1px"></i>
+  </div>
+</div>
+<div class="scanlines" aria-hidden="true"></div>
+
+<main class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg fill="none" height="23" viewBox="0 0 24 24" width="23" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
+          <path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path>
+          <circle cx="12" cy="12" r="5"></circle>
+          <path d="m8.5 8.5 7 7m0-7-7 7"></path>
+        </svg>
+      </span>
+      <div class="brand-copy">
+        <strong>HELIOS // 7</strong>
+        <span>ОРБИТАЛЬНАЯ ЗВЁЗДНАЯ БАЗА</span>
+      </div>
+      <span class="build-badge">пример · holo</span>
+    </div>
+
+    <div class="station-status">
+      <span class="pulse"></span>
+      HOLO-9 НА СВЯЗИ
+      <span class="divider"></span>
+      СЕКТОР A-17
+    </div>
+
+    <div class="balance" title="Демо-баланс">
+      <span class="balance-coin"><svg class="ic"><use href="#i-coin"/></svg></span>
+      <div>
+        <small>Баланс</small>
+        <strong><span id="credits">18 400</span> <i>¤</i></strong>
+      </div>
+    </div>
+  </header>
+
+  <nav class="primary-tabs" aria-label="Разделы станции">
+    <button type="button" data-tab="info">
+      <svg class="ic"><use href="#i-info"/></svg>
+      Информация о базе
+    </button>
+    <button type="button" data-tab="ship">
+      <svg class="ic"><use href="#i-ship"/></svg>
+      Информация о корабле
+    </button>
+    <button type="button" data-tab="shop" class="active" aria-current="page">
+      <svg class="ic"><use href="#i-shop"/></svg>
+      Магазин
+    </button>
+    <button type="button" data-tab="hangar">
+      <svg class="ic"><use href="#i-hangar"/></svg>
+      Ангар
+    </button>
+  </nav>
+
+  <div class="content">
+
+    <div class="section-title">
+      <div>
+        <span class="eyebrow">ТОРГОВЫЙ УЗЕЛ // 04</span>
+        <h1>Снаряжение и снабжение</h1>
+      </div>
+      <div class="title-side">
+        <span class="demo-chip">демо-макет</span>
+        <div class="terminal-status"><span></span> Торговый терминал подключён</div>
+      </div>
+    </div>
+
+    <div class="workspace">
+
+      <!-- 00 · ассистент -->
+      <section class="panel assistant-panel" aria-label="Голографический ассистент">
+        <div class="panel-head">
+          <div><span>00</span><strong>Ассистент</strong></div>
+          <small class="online"><i></i> HOLO-9 · online</small>
+        </div>
+
+        <div class="assistant-stage">
+          <div class="holo-glow">
+          <div class="holo-frame" id="holoFrame">
+            <span class="holo-corner corner-tl"></span>
+            <span class="holo-corner corner-br"></span>
+
+            <div class="holo-head">
+              <span class="holo-label">ЗАПРОС // 001</span>
+              <span class="holo-signal" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+            </div>
+
+            <p class="holo-reply" id="assistantReply" aria-live="polite">Добро пожаловать на борт, пилот. «Сокол» готов к вылету. Подскажу, что встанет в крепления, а что — только в трюм.</p>
+
+            <div class="holo-scope" aria-hidden="true">
+              <div class="holo-scope-bar"><span>Телеметрия // 07</span><b>стабильно</b></div>
+              <svg viewBox="0 0 300 84" preserveAspectRatio="none">
+                <path class="scope-grid" d="M0 21H300M0 42H300M0 63H300M75 0V84M150 0V84M225 0V84"/>
+                <path class="scope-wave" d="M0 56 L24 56 L30 48 L36 64 L42 34 L48 56 L72 56 L78 52 L84 60 L90 56 L126 56 L132 18 L138 72 L144 40 L150 56 L192 56 L198 48 L204 64 L210 50 L216 56 L252 56 L258 30 L264 68 L270 46 L276 56 L300 56"/>
+              </svg>
+            </div>
+
+            <div class="holo-suggestions" id="suggestions">
+              <button type="button" data-prompt="cargo">Что влезет в трюм?<span>→</span></button>
+              <button type="button" data-prompt="kit">Собери комплект до 3 000 ¤<span>→</span></button>
+              <button type="button" data-prompt="shield">Почему щит не встаёт?<span>→</span></button>
+            </div>
+
+            <div class="holo-telemetry" aria-hidden="true">
+              <span>КАНАЛ <b>12 мс</b></span>
+              <span>ПАМЯТЬ <b>64 %</b></span>
+              <span class="holo-ok">ЗАЩИЩЕНО</span>
+            </div>
+          </div>
+          </div>
+
+          <div class="holo-base" aria-hidden="true"><i></i><i></i><i></i></div>
+
+          <div class="assistant-caption"><span></span> HOLO-9 // КАНАЛ ЗАЩИЩЁН</div>
+        </div>
+      </section>
+
+      <div class="trade-column">
+        <div class="category-tabs" id="categoryTabs" role="tablist" aria-label="Категории">
+          <button type="button" class="active" data-cat="all" data-label="Все">Все <small>9</small></button>
+          <button type="button" data-cat="weapon" data-label="Оружие">Оружие <small>3</small></button>
+          <button type="button" data-cat="defense" data-label="Защита">Защита <small>2</small></button>
+          <button type="button" data-cat="engine" data-label="Двигатели">Двигатели <small>1</small></button>
+          <button type="button" data-cat="radar" data-label="Радары">Радары <small>1</small></button>
+          <button type="button" data-cat="cargo" data-label="Груз">Груз <small>2</small></button>
+        </div>
+
+        <div class="trade-pair">
+
+      <!-- 01 · витрина -->
+      <section class="panel shop-panel" aria-label="Товары в продаже">
+        <div class="panel-head">
+          <div><span>01</span><strong>В продаже</strong></div>
+          <small id="shopCount">9 позиций</small>
+        </div>
+        <div class="item-list" id="shopList" role="list">
+
+          <button type="button" class="item-row selected" role="listitem" aria-pressed="true"
+            data-name="Лазер M-7" data-price="790" data-cat="weapon" data-icon="bolt"
+            data-meta="ОРУЖИЕ · БАШНЯ S2 · МАССА 11 КГ" data-stock="6">
+            <span class="item-icon"><svg class="ic"><use href="#i-bolt"/></svg></span>
+            <span class="item-copy"><strong>Лазер M-7</strong><span>БАШНЯ S2 · 11 КГ</span></span>
+            <span class="item-meta"><small>Оружие</small><b>790 ¤</b></span>
+            <span class="stock"><b>6</b> шт.</span>
+          </button>
+
+          <button type="button" class="item-row" role="listitem" aria-pressed="false"
+            data-name="Лазер M-9" data-price="930" data-cat="weapon" data-icon="bolt"
+            data-meta="ОРУЖИЕ · БАШНЯ S2 · МАССА 13 КГ" data-stock="4">
+            <span class="item-icon"><svg class="ic"><use href="#i-bolt"/></svg></span>
+            <span class="item-copy"><strong>Лазер M-9</strong><span>БАШНЯ S2 · 13 КГ</span></span>
+            <span class="item-meta"><small>Оружие</small><b>930 ¤</b></span>
+            <span class="stock"><b>4</b> шт.</span>
+          </button>
+
+          <button type="button" class="item-row" role="listitem" aria-pressed="false"
+            data-name="Пулемёт P-5" data-price="535" data-cat="weapon" data-icon="gun"
+            data-meta="ОРУЖИЕ · ГНЕЗДО S1 · МАССА 16 КГ" data-stock="8">
+            <span class="item-icon"><svg class="ic"><use href="#i-gun"/></svg></span>
+            <span class="item-copy"><strong>Пулемёт P-5</strong><span>ГНЕЗДО S1 · 16 КГ</span></span>
+            <span class="item-meta"><small>Оружие</small><b>535 ¤</b></span>
+            <span class="stock"><b>8</b> шт.</span>
+          </button>
+
+          <button type="button" class="item-row" role="listitem" aria-pressed="false"
+            data-name="Щит S-3" data-price="495" data-cat="defense" data-icon="shield"
+            data-meta="ЗАЩИТА · ГНЕЗДО S1 · МАССА 49 КГ" data-stock="3">
+            <span class="item-icon defense"><svg class="ic"><use href="#i-shield"/></svg></span>
+            <span class="item-copy"><strong>Щит S-3</strong><span>ГНЕЗДО S1 · 49 КГ</span></span>
+            <span class="item-meta"><small>Защита</small><b>495 ¤</b></span>
+            <span class="stock"><b>3</b> шт.</span>
+          </button>
+
+          <button type="button" class="item-row" role="listitem" aria-pressed="false"
+            data-name="Щит S-5" data-price="625" data-cat="defense" data-icon="shield"
+            data-meta="ЗАЩИТА · ГНЕЗДО S1 · МАССА 65 КГ" data-stock="2">
+            <span class="item-icon defense"><svg class="ic"><use href="#i-shield"/></svg></span>
+            <span class="item-copy"><strong>Щит S-5</strong><span>ГНЕЗДО S1 · 65 КГ</span></span>
+            <span class="item-meta"><small>Защита</small><b>625 ¤</b></span>
+            <span class="stock"><b>2</b> шт.</span>
+          </button>
+
+          <button type="button" class="item-row" role="listitem" aria-pressed="false"
+            data-name="Двигатель E-2" data-price="700" data-cat="engine" data-icon="engine"
+            data-meta="ДВИГАТЕЛИ · КОРМА · МАССА 120 КГ" data-stock="3">
+            <span class="item-icon engine"><svg class="ic"><use href="#i-engine"/></svg></span>
+            <span class="item-copy"><strong>Двигатель E-2</strong><span>КОРМА · 120 КГ</span></span>
+            <span class="item-meta"><small>Двигатель</small><b>700 ¤</b></span>
+            <span class="stock"><b>3</b> шт.</span>
+          </button>
+
+          <button type="button" class="item-row" role="listitem" aria-pressed="false"
+            data-name="Радар R-2" data-price="480" data-cat="radar" data-icon="radar"
+            data-meta="РАДАРЫ · МОДУЛЬ · МАССА 32 КГ" data-stock="7">
+            <span class="item-icon radar"><svg class="ic"><use href="#i-radar"/></svg></span>
+            <span class="item-copy"><strong>Радар R-2</strong><span>МОДУЛЬ · 32 КГ</span></span>
+            <span class="item-meta"><small>Радар</small><b>480 ¤</b></span>
+            <span class="stock"><b>7</b> шт.</span>
+          </button>
+
+          <button type="button" class="item-row" role="listitem" aria-pressed="false"
+            data-name="Грузовой отсек 2 т" data-price="500" data-cat="cargo" data-icon="crate"
+            data-meta="ГРУЗ · ВНУТРЕННИЙ · МАССА 140 КГ" data-stock="2">
+            <span class="item-icon cargo"><svg class="ic"><use href="#i-crate"/></svg></span>
+            <span class="item-copy"><strong>Грузовой отсек 2 т</strong><span>ВНУТРЕННИЙ · 140 КГ</span></span>
+            <span class="item-meta"><small>Груз</small><b>500 ¤</b></span>
+            <span class="stock"><b>2</b> шт.</span>
+          </button>
+
+          <button type="button" class="item-row" role="listitem" aria-pressed="false"
+            data-name="Ремкомплект" data-price="350" data-cat="cargo" data-icon="tool"
+            data-meta="ГРУЗ · РАСХОДНИК · МАССА 2 КГ" data-stock="12">
+            <span class="item-icon cargo"><svg class="ic"><use href="#i-tool"/></svg></span>
+            <span class="item-copy"><strong>Ремкомплект</strong><span>РАСХОДНИК · 2 КГ</span></span>
+            <span class="item-meta"><small>Груз</small><b>350 ¤</b></span>
+            <span class="stock"><b>12</b> шт.</span>
+          </button>
+
+        </div>
+      </section>
+
+      <!-- 02 · оборудование на борту -->
+      <section class="panel board-panel" aria-label="Оборудование на борту">
+        <div class="panel-head">
+          <div><span>02</span><strong>На борту</strong></div>
+          <small>6 единиц · 241 кг</small>
+        </div>
+        <div class="board-list" role="list">
+
+          <div class="board-row" role="listitem">
+            <span class="item-icon"><svg class="ic"><use href="#i-bolt"/></svg></span>
+            <span class="item-copy"><strong>Лазер M-7</strong><span>БАШНЯ 1 · S2</span></span>
+            <span class="board-mass"><small>масса</small><b>11 кг</b></span>
+          </div>
+
+          <div class="board-row" role="listitem">
+            <span class="item-icon"><svg class="ic"><use href="#i-bolt"/></svg></span>
+            <span class="item-copy"><strong>Лазер M-9</strong><span>БАШНЯ 2 · S2</span></span>
+            <span class="board-mass"><small>масса</small><b>13 кг</b></span>
+          </div>
+
+          <div class="board-row" role="listitem">
+            <span class="item-icon"><svg class="ic"><use href="#i-gun"/></svg></span>
+            <span class="item-copy"><strong>Пулемёт P-5</strong><span>ГНЕЗДО 1 · S1</span></span>
+            <span class="board-mass"><small>масса</small><b>16 кг</b></span>
+          </div>
+
+          <div class="board-row" role="listitem">
+            <span class="item-icon defense"><svg class="ic"><use href="#i-shield"/></svg></span>
+            <span class="item-copy"><strong>Щит S-3</strong><span>ГНЕЗДО 2 · S1</span></span>
+            <span class="board-mass"><small>масса</small><b>49 кг</b></span>
+          </div>
+
+          <div class="board-row" role="listitem">
+            <span class="item-icon engine"><svg class="ic"><use href="#i-engine"/></svg></span>
+            <span class="item-copy"><strong>Двигатель E-2</strong><span>КОРМА · S2</span></span>
+            <span class="board-mass"><small>масса</small><b>120 кг</b></span>
+          </div>
+
+          <div class="board-row" role="listitem">
+            <span class="item-icon radar"><svg class="ic"><use href="#i-radar"/></svg></span>
+            <span class="item-copy"><strong>Радар R-2</strong><span>МОДУЛЬ · S1</span></span>
+            <span class="board-mass"><small>масса</small><b>32 кг</b></span>
+          </div>
+
+        </div>
+        <div class="board-foot">
+          <svg class="ic"><use href="#i-plus"/></svg>
+          2 свободных крепления
+        </div>
+      </section>
+
+        </div>
+      </div>
+
+      <!-- 03 · корабль -->
+      <section class="panel ship-panel" aria-label="Активный корабль">
+        <div class="panel-head">
+          <div><span>03</span><strong>Корабль</strong></div>
+          <small id="shipPanelMeta">Сокол · фрегат</small>
+        </div>
+
+        <div class="ship-body">
+          <div class="ship-visual">
+            <svg class="ship-svg" viewBox="0 0 260 132" aria-hidden="true">
+              <defs>
+                <linearGradient id="shipFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#7fe8ff" stop-opacity=".16"/>
+                  <stop offset="1" stop-color="#7fe8ff" stop-opacity=".02"/>
+                </linearGradient>
+                <linearGradient id="shipLine" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#75dfd2"/>
+                  <stop offset=".62" stop-color="#7fe8ff"/>
+                  <stop offset="1" stop-color="#aa88f6"/>
+                </linearGradient>
+                <filter id="shipGlow" x="-60%" y="-60%" width="220%" height="220%">
+                  <feGaussianBlur stdDeviation="2.2" result="b"/>
+                  <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+              </defs>
+              <g fill="none" stroke="rgba(127,232,255,.16)" filter="url(#shipGlow)">
+                <ellipse cx="130" cy="66" rx="108" ry="43" stroke-dasharray="3 8"/>
+                <ellipse cx="130" cy="66" rx="76" ry="27" stroke="rgba(170,136,246,.2)" stroke-dasharray="2 7"/>
+              </g>
+              <g fill="url(#shipFill)" stroke="url(#shipLine)" stroke-width="1.2" stroke-linejoin="round" filter="url(#shipGlow)">
+                <path d="M40 66 72 52 158 46 224 66 158 86 72 80Z"/>
+                <path d="M72 52 54 24 96 42Z"/>
+                <path d="M72 80 54 108 96 90Z"/>
+                <path d="M158 46 170 34 196 50Z"/>
+                <path d="M158 86 170 98 196 82Z"/>
+                <path d="M104 51 146 49 156 66 146 83 104 81 96 66Z" fill="rgba(127,232,255,.06)"/>
+              </g>
+              <g fill="#bffcfc" filter="url(#shipGlow)">
+                <circle cx="42" cy="66" r="2.6"/>
+                <circle cx="63" cy="60" r="1.5"/>
+                <circle cx="63" cy="72" r="1.5"/>
+              </g>
+              <g stroke="rgba(127,232,255,.32)" stroke-width=".8">
+                <path d="M158 28h26M158 104h26M28 66H12"/>
+              </g>
+            </svg>
+            <span class="ship-tag" id="activeShipName">СОКОЛ // ФРЕГАТ</span>
+            <span class="ship-hp">HULL 900 / 900</span>
+            <span class="ship-scan" aria-hidden="true"></span>
+          </div>
+
+          <div class="ship-specs">
+            <div class="ship-stats">
+              <div><small>Корпус</small><b>900</b></div>
+              <div><small>Скорость</small><b>22</b></div>
+              <div><small>Масса</small><b>3 441 <em>кг</em></b></div>
+            </div>
+
+            <div class="ship-block">
+              <div class="block-head"><span>Крепления</span><b>6 / 8</b></div>
+              <div class="slot-grid">
+                <span class="slot-tile" title="Лазер M-7"><svg class="ic"><use href="#i-bolt"/></svg></span>
+                <span class="slot-tile" title="Лазер M-9"><svg class="ic"><use href="#i-bolt"/></svg></span>
+                <span class="slot-tile" title="Пулемёт P-5"><svg class="ic"><use href="#i-gun"/></svg></span>
+                <span class="slot-tile" title="Щит S-3"><svg class="ic"><use href="#i-shield"/></svg></span>
+                <span class="slot-tile" title="Двигатель E-2"><svg class="ic"><use href="#i-engine"/></svg></span>
+                <span class="slot-tile" title="Радар R-2"><svg class="ic"><use href="#i-radar"/></svg></span>
+                <span class="slot-tile empty" title="Свободное крепление"><svg class="ic"><use href="#i-plus"/></svg></span>
+                <span class="slot-tile empty" title="Свободное крепление"><svg class="ic"><use href="#i-plus"/></svg></span>
+              </div>
+            </div>
+
+            <div class="ship-block">
+              <div class="block-head"><span>Трюм</span><b>640 / 2 000 кг</b></div>
+              <div class="hold-bar"><span style="width:32%"></span></div>
+              <div class="hold-legend"><span>Трюм 1 · 640 кг</span><span>Трюм 2 · пусто</span></div>
+            </div>
+
+            <div class="ship-block ship-systems">
+              <div class="block-head"><span>Системы</span><b>норма</b></div>
+              <div class="system-row"><span>Щит</span><i><em style="width:82%"></em></i><b>82%</b></div>
+              <div class="system-row"><span>Двигатель</span><i><em style="width:64%"></em></i><b>64%</b></div>
+              <div class="system-row"><span>Сканер</span><i><em style="width:91%"></em></i><b>91%</b></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- консоль выбранного предмета -->
+    <div class="console-bar" id="consoleBar">
+      <div class="console-item">
+        <span class="console-icon" id="consoleIcon"><svg class="ic"><use href="#i-bolt"/></svg></span>
+        <div>
+          <small>Выбрано</small>
+          <strong id="consoleName">Лазер M-7</strong>
+          <span id="consoleMeta">ОРУЖИЕ · БАШНЯ S2 · МАССА 11 КГ</span>
+        </div>
+      </div>
+      <div class="console-price">
+        <small>Цена</small>
+        <strong><span id="consolePrice">790</span> ¤</strong>
+      </div>
+      <button type="button" class="buy-button" id="buyButton">
+        Купить
+        <svg class="ic"><use href="#i-arrow"/></svg>
+      </button>
+    </div>
+
+    <!-- док -->
+    <div class="ship-dock">
+      <div class="dock-caption">
+        <span>Ангар</span>
+        <b>03</b>
+        <small>корабля</small>
+      </div>
+
+      <button type="button" class="dock-card active" data-ship="Сокол" data-class="Фрегат" data-mass="3 441">
+        <span class="dock-glyph"><svg class="ic"><use href="#i-ship"/></svg></span>
+        <span class="dock-copy"><strong>Сокол</strong><small>ФРЕГАТ · 3 441 КГ</small></span>
+        <span class="dock-state"><i></i>Активен</span>
+      </button>
+
+      <button type="button" class="dock-card" data-ship="Челнок" data-class="Шаттл" data-mass="852">
+        <span class="dock-glyph"><svg class="ic"><use href="#i-ship"/></svg></span>
+        <span class="dock-copy"><strong>Челнок</strong><small>ШАТТЛ · 852 КГ</small></span>
+        <span class="dock-state"><i></i>В доке</span>
+      </button>
+
+      <button type="button" class="dock-card" data-ship="Стриж" data-class="Перехватчик" data-mass="620">
+        <span class="dock-glyph"><svg class="ic"><use href="#i-ship"/></svg></span>
+        <span class="dock-copy"><strong>Стриж</strong><small>ПЕРЕХВАТЧИК · 620 КГ</small></span>
+        <span class="dock-state"><i></i>В доке</span>
+      </button>
+    </div>
+
+  </div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="holo.js"></script>
+</body>
+</html>
