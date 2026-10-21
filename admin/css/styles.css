@@ -247,6 +247,29 @@ body.modal-open { overflow: hidden; }
 
 /* ---------- Дерево категорий ---------- */
 
+/* Вкладки групп: оборудование, ресурсы, корабли. */
+.category-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 12px; }
+.category-tab {
+  appearance: none;
+  border: 1px solid var(--border-soft);
+  background: rgba(18, 14, 40, 0.5);
+  color: var(--muted);
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.category-tab:hover { color: var(--text); border-color: rgba(168, 85, 247, 0.4); background: rgba(40, 30, 80, 0.55); }
+.category-tab.active {
+  color: var(--text);
+  border-color: rgba(168, 85, 247, 0.45);
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.28), rgba(55, 201, 238, 0.12));
+  font-weight: 600;
+}
+.category-tab:focus-visible { outline: 2px solid rgba(124, 92, 255, 0.7); outline-offset: 2px; }
+
 .tree-cell { display: flex; align-items: center; gap: 6px; }
 .tree-indent { flex: none; }
 .tree-toggle {

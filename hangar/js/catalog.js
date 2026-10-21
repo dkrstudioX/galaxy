@@ -6,6 +6,9 @@
 
 import { isMassName, iconForCategory } from './base.js';
 
+/* Старые базы один раз раскладываются по трём группам до построения витрины. */
+if (window.Store) Store.ensureCatalogGroups();
+
 /* ---------- Данные магазина (объекты из базы админки) ---------- */
 
 /* Объекты админки -> строки витрины: имя, категория, масса и свойства. */
@@ -41,24 +44,22 @@ export var shopItems = buildShopItems();
 
 /* ---------- Категории магазина ---------- */
 
-/* Запасной набор: если в базе админки ещё нет ни одной категории. */
-var FALLBACK_CATEGORIES = [
-  { id: 'weapon', label: 'Оружие', icon: 'weapon' },
-  { id: 'shield', label: 'Щиты', icon: 'shield' },
-  { id: 'resource', label: 'Ресурсы', icon: 'resource' },
-  { id: 'ship', label: 'Корабли', icon: 'ship' }
-];
-
-
-/* Табы: «Все» + категории первого уровня из базы админки (data/store.js). */
+/* Табы: «Все» + три группы из Store в порядке плана:
+   оборудование, ресурсы, корабли. Старого набора-заглушки нет. */
 function buildCategories() {
   var roots = [];
   if (window.Store) {
-    roots = Store.childCategories('').map(function (cat) {
-      return { id: cat.id, label: cat.name, icon: cat.icon || iconForCategory(cat.name) };
+    var groups = Store.catalogGroups();
+    ['equipment', 'resources', 'ships'].forEach(function (key) {
+      var group = groups[key];
+      if (!group) return;
+      roots.push({
+        id: group.root.id,
+        label: group.title,
+        icon: group.root.icon || iconForCategory(group.title)
+      });
     });
   }
-  if (!roots.length) roots = FALLBACK_CATEGORIES.slice();
   return [{ id: 'all', label: 'Все', icon: 'grid' }].concat(roots);
 }
 

@@ -118,25 +118,44 @@ export function ownedShipRecord() {
   return null;
 }
 
-/* Консоль купленного корабля: цена продажи и кнопка «Продать». */
+/* Разбивка продажи корабля: корпус, оборудование, груз и итого. */
+function shipSaleCardHTML(value) {
+  if (!value || !value.ok) {
+    return '<span class="trade-preview-stats">' +
+      ((value && value.error) || 'Цена продажи не задана') + '</span>';
+  }
+  function row(iconName, label, price) {
+    return '<div class="trade-cargo-row">' +
+      '<span class="trade-cargo-icon">' + iconMarkup(iconName, 13) + '</span>' +
+      '<span class="trade-cargo-name">' + label + '</span>' +
+      '<span class="trade-cargo-kg">' + fmt(price) + ' ¤</span>' +
+      '</div>';
+  }
+  return '<span class="trade-cargo-label">Стоимость продажи</span>' +
+    '<div class="trade-cargo-list">' +
+    row('ship', 'Корабль', value.shipPrice) +
+    row('grid', 'Оборудование · ' + value.gearCount + ' шт.', value.gearPrice) +
+    row('resource', 'Груз · ' + fmt(value.cargoKg) + ' кг', value.cargoPrice) +
+    '</div>' +
+    '<div class="trade-sale-total"><span>Итого</span><b>' + fmt(value.total) + ' ¤</b></div>';
+}
+
+/* Консоль купленного корабля: разбивка цены и кнопка «Продать корабль». */
 function ownedShipConsole(rec) {
   var ship = window.Store ? Store.byId('objects', rec.shipId) : null;
   var cat = ship ? Store.byId('categories', ship.categoryId) : null;
-  var sale = ship ? Store.priceSale(ship) : 0;
+  var value = window.Store ? Store.shipSaleValue(rec) : { ok: false, error: 'Store не загружен' };
   var bought = rec.boughtAt ? new Date(rec.boughtAt).toLocaleDateString('ru-RU') : '';
   var lines = '<span class="trade-preview-stats">' + (cat ? Store.categoryPath(cat.id) : 'корабль') + '</span>';
   if (ship) lines += '<span class="trade-preview-stats">Масса: ' + fmt(Store.massOf(ship)) + ' кг</span>';
   lines += '<span class="trade-preview-stats">в ангаре с ' + bought + '</span>';
-  var price = sale
-    ? '<span class="trade-preview-price">' + fmt(sale) + ' ¤<small> / шт.</small></span>' +
-      '<span class="trade-preview-stats">выкуп по цене продажи</span>'
-    : '<span class="trade-preview-stats">Цена продажи не задана</span>';
   return '<div class="trade-preview">' +
     '<span class="trade-preview-icon">' + iconMarkup(ship ? ship.icon : 'ship', 27) + '</span>' +
     '<strong>' + rec.name + '</strong>' +
-    lines + price +
+    lines + shipSaleCardHTML(value) +
     '</div>' +
-    '<button class="trade-button sell" data-action="sell-ship">' + icon('arrowLeft') + 'Продать</button>';
+    '<button class="trade-button sell" data-action="sell-ship">' +
+    icon('arrowLeft') + 'Продать корабль</button>';
 }
 
 /* Карточка груза контейнера: ресурс, где лежит, сколько и продажа 1 кг. */

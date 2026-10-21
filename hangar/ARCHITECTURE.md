@@ -53,8 +53,9 @@ state.js ───────────────────────�
 
 - `data/store.js` — единственный источник данных мира: объекты, категории,
   шаблоны слотов, записи купленных кораблей, масса, цены, кредиты.
-- `catalog.js` один раз при загрузке строит строки витрины (`shopItems`) и
-  табы категорий (`categories`).
+- `catalog.js` один раз при загрузке вызывает `Store.ensureCatalogGroups()`
+  (миграция старых баз в три группы), затем строит строки витрины
+  (`shopItems`) и табы категорий (`categories`) из `Store.catalogGroups()`.
 - `state.js` — только состояние интерфейса (вкладка, фильтры, выбранный
   корабль/предмет). Данные мира в нём не хранятся.
 - `app.js` — единственное место, где меняется `Store`: покупка, продажа,
@@ -66,7 +67,7 @@ state.js ───────────────────────�
 | --- | --- | --- |
 | `js/base.js` | SVG-иконки (`icon`, `iconMarkup`, `iconForCategory`, `shipGlyph`), `fmt`, `plural`, `pad2`, `byId`, `isMassName`, общее окно `openDialog` | — |
 | `js/state.js` | объект `state`: вкладка, категория/подкатегория, выбранные корабль и предмет, режим перегрузки, демо-запас «Ангара» | — |
-| `js/catalog.js` | `shopItems` из `Store.objects()`, `categories` первого уровня, `hangarResources` | `base` |
+| `js/catalog.js` | `shopItems` из `Store.objects()`, табы трёх групп (`categories`) из `Store.catalogGroups()`, `hangarResources` | `base` |
 | `js/categories.js` | дерево категорий: `inSubtree`/`inCategory`, `buildSubcategories`, `filteredItems`, `activeBranch`, `groupCategoryId`, `groupedShopItems`, `currentShop`, `activeResource` | `base`, `catalog`, `state` |
 | `js/ship.js` | запись корабля (`userShipRecords`, `activeUserShip`, `activeShipView`), оборудование в креплениях и трюмах, квадраты слотов и трюмов, панель «01 Корабль», колонка «На корабле», модальные окна и подсказки | `base`, `state`, `catalog`, `categories` |
 | `js/shop.js` | вкладка «Магазин»: табы, чипы, список «В продаже», консоль (купить / сведения), колонка «На корабле» | `base`, `state`, `catalog`, `categories`, `ship` |
@@ -90,6 +91,11 @@ ship-view → info → hangar-tab → dock → app
 
 - **Витрина** — плоский список `shopItems`; каждый объект знает `categoryId`,
   `parentCategoryId`, `mass`, `price`, `sale`, `slotId`, `isShip`.
+- **Группы** — три постоянных корня каталога: «Оборудование», «Ресурсы»,
+  «Корабли». В магазине это табы после «Все»; ресурсы делятся на
+  «Материалы» и «Топливо», корабли — на классы. Состав групп задаёт
+  `Store.catalogGroups()`, старые базы приводит к нему
+  `Store.ensureCatalogGroups()`.
 - **Ветка** — выбранная категория плюс необязательный чип подкатегории;
   `activeBranch()` возвращает самую глубокую выбранную категорию.
 - **Группы списка** — `groupedShopItems` кладёт позиции под ближайшую
@@ -114,6 +120,10 @@ ship-view → info → hangar-tab → dock → app
   в карточке — список ресурсов с килограммами и итог, ниже — только «Продать
   вместе с грузом»: подтверждение с составом и общей суммой, затем
   `Store.sellEntry(..., withCargo=true)`.
+- **Продажа корабля** — карточка купленного корабля показывает разбивку
+  `Store.shipSaleValue`: корабль, оборудование, груз и итого. «Продать
+  корабль» открывает подтверждение с той же разбивкой; `Store.sellShip`
+  удаляет запись и начисляет сумму за корабль вместе с содержимым.
 - **Модальные окна** — общий паттерн `.slot-modal`/`.slot-dialog`: тёмный
   оверлей, eyebrow, заголовок, квадратная «×». Закрытие — клик по оверлею,
   «×» или `Esc`.

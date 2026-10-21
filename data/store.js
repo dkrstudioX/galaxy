@@ -332,6 +332,259 @@
     });
   }
 
+  /* ---------- Группы каталога ---------- */
+
+  /* Три фиксированных корня. Пользователь видит их как вкладки, а не как
+     отдельные страницы; внутри — один уровень подкатегорий. */
+  var CATALOG_GROUPS = [
+    { key: 'equipment', name: 'Оборудование', icon: 'tool', isShip: false },
+    { key: 'resources', name: 'Ресурсы', icon: 'gem', isShip: false },
+    { key: 'ships', name: 'Корабли', icon: 'ship', isShip: true }
+  ];
+
+  var EQUIPMENT_ORDER = [
+    'Лазеры', 'Пулемёты', 'Щиты', 'Двигатели', 'Радары и сканеры',
+    'Добывающее', 'Переработка', 'Грузовые отсеки', 'Топливные баки', 'Расходники'
+  ];
+  var SHIP_ORDER = ['Линкоры', 'Фрегаты', 'Корветы', 'Перехватчики', 'Шаттлы', 'Грузовозы'];
+  var RESOURCE_ORDER = ['Материалы', 'Топливо'];
+  var LEGACY_RESOURCE_GROUPS = ['металлы', 'минералы', 'прочее', 'материалы', 'топливо'];
+
+  function normName(v) { return str(v).trim().toLowerCase(); }
+
+  function childIn(d, parentId, name) {
+    var n = normName(name);
+    var found = null;
+    d.categories.forEach(function (c) {
+      if (!found && str(c.parentId) === str(parentId) && normName(c.name) === n) found = c;
+    });
+    return found;
+  }
+
+  function groupRootIn(d, def) {
+    var found = null;
+    d.categories.forEach(function (c) {
+      if (!found && normName(c.name) === normName(def.name)) found = c;
+    });
+    return found;
+  }
+
+  /* Найти или создать корень группы; одинаковые имена сливаются в один корень. */
+  function ensureGroupRoot(d, def) {
+    var same = d.categories.filter(function (c) { return normName(c.name) === normName(def.name); });
+    var root = null;
+    same.forEach(function (c) { if (!root && !c.parentId) root = c; });
+    if (!root) root = same[0] || null;
+    var changed = false;
+    if (!root) {
+      root = { id: uid(), name: def.name, propIds: [], parentId: '', isShip: !!def.isShip, icon: def.icon };
+      d.categories.push(root);
+      changed = true;
+    }
+    if (root.parentId) { root.parentId = ''; changed = true; }
+    if (root.isShip !== !!def.isShip) { root.isShip = !!def.isShip; changed = true; }
+    same.forEach(function (other) {
+      if (other === root) return;
+      d.categories.forEach(function (c) { if (c.parentId === other.id) c.parentId = root.id; });
+      d.objects.forEach(function (o) { if (o.categoryId === other.id) o.categoryId = root.id; });
+      d.categories = d.categories.filter(function (c) { return c !== other; });
+      changed = true;
+    });
+    return { root: root, changed: changed };
+  }
+
+  function subtreeCats(d, rootId) {
+    var out = [];
+    var seen = {};
+    (function walk(pid) {
+      d.categories.forEach(function (c) {
+        if (str(c.parentId) !== str(pid) || seen[c.id]) return;
+        seen[c.id] = true;
+        out.push(c);
+        walk(c.id);
+      });
+    })(rootId);
+    return out;
+  }
+
+  function isInSubtree(d, categoryId, rootId) {
+    var id = str(categoryId);
+    var root = str(rootId);
+    if (!id || !root) return false;
+    for (var i = 0; i < 1000; i++) {
+      if (id === root) return true;
+      var cat = null;
+      d.categories.forEach(function (c) { if (!cat && c.id === id) cat = c; });
+      if (!cat || !cat.parentId) return false;
+      id = str(cat.parentId);
+    }
+    return false;
+  }
+
+  function syncObjectParents(d) {
+    var map = {};
+    d.categories.forEach(function (c) { map[c.id] = c; });
+    d.objects.forEach(function (o) {
+      var cat = map[o.categoryId];
+      o.parentCategoryId = cat ? str(cat.parentId) : '';
+    });
+  }
+
+  /* Порядок подкатегорий: известные имена — как в плане, новые — в конце. */
+  function reorderChildren(d, parentId, order) {
+    var rank = {};
+    order.forEach(function (name, i) { rank[normName(name)] = i; });
+    var kids = d.categories.filter(function (c) { return str(c.parentId) === str(parentId); });
+    if (kids.length < 2) return false;
+    var sorted = kids.slice().sort(function (a, b) {
+      var ra = rank[normName(a.name)];
+      var rb = rank[normName(b.name)];
+      if (ra === undefined) ra = 1000;
+      if (rb === undefined) rb = 1000;
+      return ra - rb;
+    });
+    var same = sorted.every(function (c, i) { return c === kids[i]; });
+    if (same) return false;
+    var positions = [];
+    d.categories.forEach(function (c, i) { if (str(c.parentId) === str(parentId)) positions.push(i); });
+    positions.forEach(function (pos, i) { d.categories[pos] = sorted[i]; });
+    return true;
+  }
+
+  function reorderRoots(d, roots) {
+    var set = {};
+    roots.forEach(function (c) { set[c.id] = true; });
+    var next = roots.concat(d.categories.filter(function (c) { return !set[c.id]; }));
+    var same = next.length === d.categories.length && next.every(function (c, i) { return c === d.categories[i]; });
+    if (same) return false;
+    d.categories = next;
+    return true;
+  }
+
+  function looksLikeResourceRoot(cat) {
+    var n = normName(cat.name);
+    return n.indexOf('ресурс') > -1 || n.indexOf('топлив') > -1 || n === 'материалы';
+  }
+
+  /* Ресурсы: ровно две подкатегории — «Материалы» и «Топливо».
+     Старые «Металлы»/«Минералы»/«Прочее» и предметы прямо в корне
+     раскладываются в «Материалы»; топливо по имени — в «Топливо». */
+  function ensureResourceTree(d, resRoot) {
+    var changed = false;
+    var materials = childIn(d, resRoot.id, 'Материалы');
+    if (!materials) {
+      materials = { id: uid(), name: 'Материалы', propIds: [], parentId: resRoot.id, isShip: false, icon: 'crate' };
+      d.categories.push(materials);
+      changed = true;
+    }
+    var fuel = childIn(d, resRoot.id, 'Топливо');
+    if (!fuel) {
+      fuel = { id: uid(), name: 'Топливо', propIds: [], parentId: resRoot.id, isShip: false, icon: 'fuel' };
+      d.categories.push(fuel);
+      changed = true;
+    }
+
+    /* Старые служебные группы («Металлы», «Минералы», «Прочее», дубли
+       «Материалов»/«Топлива») раскрываем в «Материалы»/«Топливо».
+       Пользовательские категории внутри «Ресурсов» не трогаем. */
+    var remove = {};
+    function markRemove(cat) {
+      if (cat.id === materials.id || cat.id === fuel.id || remove[cat.id]) return;
+      remove[cat.id] = true;
+      d.categories.forEach(function (c) { if (str(c.parentId) === str(cat.id)) markRemove(c); });
+    }
+    subtreeCats(d, resRoot.id).forEach(function (c) {
+      if (c.id === materials.id || c.id === fuel.id) return;
+      if (LEGACY_RESOURCE_GROUPS.indexOf(normName(c.name)) > -1) markRemove(c);
+    });
+    if (Object.keys(remove).length) changed = true;
+
+    var catById = {};
+    d.categories.forEach(function (c) { catById[c.id] = c; });
+    d.objects.forEach(function (o) {
+      var directly = o.categoryId === resRoot.id || !!remove[o.categoryId];
+      if (!directly) return;
+      var cat = catById[o.categoryId];
+      var underFuel = isInSubtree(d, o.categoryId, fuel.id) ||
+        (cat && normName(cat.name).indexOf('топлив') > -1);
+      var target = underFuel || normName(o.name).indexOf('топлив') > -1 ? fuel : materials;
+      if (o.categoryId !== target.id) { o.categoryId = target.id; changed = true; }
+    });
+    d.categories = d.categories.filter(function (c) { return !remove[c.id]; });
+
+    if (reorderChildren(d, resRoot.id, RESOURCE_ORDER)) changed = true;
+    return changed;
+  }
+
+  /* Одноразовая (идемпотентная) миграция старого дерева в три группы. */
+  function migrateCatalogGroups(d) {
+    var changed = false;
+    var roots = {};
+    CATALOG_GROUPS.forEach(function (def) {
+      var made = ensureGroupRoot(d, def);
+      roots[def.key] = made.root;
+      if (made.changed) changed = true;
+    });
+
+    var rootIds = {};
+    CATALOG_GROUPS.forEach(function (def) { rootIds[roots[def.key].id] = true; });
+
+    /* Старые корни переносим в свою группу. Промежуточную категорию
+       с детьми раскрываем, чтобы остался один уровень подкатегорий. */
+    var oldRoots = d.categories.filter(function (c) { return !c.parentId && !rootIds[c.id]; });
+    oldRoots.forEach(function (cat) {
+      var target = roots.equipment;
+      if (cat.isShip) target = roots.ships;
+      else if (looksLikeResourceRoot(cat)) target = roots.resources;
+      var directObjects = d.objects.some(function (o) { return o.categoryId === cat.id; });
+      var kids = d.categories.filter(function (c) { return c.parentId === cat.id; });
+      if (kids.length && !directObjects) {
+        kids.forEach(function (c) { c.parentId = target.id; });
+        d.categories = d.categories.filter(function (c) { return c !== cat; });
+      } else {
+        cat.parentId = target.id;
+        if (target === roots.ships) cat.isShip = false;
+      }
+      changed = true;
+    });
+
+    if (ensureResourceTree(d, roots.resources)) changed = true;
+
+    if (reorderRoots(d, [roots.equipment, roots.resources, roots.ships])) changed = true;
+    if (reorderChildren(d, roots.equipment.id, EQUIPMENT_ORDER)) changed = true;
+    if (reorderChildren(d, roots.ships.id, SHIP_ORDER)) changed = true;
+
+    if (changed) {
+      fixParents(d.categories);
+      syncObjectParents(d);
+    }
+    return changed;
+  }
+
+  function catalogGroupsRaw() {
+    var out = {};
+    var d = ensure();
+    CATALOG_GROUPS.forEach(function (def) {
+      var root = groupRootIn(d, def);
+      if (!root) return;
+      out[def.key] = {
+        key: def.key,
+        title: def.name,
+        root: root,
+        items: childrenOf(root.id).map(function (c) { return { id: c.id, title: c.name, cat: c }; })
+      };
+    });
+    return out;
+  }
+
+  function ensureCatalogGroups() {
+    var d = ensure();
+    if (migrateCatalogGroups(d)) persist();
+    return catalogGroupsRaw();
+  }
+
+  function catalogGroups() { return ensureCatalogGroups(); }
+
   function ensure() {
     if (db) return db;
     var raw = null;
@@ -659,6 +912,7 @@
     var data = JSON.parse(text);
     if (!isObj(data)) throw new Error('Неверный формат файла: ожидался объект с данными.');
     db = sanitize(data);
+    migrateCatalogGroups(db);
     persist();
     return db;
   }
@@ -707,20 +961,87 @@
     return isFinite(n) && n > 0 ? n : 0;
   }
 
-  /* Продать купленный корабль: запись удаляется, цена продажи идёт на баланс. */
-  function sellShip(recordId) {
-    var d = ensure();
-    var list = all('users_ships');
-    var rec = null;
-    for (var i = 0; i < list.length; i++) if (list[i].id === recordId) rec = list[i];
+  /* Стоимость груза контейнера: ресурсы по цене за килограмм.
+     Пустые строки и неизвестные ресурсы пропускаем, как в sellEntry;
+     ресурс без цены продажи — отказ. */
+  function cargoValue(entry) {
+    var price = 0;
+    var kg = 0;
+    var noPrice = null;
+    arr(entry && entry.cargo).forEach(function (g) {
+      var amount = parseInt(g.qty, 10) || 0;
+      if (!amount) return;
+      var res = byId('objects', g.itemId);
+      if (!res) return;
+      var p = priceSale(res);
+      if (!p) { if (!noPrice) noPrice = res; return; }
+      kg += amount;
+      price += p * amount;
+    });
+    if (noPrice) return { ok: false, error: 'У груза «' + noPrice.name + '» не задана цена продажи' };
+    return { ok: true, price: price, kg: kg };
+  }
+
+  /* Стоимость одной записи содержимого: предмет (одна штука) и его груз. */
+  function entryValue(entry) {
+    var item = byId('objects', entry && entry.itemId);
+    if (!item) return { ok: false, error: 'Объект не найден' };
+    var itemPrice = priceSale(item);
+    if (!itemPrice) return { ok: false, error: 'У предмета «' + item.name + '» не задана цена продажи' };
+    var cargo = cargoValue(entry);
+    if (!cargo.ok) return cargo;
+    return {
+      ok: true, item: item, itemPrice: itemPrice,
+      cargoPrice: cargo.price, cargoKg: cargo.kg
+    };
+  }
+
+  /* Стоимость продажи корабля: сам корабль, оборудование в креплениях и
+     трюмах и груз контейнеров. Ничего не меняет — её же показывает карточка. */
+  function shipSaleValue(record) {
+    var rec = isObj(record) ? record : byId('users_ships', record);
     if (!rec) return { ok: false, error: 'Запись не найдена' };
     var ship = byId('objects', rec.shipId);
-    var price = ship ? priceSale(ship) : 0;
-    if (!price) return { ok: false, error: 'Цена продажи не задана' };
+    if (!ship) return { ok: false, error: 'Корабль не найден' };
+    var shipPrice = priceSale(ship);
+    if (!shipPrice) return { ok: false, error: 'Цена продажи корабля не задана' };
 
-    d.users_ships = list.filter(function (r) { return r.id !== recordId; });
-    var left = addCredits(price);
-    return { ok: true, name: rec.name, price: price, credits: left };
+    var gearPrice = 0;
+    var cargoPrice = 0;
+    var cargoKg = 0;
+    var gearCount = 0;
+    var entries = shipEntries(rec);
+    for (var i = 0; i < entries.length; i++) {
+      var value = entryValue(entries[i]);
+      if (!value.ok) return value;
+      gearPrice += value.itemPrice;
+      cargoPrice += value.cargoPrice;
+      cargoKg += value.cargoKg;
+      gearCount++;
+    }
+    var total = shipPrice + gearPrice + cargoPrice;
+    return {
+      ok: true, name: rec.name, shipPrice: shipPrice, gearPrice: gearPrice,
+      cargoPrice: cargoPrice, cargoKg: cargoKg, gearCount: gearCount, total: total
+    };
+  }
+
+  /* Продать купленный корабль вместе с оборудованием и грузом. */
+  function sellShip(recordId) {
+    var d = ensure();
+    var rec = byId('users_ships', recordId);
+    if (!rec) return { ok: false, error: 'Запись не найдена' };
+    var value = shipSaleValue(rec);
+    if (!value.ok) return value;
+
+    d.users_ships = all('users_ships').filter(function (r) { return r.id !== recordId; });
+    var left = addCredits(value.total);
+    return {
+      ok: true, name: rec.name, price: value.total, total: value.total,
+      shipPrice: value.shipPrice, gearPrice: value.gearPrice,
+      cargoPrice: value.cargoPrice, cargoKg: value.cargoKg,
+      gearCount: value.gearCount, credits: left
+    };
   }
 
   function userShips() { return all('users_ships'); }
@@ -983,8 +1304,8 @@
      у каждого объекта своё значение. У ресурсов массы нет: их количество
      измеряется в килограммах, и килограмм — это и есть груз.
      Три корневые категории: «Оборудование», «Ресурсы», «Корабли».
-     Ресурсы — четыре материала без подкатегорий; «Топливо» оставлено пустым
-     на будущее. Баки, грузовые отсеки и добывающее оборудование — оборудование
+     Ресурсы — «Материалы» (четыре материала) и пустое «Топливо» на будущее.
+     Баки, грузовые отсеки и добывающее оборудование — оборудование
      с заполненным `prop_2`.
      У кораблей свои крепления и трюмы: трюмы больше не шаблоны слотов,
      у каждого своя вместимость.
@@ -1076,19 +1397,19 @@
     var catGuns = addCat('Пулемёты', [damage.id, fireRate.id], catEquipment, false, 'weapon');
     var catShields = addCat('Щиты', [defense.id, regen.id], catEquipment, false, 'shield');
     var catEngines = addCat('Двигатели', [thrust.id, fuelUse.id], catEquipment, false, 'engine');
+    var catSensors = addCat('Радары и сканеры', [scanRange.id], catEquipment, false, 'radar');
     var catMining = addCat('Добывающее', [mineSpeed.id], catEquipment, false, 'tool');
     var catRefining = addCat('Переработка', [refineSpeed.id], catEquipment, false, 'tool');
-    var catSensors = addCat('Радары и сканеры', [scanRange.id], catEquipment, false, 'radar');
     var catHolds = addCat('Грузовые отсеки', [holdCapacity.id], catEquipment, false, 'crate');
-    var catConsumables = addCat('Расходники', [], catEquipment, false, 'tool');
-
-    /* У ресурсов свойства «Масса» нет: количество ресурса и есть масса груза. */
-    var catResources = addCat('Ресурсы', [], null, false, 'gem');
-    /* «Топливо» пока пустое: бак — оборудование, его `prop_2` разрешает топливо. */
-    var catFuel = addCat('Топливо', [], catResources, false, 'fuel');
-
     /* Бак — контейнер: своя масса и своя вместимость, `prop_2` = топливо. */
     var catFuelTanks = addCat('Топливные баки', [massProp.id, holdCapacity.id], catEquipment, false, 'fuel');
+    var catConsumables = addCat('Расходники', [], catEquipment, false, 'tool');
+
+    /* У ресурсов свойства «Масса» нет: количество ресурса и есть масса груза.
+       «Материалы» — все четыре материала; «Топливо» пока пустое. */
+    var catResources = addCat('Ресурсы', [], null, false, 'gem');
+    var catMaterials = addCat('Материалы', [], catResources, false, 'crate');
+    var catFuel = addCat('Топливо', [], catResources, false, 'fuel');
 
     var catShips = addCat('Корабли', [durability.id, speed.id, massProp.id], null, true, 'ship');
     var catLiners = addCat('Линкоры', [], catShips, false, 'ship');
@@ -1107,7 +1428,7 @@
       { name: 'Камень', buy: '3', sale: '2', icon: 'gem' }
     ];
     materials.forEach(function (m) {
-      addItem(m.name, catResources, '', [], null, m.buy, m.icon, null, { buy: m.buy, sale: m.sale });
+      addItem(m.name, catMaterials, '', [], null, m.buy, m.icon, null, { buy: m.buy, sale: m.sale });
     });
     var materialNames = materials.map(function (m) { return m.name; });
 
@@ -1316,6 +1637,8 @@
     categoryUsage: categoryUsage,
 
     childCategories: childrenOf,
+    catalogGroups: catalogGroups,
+    ensureCatalogGroups: ensureCatalogGroups,
     categoryIsShip: categoryIsShip,
     categoryTree: categoryTree,
     categoryChain: categoryChain,
@@ -1369,8 +1692,11 @@
     buyForShip: buyForShip,
     sellEntry: sellEntry,
     sellCargo: sellCargo,
+    cargoValue: cargoValue,
+    entryValue: entryValue,
+    shipSaleValue: shipSaleValue,
     sellShip: sellShip,
-    loadDemo: function () { db = demoData(); persist(); },
+    loadDemo: function () { db = demoData(); migrateCatalogGroups(db); persist(); },
     counts: counts
   };
 })();

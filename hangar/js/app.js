@@ -117,6 +117,32 @@ function confirmSellCargo(row) {
     '</div>');
 }
 
+/* Подтверждение продажи корабля: разбивка и итог, затем Store.sellShip. */
+function confirmSellShip(rec) {
+  var value = window.Store ? Store.shipSaleValue(rec) : { ok: false, error: 'Store не загружен' };
+  if (!value.ok) {
+    openDialog('ПРОДАЖА', '«' + rec.name + '» — не продан',
+      '<p class="dialog-text">' + value.error + '</p>');
+    return;
+  }
+  function line(label, price, cls) {
+    return '<div class="dialog-line ' + (cls || 'cost') + '"><span>' + label + '</span>' +
+      '<b>' + fmt(price) + ' ¤</b></div>';
+  }
+  openDialog('ПРОДАЖА', '«' + rec.name + '» — вместе с содержимым',
+    '<p class="dialog-text">Корабль продаётся вместе с оборудованием и грузом.</p>' +
+    '<div class="dialog-lines">' +
+    line('Корабль', value.shipPrice) +
+    line('Оборудование · ' + value.gearCount + ' шт.', value.gearPrice) +
+    line('Груз · ' + fmt(value.cargoKg) + ' кг', value.cargoPrice) +
+    line('Итого', value.total, 'total') +
+    '</div>' +
+    '<div class="dialog-actions">' +
+    '<button class="trade-button sell" data-action="sell-ship-confirm">Продать корабль</button>' +
+    '<button class="trade-button ghost" data-action="close-slot">Отмена</button>' +
+    '</div>');
+}
+
 /* Продать выбранную строку «На корабле». Возвращает false, если продажа не прошла. */
 function sellOwnedRow(withCargo) {
   var rec = activeUserShip();
@@ -231,14 +257,27 @@ document.addEventListener('click', function (e) {
   }
   else if (action === 'sell-ship') {
     var rec = ownedShipRecord();
-    var res = rec ? Store.sellShip(rec.id) : { ok: false, error: 'Корабль не выбран' };
-    state.notice = res.ok
-      ? 'Корабль «' + res.name + '» продан за ' + fmt(res.price) + ' ¤'
-      : 'Не удалось продать: ' + (res.error || 'ошибка');
-    if (res.ok) {
-      state.ownedShipId = '';
-      state.userShipId = '';
+    if (!rec) {
+      openDialog('ПРОДАЖА', 'Корабль не выбран',
+        '<p class="dialog-text">Выберите купленный корабль в доке.</p>');
+      return;
     }
+    confirmSellShip(rec);
+    return;
+  }
+  else if (action === 'sell-ship-confirm') {
+    var shipRec = ownedShipRecord();
+    var res = shipRec ? Store.sellShip(shipRec.id) : { ok: false, error: 'Корабль не выбран' };
+    if (!res.ok) {
+      openDialog('ПРОДАЖА', '«' + (shipRec ? shipRec.name : 'Корабль') + '» — не продан',
+        '<p class="dialog-text">' + (res.error || 'Ошибка продажи') + '</p>');
+      return;
+    }
+    state.notice = 'Корабль «' + res.name + '» продан за ' + fmt(res.total) + ' ¤';
+    state.ownedShipId = '';
+    state.userShipId = '';
+    state.selectedCargo = '';
+    closeSlotModal();
   }
   else if (action === 'sell-cargo') { if (!sellOwnedRow(false)) return; }
   else if (action === 'sell-cargo-with') {

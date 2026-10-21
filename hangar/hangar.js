@@ -128,6 +128,9 @@ var state = {
 
 
 
+/* Старые базы один раз раскладываются по трём группам до построения витрины. */
+if (window.Store) Store.ensureCatalogGroups();
+
 /* ---------- Данные магазина (объекты из базы админки) ---------- */
 
 /* Объекты админки -> строки витрины: имя, категория, масса и свойства. */
@@ -163,24 +166,22 @@ var shopItems = buildShopItems();
 
 /* ---------- Категории магазина ---------- */
 
-/* Запасной набор: если в базе админки ещё нет ни одной категории. */
-var FALLBACK_CATEGORIES = [
-  { id: 'weapon', label: 'Оружие', icon: 'weapon' },
-  { id: 'shield', label: 'Щиты', icon: 'shield' },
-  { id: 'resource', label: 'Ресурсы', icon: 'resource' },
-  { id: 'ship', label: 'Корабли', icon: 'ship' }
-];
-
-
-/* Табы: «Все» + категории первого уровня из базы админки (data/store.js). */
+/* Табы: «Все» + три группы из Store в порядке плана:
+   оборудование, ресурсы, корабли. Старого набора-заглушки нет. */
 function buildCategories() {
   var roots = [];
   if (window.Store) {
-    roots = Store.childCategories('').map(function (cat) {
-      return { id: cat.id, label: cat.name, icon: cat.icon || iconForCategory(cat.name) };
+    var groups = Store.catalogGroups();
+    ['equipment', 'resources', 'ships'].forEach(function (key) {
+      var group = groups[key];
+      if (!group) return;
+      roots.push({
+        id: group.root.id,
+        label: group.title,
+        icon: group.root.icon || iconForCategory(group.title)
+      });
     });
   }
-  if (!roots.length) roots = FALLBACK_CATEGORIES.slice();
   return [{ id: 'all', label: 'Все', icon: 'grid' }].concat(roots);
 }
 
@@ -925,25 +926,44 @@ function ownedShipRecord() {
   return null;
 }
 
-/* Консоль купленного корабля: цена продажи и кнопка «Продать». */
+/* Разбивка продажи корабля: корпус, оборудование, груз и итого. */
+function shipSaleCardHTML(value) {
+  if (!value || !value.ok) {
+    return '<span class="trade-preview-stats">' +
+      ((value && value.error) || 'Цена продажи не задана') + '</span>';
+  }
+  function row(iconName, label, price) {
+    return '<div class="trade-cargo-row">' +
+      '<span class="trade-cargo-icon">' + iconMarkup(iconName, 13) + '</span>' +
+      '<span class="trade-cargo-name">' + label + '</span>' +
+      '<span class="trade-cargo-kg">' + fmt(price) + ' ¤</span>' +
+      '</div>';
+  }
+  return '<span class="trade-cargo-label">Стоимость продажи</span>' +
+    '<div class="trade-cargo-list">' +
+    row('ship', 'Корабль', value.shipPrice) +
+    row('grid', 'Оборудование · ' + value.gearCount + ' шт.', value.gearPrice) +
+    row('resource', 'Груз · ' + fmt(value.cargoKg) + ' кг', value.cargoPrice) +
+    '</div>' +
+    '<div class="trade-sale-total"><span>Итого</span><b>' + fmt(value.total) + ' ¤</b></div>';
+}
+
+/* Консоль купленного корабля: разбивка цены и кнопка «Продать корабль». */
 function ownedShipConsole(rec) {
   var ship = window.Store ? Store.byId('objects', rec.shipId) : null;
   var cat = ship ? Store.byId('categories', ship.categoryId) : null;
-  var sale = ship ? Store.priceSale(ship) : 0;
+  var value = window.Store ? Store.shipSaleValue(rec) : { ok: false, error: 'Store не загружен' };
   var bought = rec.boughtAt ? new Date(rec.boughtAt).toLocaleDateString('ru-RU') : '';
   var lines = '<span class="trade-preview-stats">' + (cat ? Store.categoryPath(cat.id) : 'корабль') + '</span>';
   if (ship) lines += '<span class="trade-preview-stats">Масса: ' + fmt(Store.massOf(ship)) + ' кг</span>';
   lines += '<span class="trade-preview-stats">в ангаре с ' + bought + '</span>';
-  var price = sale
-    ? '<span class="trade-preview-price">' + fmt(sale) + ' ¤<small> / шт.</small></span>' +
-      '<span class="trade-preview-stats">выкуп по цене продажи</span>'
-    : '<span class="trade-preview-stats">Цена продажи не задана</span>';
   return '<div class="trade-preview">' +
     '<span class="trade-preview-icon">' + iconMarkup(ship ? ship.icon : 'ship', 27) + '</span>' +
     '<strong>' + rec.name + '</strong>' +
-    lines + price +
+    lines + shipSaleCardHTML(value) +
     '</div>' +
-    '<button class="trade-button sell" data-action="sell-ship">' + icon('arrowLeft') + 'Продать</button>';
+    '<button class="trade-button sell" data-action="sell-ship">' +
+    icon('arrowLeft') + 'Продать корабль</button>';
 }
 
 /* Карточка груза контейнера: ресурс, где лежит, сколько и продажа 1 кг. */
@@ -1479,6 +1499,32 @@ function confirmSellCargo(row) {
     '</div>');
 }
 
+/* Подтверждение продажи корабля: разбивка и итог, затем Store.sellShip. */
+function confirmSellShip(rec) {
+  var value = window.Store ? Store.shipSaleValue(rec) : { ok: false, error: 'Store не загружен' };
+  if (!value.ok) {
+    openDialog('ПРОДАЖА', '«' + rec.name + '» — не продан',
+      '<p class="dialog-text">' + value.error + '</p>');
+    return;
+  }
+  function line(label, price, cls) {
+    return '<div class="dialog-line ' + (cls || 'cost') + '"><span>' + label + '</span>' +
+      '<b>' + fmt(price) + ' ¤</b></div>';
+  }
+  openDialog('ПРОДАЖА', '«' + rec.name + '» — вместе с содержимым',
+    '<p class="dialog-text">Корабль продаётся вместе с оборудованием и грузом.</p>' +
+    '<div class="dialog-lines">' +
+    line('Корабль', value.shipPrice) +
+    line('Оборудование · ' + value.gearCount + ' шт.', value.gearPrice) +
+    line('Груз · ' + fmt(value.cargoKg) + ' кг', value.cargoPrice) +
+    line('Итого', value.total, 'total') +
+    '</div>' +
+    '<div class="dialog-actions">' +
+    '<button class="trade-button sell" data-action="sell-ship-confirm">Продать корабль</button>' +
+    '<button class="trade-button ghost" data-action="close-slot">Отмена</button>' +
+    '</div>');
+}
+
 /* Продать выбранную строку «На корабле». Возвращает false, если продажа не прошла. */
 function sellOwnedRow(withCargo) {
   var rec = activeUserShip();
@@ -1593,14 +1639,27 @@ document.addEventListener('click', function (e) {
   }
   else if (action === 'sell-ship') {
     var rec = ownedShipRecord();
-    var res = rec ? Store.sellShip(rec.id) : { ok: false, error: 'Корабль не выбран' };
-    state.notice = res.ok
-      ? 'Корабль «' + res.name + '» продан за ' + fmt(res.price) + ' ¤'
-      : 'Не удалось продать: ' + (res.error || 'ошибка');
-    if (res.ok) {
-      state.ownedShipId = '';
-      state.userShipId = '';
+    if (!rec) {
+      openDialog('ПРОДАЖА', 'Корабль не выбран',
+        '<p class="dialog-text">Выберите купленный корабль в доке.</p>');
+      return;
     }
+    confirmSellShip(rec);
+    return;
+  }
+  else if (action === 'sell-ship-confirm') {
+    var shipRec = ownedShipRecord();
+    var res = shipRec ? Store.sellShip(shipRec.id) : { ok: false, error: 'Корабль не выбран' };
+    if (!res.ok) {
+      openDialog('ПРОДАЖА', '«' + (shipRec ? shipRec.name : 'Корабль') + '» — не продан',
+        '<p class="dialog-text">' + (res.error || 'Ошибка продажи') + '</p>');
+      return;
+    }
+    state.notice = 'Корабль «' + res.name + '» продан за ' + fmt(res.total) + ' ¤';
+    state.ownedShipId = '';
+    state.userShipId = '';
+    state.selectedCargo = '';
+    closeSlotModal();
   }
   else if (action === 'sell-cargo') { if (!sellOwnedRow(false)) return; }
   else if (action === 'sell-cargo-with') {

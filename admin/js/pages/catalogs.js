@@ -196,24 +196,28 @@
 
   var CATEGORY_META = {
     title: 'Категории',
-    subtitle: 'Категория задаёт список свойств объектов. Категории вкладываются друг в друга: «Корабли» → «Линкоры», «Шатлы».',
-    empty: 'Пока нет категорий. Например: «Оборудование» → «Расходники», «Ресурсы» → «Топливо», «Корабли» → «Линкоры».',
+    subtitle: 'Категория задаёт список свойств объектов. Вкладки переключают группы: «Оборудование», «Ресурсы», «Корабли».',
+    empty: 'Пока нет категорий. Например: «Оборудование» → «Расходники», «Ресурсы» → «Материалы», «Корабли» → «Линкоры».',
     placeholder: 'Например: Линкоры'
   };
+
+  var CATEGORY_GROUP_ORDER = ['equipment', 'resources', 'ships'];
+
+  /* Активная вкладка — локальное состояние страницы; URL не меняется. */
+  var activeCategoryGroup = 'ships';
 
   /* Свёрнутые ветки дерева: id → true. По умолчанию дерево развёрнуто целиком. */
   var collapsedCats = {};
 
-  /* Селект категорий: вложенные подписаны полным путём («Корабли / Линкоры»). */
-  function categoryOptions(emptyLabel, excluded) {
-    var options = [{ value: '', label: emptyLabel }];
-    Store.categoryTree().forEach(function (node) {
-      if (excluded && excluded[node.cat.id]) return;
-      options.push({
-        value: node.cat.id,
-        label: node.depth ? Store.categoryPath(node.cat.id) : node.cat.name
-      });
-    });
+  /* Селект родителей внутри одной группы: корень и его поддерево.
+     Вложенные подписаны полным путём («Корабли / Линкоры»). */
+  function groupCategoryOptions(group, excluded) {
+    var options = [];
+    (function walk(cat, depth) {
+      if (excluded && excluded[cat.id]) return;
+      options.push({ value: cat.id, label: depth ? Store.categoryPath(cat.id) : cat.name });
+      Store.childCategories(cat.id).forEach(function (c) { walk(c, depth + 1); });
+    })(group.root, 0);
     return options;
   }
 
@@ -271,32 +275,52 @@
 
   function renderCategories(root) {
     var meta = CATEGORY_META;
+    var groups = Store.catalogGroups();
+    var keys = CATEGORY_GROUP_ORDER.filter(function (key) { return !!groups[key]; });
+    if (!groups[activeCategoryGroup]) {
+      activeCategoryGroup = keys.indexOf('ships') > -1 ? 'ships' : (keys[0] || '');
+    }
+    var group = groups[activeCategoryGroup] || null;
 
     root.appendChild(UI.pageHead({
       title: meta.title,
       subtitle: meta.subtitle,
       addLabel: 'Добавить категорию',
-      onAdd: function () { openCategoryModal(null, ''); }
+      onAdd: function () {
+        if (group) openCategoryModal(null, group.root.id, group.key);
+      }
     }));
 
-    if (!Store.categoryTree().length) {
+    if (!group) {
       root.appendChild(UI.emptyState({
-        text: meta.empty,
-        addLabel: 'Добавить категорию',
-        onAdd: function () { openCategoryModal(null, ''); }
+        text: meta.empty
       }));
       return;
     }
 
-    /* В таблицу попадают только видимые строки: содержимое свёрнутых веток скрыто. */
-    var rows = [];
-    (function collect(parentId, depth) {
-      Store.childCategories(parentId).forEach(function (cat) {
-        var kids = Store.childCategories(cat.id);
-        rows.push({ cat: cat, depth: depth, hasChildren: kids.length > 0, childCount: kids.length });
-        if (kids.length && !collapsedCats[cat.id]) collect(cat.id, depth + 1);
+    /* Вкладки групп: тот же экран, меняется только набор строк таблицы. */
+    root.appendChild(h('div', { class: 'category-tabs' }, keys.map(function (key) {
+      var g = groups[key];
+      return h('button', {
+        class: 'category-tab' + (key === activeCategoryGroup ? ' active' : ''),
+        text: g.title,
+        onclick: function () {
+          activeCategoryGroup = key;
+          App.refresh();
+        }
       });
-    })('', 0);
+    })));
+
+    /* В таблицу попадают только видимые строки выбранной группы:
+       корень и его поддерево, содержимое свёрнутых веток скрыто. */
+    var rows = [];
+    (function collect(cat, depth) {
+      var kids = Store.childCategories(cat.id);
+      rows.push({ cat: cat, depth: depth, hasChildren: kids.length > 0, childCount: kids.length });
+      if (kids.length && !collapsedCats[cat.id]) {
+        kids.forEach(function (kid) { collect(kid, depth + 1); });
+      }
+    })(group.root, 0);
 
     root.appendChild(UI.table({
       columns: [
@@ -316,42 +340,60 @@
             class: 'btn btn-sm',
             text: 'Подкатегория',
             title: 'Создать вложенную категорию',
-            onclick: function () { openCategoryModal(null, row.cat.id); }
+            onclick: function () { openCategoryModal(null, row.cat.id, group.key); }
           })
         ].concat(UI.editDelete(
-          function () { openCategoryModal(row.cat, ''); },
-          function () { deleteCategory(row.cat); }
+          function () { openCategoryModal(row.cat, '', group.key); },
+          function () { deleteCategory(row.cat, group); }
         ));
       }
     }));
 
     root.appendChild(h('div', {
       class: 'hint',
-      text: 'Подкатегория наследует свойства и флажок «корабль» родительской категории. Стрелка слева сворачивает ветку, кнопка «Подкатегория» создаёт вложенную категорию внутри строки.'
+      text: 'Подкатегория наследует свойства и тип активной группы. Стрелка слева сворачивает ветку, кнопка «Подкатегория» создаёт вложенную категорию внутри строки.'
     }));
   }
 
-  function openCategoryModal(existing, parentId) {
+  function openCategoryModal(existing, parentId, groupKey) {
     var isEdit = !!existing;
     var meta = CATEGORY_META;
+    var groups = Store.catalogGroups();
+    var key = groups[groupKey] ? groupKey : (groups[activeCategoryGroup] ? activeCategoryGroup : 'ships');
+    var group = groups[key];
+    if (!group) {
+      UI.alert({ title: 'Нет группы', text: 'Не удалось определить группу категории. Обновите страницу.' });
+      return;
+    }
+    var isRoot = isEdit && existing.id === group.root.id;
 
     var nameInput = UI.input({ value: isEdit ? existing.name : '', placeholder: meta.placeholder });
+    if (isRoot) nameInput.disabled = true;
 
-    /* Родителем может стать любая категория, кроме самой категории и её подкатегорий. */
+    /* Родителем может стать категория внутри этой же группы, кроме самой
+       категории и её подкатегорий. Корень группы не переносится. */
     var excluded = {};
     if (isEdit) {
       excluded[existing.id] = true;
       Store.categoryDescendants(existing.id).forEach(function (c) { excluded[c.id] = true; });
     }
-    var initialParent = isEdit ? (existing.parentId || '') : (parentId || '');
-    var parentSelect = UI.select({
-      options: categoryOptions('— корневая категория —', excluded),
-      value: excluded[initialParent] ? '' : initialParent
-    });
+    var initialParent = isEdit ? (existing.parentId || '') : (parentId || group.root.id);
+    var parentSelect;
+    if (isRoot) {
+      parentSelect = UI.select({ options: [{ value: '', label: '— корневая категория —' }], value: '' });
+      parentSelect.disabled = true;
+    } else {
+      var options = groupCategoryOptions(group, excluded);
+      var valid = options.some(function (o) { return o.value === initialParent; });
+      parentSelect = UI.select({ options: options, value: valid ? initialParent : group.root.id });
+    }
     var parentHint = h('div', { class: 'hint' });
-
-    /* Флажок «корабль»: у объектов такой категории появляются слоты. */
-    var shipRow = UI.checkRow('Категория кораблей', isEdit ? !!existing.isShip : false);
+    var typeHint = h('div', {
+      class: 'hint',
+      text: key === 'ships'
+        ? 'Тип «корабль» задаётся вкладкой «Корабли»; подкатегории наследуют его.'
+        : 'Тип категории задаётся вкладкой «' + group.title + '».'
+    });
 
     /* Иконка категории — из того же каталога, что и у объектов. */
     var iconField = UI.iconPicker(isEdit ? existing.icon : '');
@@ -367,9 +409,11 @@
     function renderList() {
       UI.clear(listHost);
       var parent = parentSelect.value ? Store.byId('categories', parentSelect.value) : null;
-      parentHint.textContent = parent
-        ? 'Категория станет подкатегорией «' + parent.name + '» и унаследует её свойства.'
-        : 'Категория верхнего уровня: свойства родителей не подключаются.';
+      parentHint.textContent = isRoot
+        ? 'Корневая категория группы «' + group.title + '»: имя и родитель фиксированы.'
+        : (parent
+          ? 'Категория станет подкатегорией «' + parent.name + '» и унаследует её свойства.'
+          : 'Выберите родительскую категорию внутри группы.');
 
       var props = Store.props();
       if (!props.length) {
@@ -416,12 +460,8 @@
       h('div', { class: 'field' },
         h('label', { class: 'field-label', text: 'Родительская категория' }),
         parentSelect,
-        parentHint
-      ),
-      h('div', { class: 'field' },
-        h('label', { class: 'field-label', text: 'Тип категории' }),
-        shipRow.el,
-        h('div', { class: 'hint', text: 'У категории кораблей объекты получают список слотов, сам объект никуда не вставляется. Флажок наследуется подкатегориями; у остальных категорий объект вставляется в слот.' })
+        parentHint,
+        typeHint
       ),
       h('div', { class: 'field' },
         h('label', { class: 'field-label', text: 'Свойства категории' }),
@@ -435,18 +475,27 @@
       wide: true,
       body: body,
       onSave: function () {
-        var name = nameInput.value.trim();
+        var name = isRoot ? existing.name : nameInput.value.trim();
         if (!name) return 'Укажите название категории.';
-        if (Store.categoryNameTaken(name, parentSelect.value, isEdit ? existing.id : null)) {
+        var parentValue = isRoot ? '' : (parentSelect.value || '');
+        if (!isRoot && !parentValue) return 'Выберите родительскую категорию.';
+        if (Store.categoryNameTaken(name, parentValue, isEdit ? existing.id : null)) {
           return 'В этой ветке уже есть категория с таким названием.';
         }
         var propIds = Store.props().filter(function (p) { return ownChecked[p.id]; }).map(function (p) { return p.id; });
+        var isShip = isRoot ? key === 'ships' : false;
         if (isEdit) {
-          Store.patch('categories', existing.id, { name: name, parentId: parentSelect.value || '', propIds: propIds, isShip: shipRow.input.checked, icon: iconField.value() });
+          Store.patch('categories', existing.id, {
+            name: name,
+            parentId: parentValue,
+            propIds: propIds,
+            isShip: isShip,
+            icon: iconField.value()
+          });
           UI.toast('Категория изменена', 'ok');
         } else {
-          Store.createCategory(name, propIds, parentSelect.value, shipRow.input.checked, iconField.value());
-          UI.toast(parentSelect.value ? 'Подкатегория добавлена' : 'Категория добавлена', 'ok');
+          Store.createCategory(name, propIds, parentValue, isShip, iconField.value());
+          UI.toast('Подкатегория добавлена', 'ok');
         }
         App.refresh();
         return null;
@@ -454,7 +503,14 @@
     });
   }
 
-  function deleteCategory(c) {
+  function deleteCategory(c, group) {
+    if (group && c.id === group.root.id) {
+      UI.alert({
+        title: 'Нельзя удалить',
+        text: 'Корневую категорию «' + c.name + '» удалить нельзя: это постоянная группа каталога.'
+      });
+      return;
+    }
     var kids = Store.childCategories(c.id);
     if (kids.length) {
       UI.alert({

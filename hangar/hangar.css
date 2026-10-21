@@ -428,6 +428,13 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 }
 .trade-cargo-kg { flex: none; color: #d7c9f7; font: 600 11px "IBM Plex Mono"; }
 .trade-cargo-total { width: 100%; margin-top: 5px; color: #8a909c; text-align: left; font: 10px "IBM Plex Mono"; }
+/* Итог продажи корабля: подпись слева, сумма справа. */
+.trade-sale-total {
+  width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(150, 190, 255, .16);
+  color: #c4a9ff; text-align: left; font: 600 12px "IBM Plex Mono";
+}
+.trade-sale-total b { font-weight: 600; }
 .hangar-console { padding-top: 18px; }
 .hangar-console .trade-preview { padding-bottom: 18px; }
 .hangar-console .trade-preview strong { white-space: normal; font-size: 11px; }
@@ -689,6 +696,15 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 }
 .dialog-line b { color: #cfdadd; font: 500 9px "IBM Plex Mono"; }
 .dialog-line small { color: #a38fcf; font: 8px "IBM Plex Mono"; }
+/* Разбивка продажи: подпись и цена, итог выделен. */
+.dialog-line.cost { grid-template-columns: 1fr auto; }
+.dialog-line.cost b { color: #d7c9f7; font: 600 11px "IBM Plex Mono"; }
+.dialog-line.total {
+  grid-template-columns: 1fr auto;
+  border-color: rgba(196, 169, 255, .35);
+  background: rgba(37, 26, 60, .5);
+}
+.dialog-line.total b { color: #c4a9ff; font: 600 13px "IBM Plex Mono"; }
 .dialog-actions { display: flex; gap: 8px; }
 .dialog-actions .trade-button { margin: 0; }
 .trade-button.ghost {
