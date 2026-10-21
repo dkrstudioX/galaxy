@@ -1,4 +1,4 @@
-/* Страницы-справочники: «Свойства», «Слоты» и «Категории» (корабли/товары). */
+/* Страницы-справочники: «Свойства», «Слоты» и «Категории» (три группы). */
 (function () {
   'use strict';
   var h = UI.h;
@@ -195,16 +195,25 @@
   /* ================= Категории ================= */
 
   var CATEGORY_META = {
-    title: 'Категории',
-    subtitle: 'Категория задаёт список свойств объектов. Вкладки переключают группы: «Оборудование», «Ресурсы», «Корабли».',
-    empty: 'Пока нет категорий. Например: «Оборудование» → «Расходники», «Ресурсы» → «Материалы», «Корабли» → «Линкоры».',
-    placeholder: 'Например: Линкоры'
+    ships: {
+      title: 'Категории кораблей',
+      subtitle: 'Классы кораблей и их свойства. Корень «Корабли» — постоянная группа каталога.',
+      empty: 'Пока нет категорий кораблей. Например: «Линкоры», «Фрегаты».',
+      placeholder: 'Например: Линкоры'
+    },
+    resources: {
+      title: 'Категории ресурсов',
+      subtitle: 'Материалы и топливо. Корень «Ресурсы» — постоянная группа каталога.',
+      empty: 'Пока нет категорий ресурсов. Например: «Материалы», «Топливо».',
+      placeholder: 'Например: Материалы'
+    },
+    equipment: {
+      title: 'Категории оборудования',
+      subtitle: 'Категории оборудования и их свойства. Корень «Оборудование» — постоянная группа каталога.',
+      empty: 'Пока нет категорий оборудования. Например: «Лазеры», «Щиты».',
+      placeholder: 'Например: Лазеры'
+    }
   };
-
-  var CATEGORY_GROUP_ORDER = ['equipment', 'resources', 'ships'];
-
-  /* Активная вкладка — локальное состояние страницы; URL не меняется. */
-  var activeCategoryGroup = 'ships';
 
   /* Свёрнутые ветки дерева: id → true. По умолчанию дерево развёрнуто целиком. */
   var collapsedCats = {};
@@ -273,21 +282,18 @@
     );
   }
 
-  function renderCategories(root) {
-    var meta = CATEGORY_META;
+  function renderCategories(root, route) {
+    var key = route && route.group ? route.group : 'ships';
+    var meta = CATEGORY_META[key] || CATEGORY_META.ships;
     var groups = Store.catalogGroups();
-    var keys = CATEGORY_GROUP_ORDER.filter(function (key) { return !!groups[key]; });
-    if (!groups[activeCategoryGroup]) {
-      activeCategoryGroup = keys.indexOf('ships') > -1 ? 'ships' : (keys[0] || '');
-    }
-    var group = groups[activeCategoryGroup] || null;
+    var group = groups[key] || null;
 
     root.appendChild(UI.pageHead({
       title: meta.title,
       subtitle: meta.subtitle,
       addLabel: 'Добавить категорию',
       onAdd: function () {
-        if (group) openCategoryModal(null, group.root.id, group.key);
+        if (group) openCategoryModal(null, group.root.id, key);
       }
     }));
 
@@ -297,19 +303,6 @@
       }));
       return;
     }
-
-    /* Вкладки групп: тот же экран, меняется только набор строк таблицы. */
-    root.appendChild(h('div', { class: 'category-tabs' }, keys.map(function (key) {
-      var g = groups[key];
-      return h('button', {
-        class: 'category-tab' + (key === activeCategoryGroup ? ' active' : ''),
-        text: g.title,
-        onclick: function () {
-          activeCategoryGroup = key;
-          App.refresh();
-        }
-      });
-    })));
 
     /* В таблицу попадают только видимые строки выбранной группы:
        корень и его поддерево, содержимое свёрнутых веток скрыто. */
@@ -351,15 +344,15 @@
 
     root.appendChild(h('div', {
       class: 'hint',
-      text: 'Подкатегория наследует свойства и тип активной группы. Стрелка слева сворачивает ветку, кнопка «Подкатегория» создаёт вложенную категорию внутри строки.'
+      text: 'Подкатегория наследует свойства и тип своей группы. Стрелка слева сворачивает ветку, кнопка «Подкатегория» создаёт вложенную категорию внутри строки.'
     }));
   }
 
   function openCategoryModal(existing, parentId, groupKey) {
     var isEdit = !!existing;
-    var meta = CATEGORY_META;
     var groups = Store.catalogGroups();
-    var key = groups[groupKey] ? groupKey : (groups[activeCategoryGroup] ? activeCategoryGroup : 'ships');
+    var key = groups[groupKey] ? groupKey : 'ships';
+    var meta = CATEGORY_META[key] || CATEGORY_META.ships;
     var group = groups[key];
     if (!group) {
       UI.alert({ title: 'Нет группы', text: 'Не удалось определить группу категории. Обновите страницу.' });
@@ -391,8 +384,8 @@
     var typeHint = h('div', {
       class: 'hint',
       text: key === 'ships'
-        ? 'Тип «корабль» задаётся вкладкой «Корабли»; подкатегории наследуют его.'
-        : 'Тип категории задаётся вкладкой «' + group.title + '».'
+        ? 'Тип «корабль» задаётся группой «Корабли»; подкатегории наследуют его.'
+        : 'Тип категории задаётся группой «' + group.title + '»; подкатегории наследуют его.'
     });
 
     /* Иконка категории — из того же каталога, что и у объектов. */
