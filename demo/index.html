@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Демо · Добыча астероида — вид из кабины</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<!-- блик стекла и виньетка поверх 3D-кабины, которая рисуется на канве -->
+<div id="cockpit" aria-hidden="true">
+  <i class="glass"></i>
+  <i class="vignette"></i>
+</div>
+
+<header id="topbar" class="hud">
+  <span class="chip phase" id="phaseBox" data-phase="manual"><b id="phase">РУЧНОЕ УПРАВЛЕНИЕ</b></span>
+  <span class="chip" id="apChip">АВТОПИЛОТ · ВЫКЛ</span>
+  <span class="chip" id="lightChip">ПРОЖЕКТОРЫ · ВЫКЛ</span>
+  <span class="chip" id="warpChip">ВРЕМЯ ×2</span>
+  <span class="chip" id="clock">T+ 00:00</span>
+  <span class="spacer"></span>
+  <button class="btn" id="apBtn">Автопилот</button>
+  <button class="btn" id="pauseBtn">Пауза</button>
+  <button class="btn" id="resetBtn">Сброс</button>
+</header>
+
+<section id="flightPanel" class="panel hud">
+  <div class="eyebrow">Полёт · «Гелиос-7»</div>
+  <div class="row"><span>СКОРОСТЬ</span><b id="speed">0,0 м/с</b></div>
+  <div class="row"><span>СБЛИЖЕНИЕ</span><b id="close">—</b></div>
+  <div class="row"><span>ДО ПРИЧАЛА</span><b id="dist">—</b></div>
+  <div class="row"><span>ΔV РАСХОД</span><b id="dv">0 м/с</b></div>
+  <div class="row"><span>МАССА</span><b id="mass">38 т</b></div>
+  <div class="sub">ТРЮМ</div>
+  <div class="bar"><i id="holdBar"></i></div>
+  <div class="row"><span>РУДА</span><b id="hold">0 / 60 т</b></div>
+  <div class="mix" id="holdMix"><span class="muted">пусто</span></div>
+</section>
+
+<section id="targetPanel" class="panel hud">
+  <div class="eyebrow">Цель</div>
+  <div class="row big"><span>ОБЪЕКТ</span><b id="targetTag">—</b></div>
+  <div class="row"><span>РУДА</span><b id="tgtLeft">—</b></div>
+  <div class="bar"><i id="oreBar"></i></div>
+  <ul class="mix" id="oreMix"><li class="empty">—</li></ul>
+  <div class="row"><span>ВРАЩЕНИЕ</span><b id="tgtSpin">—</b></div>
+</section>
+
+<section id="advicePanel" class="panel hud">
+  <div class="eyebrow">Манёвр · подсказки</div>
+  <div class="advice-mode" id="adviceMode">СБЛИЖЕНИЕ</div>
+  <div class="advice-axes">
+    <div class="axis">
+      <span class="k" id="axMainFwd">W ▲</span>
+      <span class="axis-name">ГЛАВНЫЙ</span>
+      <span class="k" id="axMainRev">S ▼</span>
+    </div>
+    <div class="axis">
+      <span class="k" id="axLatLeft">A ◀</span>
+      <span class="axis-name">БОРТ</span>
+      <span class="k" id="axLatRight">D ▶</span>
+    </div>
+    <div class="axis">
+      <span class="k" id="axYawLeft">◀</span>
+      <span class="axis-name">МЫШЬ</span>
+      <span class="k" id="axYawRight">▶</span>
+    </div>
+  </div>
+  <div class="advice-foot"><span id="advClose">—</span><span id="advRel">V отн —</span></div>
+</section>
+
+<section id="mapPanel" class="panel hud">
+  <div class="eyebrow">Орбита · 2,4 а.е.</div>
+  <canvas id="map"></canvas>
+</section>
+
+<section id="logPanel" class="panel hud">
+  <div class="eyebrow">Журнал</div>
+  <ol id="log"></ol>
+</section>
+
+<div id="overlay">
+  <div class="card" id="introCard">
+    <div class="eyebrow">Демо · пояс на 2,4 а.е. от Солнца</div>
+    <h1>Добыча астероида</h1>
+    <p>Вы в кабине бурового корабля «Гелиос-7». Астероид уходит по прямой —
+       это участок его солнечной орбиты (схема слева внизу). Догоните его,
+       уравняйте скорость и возьмите причал маневровыми двигателями:
+       захват сработает при подходе медленнее 1,5 м/с. Стрелки на панели
+       «Манёвр» подсказывают, куда жать.</p>
+    <div class="controls">
+      <div><kbd>W</kbd><kbd>S</kbd> тяга вперёд / назад</div>
+      <div><kbd>A</kbd><kbd>D</kbd> бортовые двигатели</div>
+      <div><kbd>мышь</kbd> поворот корабля</div>
+      <div><kbd>←</kbd><kbd>→</kbd> поворот — резерв</div>
+      <div><kbd>H</kbd> прожекторы</div>
+      <div><kbd>U</kbd> отстыковка</div>
+      <div><kbd>Space</kbd> автопилот</div>
+      <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> время ×1 / ×2 / ×4</div>
+      <div><kbd>P</kbd> пауза · <kbd>R</kbd> сброс</div>
+      <div><kbd>Esc</kbd> отпустить мышь</div>
+    </div>
+    <div class="specs">ТТХ: главный двигатель 5,8 м/с² · РСУ 1,8 м/с² ·
+      поворот мышью 0,0021 рад/px · захват причала до 1,5 м/с</div>
+    <button class="primary" id="startBtn">Начать полёт</button>
+  </div>
+  <div class="card" id="pauseCard" hidden>
+    <div class="eyebrow">Полёт приостановлен</div>
+    <h1>Пауза</h1>
+    <p>Мышь освобождена. Нажмите «Продолжить», чтобы вернуться в кабину.</p>
+    <button class="primary" id="resumeBtn">Продолжить</button>
+  </div>
+</div>
+
+<script src="js/sim.js"></script>
+<script src="js/view.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
