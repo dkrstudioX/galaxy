@@ -461,9 +461,20 @@
     return true;
   }
 
-  function looksLikeResourceRoot(cat) {
+  function looksLikeResourceRoot(d, cat) {
     var n = normName(cat.name);
-    return n.indexOf('ресурс') > -1 || n.indexOf('топлив') > -1 || n === 'материалы';
+    if (n.indexOf('ресурс') > -1 || n.indexOf('топлив') > -1 || n === 'материалы') return true;
+    var mass = null;
+    d.props.forEach(function (p) { if (!mass && isMassPropName(p.name)) mass = p; });
+    if (!mass) return false;
+    var ids = {};
+    ids[cat.id] = true;
+    subtreeCats(d, cat.id).forEach(function (c) { ids[c.id] = true; });
+    return d.objects.some(function (o) {
+      if (!ids[o.categoryId]) return false;
+      var hasMass = str(o.mass).trim() || str(o.values && o.values[mass.id]).trim();
+      return !hasMass && !o.slotId;
+    });
   }
 
   /* Ресурсы: ровно две подкатегории — «Материалы» и «Топливо».
@@ -535,7 +546,7 @@
     oldRoots.forEach(function (cat) {
       var target = roots.equipment;
       if (cat.isShip) target = roots.ships;
-      else if (looksLikeResourceRoot(cat)) target = roots.resources;
+      else if (looksLikeResourceRoot(d, cat)) target = roots.resources;
       var directObjects = d.objects.some(function (o) { return o.categoryId === cat.id; });
       var kids = d.categories.filter(function (c) { return c.parentId === cat.id; });
       if (kids.length && !directObjects) {
