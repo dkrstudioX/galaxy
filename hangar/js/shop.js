@@ -23,10 +23,17 @@ function shopItemRowHTML(item, selected) {
     '</button>';
 }
 
+/* Корневые разделы — только иконки: подпись появляется над иконкой при
+   наведении, активный раздел подсвечивается контуром. */
 function categoryTabsHTML() {
   return categories.map(function (c) {
-    return '<button class="' + (state.category === c.id ? 'active' : '') + '" data-action="category" data-cat="' + c.id + '">' +
-      iconMarkup(c.icon, 17) + c.label + '</button>';
+    var active = state.category === c.id;
+    return '<button type="button" class="cat-tab' + (active ? ' active' : '') + '"' +
+      ' data-action="category" data-cat="' + c.id + '"' +
+      ' aria-label="' + c.label + '" aria-pressed="' + (active ? 'true' : 'false') + '">' +
+      '<span class="cat-tab-tip" aria-hidden="true">' + c.label + '</span>' +
+      '<span class="cat-tab-icon">' + iconMarkup(c.icon, 42.5) + '</span>' +
+      '</button>';
   }).join('');
 }
 
