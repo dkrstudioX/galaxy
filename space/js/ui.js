@@ -1,8 +1,9 @@
 // =============================================================================
 // ui.js — DOM-интерфейс: HUD-показатели (зум/скорость/дата), боковые блоки
-// «СОЛНЕЧНАЯ СИСТЕМА» (дерево планет/лун), «ОБЪЕКТ» (информация о выбранном;
-// появляется только с выбором — шапка блока носит имя выбранного) и
-// «МАЛЫЕ ТЕЛА» (группы малых тел: полёт камеры и выбор по клику).
+// «СОЛНЕЧНАЯ СИСТЕМА» (дерево всех выбираемых тел: Солнце, планеты, луны и
+// малые тела), «ОБЪЕКТ» (информация о выбранном; появляется только с выбором —
+// шапка блока носит имя выбранного) и «МАЛЫЕ ТЕЛА» (группы малых тел: полёт
+// камеры и выбор по клику).
 // Выбор делается кликом по канвасу (selectBody вызывает input.js), по
 // элементу дерева или по строке блока малых тел. Шапка каждого блока
 // сворачивает его — отдельных кнопок «скрыть/показать» нет. Здесь же твин
@@ -14,7 +15,8 @@
 import { state } from './state.js';
 import { formatSimDate, clamp } from './math.js';
 import { SUN_R, COLORS, MIN_ZOOM, MAX_ZOOM } from './config.js';
-import { planets, moonTree, moonTotals, moonsByPlanet, moonDist, moonOrbitRadius, moonPeriod } from './data.js';
+import { planets, moonTotals, moonsByPlanet, moonDist, moonOrbitRadius, moonPeriod } from './data.js';
+import { notables, neaBodies, trojanBodies, cometBodies } from './smallbodies.js';
 import { bases, basesAt, fitBaseRadius, startBaseRemoval, removalProgress, BASE_REMOVAL_MS } from './bases.js';
 
 // Русские имена для блока «ОБЪЕКТ»: планеты хранят их в данных (data.js, поле
@@ -69,16 +71,150 @@ export function updateHud(hud) {
     hud.zEl.textContent = state.zoom.toFixed(2) + 'x';
 }
 
+/* ---------- Дерево «01 Солнечная система»: все выбираемые тела ---------- */
+
+// Таблица камеры: что должно оказаться в центре экрана и с каким масштабом.
+// У планет, лун и малых тел координаты меняются со временем, поэтому здесь
+// задан только масштаб, а x/y берутся из текущего кадра. У поясов и облака
+// координаты статические — центр карты.
+const VIEW_TARGETS = {
+    sun:      { x: 0, y: 0, zoom: 1.8 },
+    planet:   { zoom: 3.2 },
+    moon:     { zoom: 12 },
+    asteroid: { zoom: 5 },
+    nea:      { zoom: 5 },
+    trojan:   { zoom: 4 },
+    comet:    { zoom: 4 },
+    belt:     { x: 0, y: 0, zoom: 0.72 },
+    kuiper:   { x: 0, y: 0, zoom: 0.38 },
+    oort:     { x: 0, y: 0, zoom: 0.30 }
+};
+
+// Описание областей: у них нет карточки тела, но есть выбор, подсветка и
+// короткая карточка области. target — ключ в VIEW_TARGETS.
+const REGION_INFO = {
+    belt: {
+        key: 'belt', target: 'belt', title: 'Пояс астероидов',
+        kindLabel: 'пояс астероидов', color: '#b9a88f',
+        distance: '2.2–3.5 <em>а.е.</em>',
+        map: 'кольцо частиц между Марсом и Юпитером',
+        rowTail: '4 тела',
+        note: '99% метеоритов Земли — из главного пояса'
+    },
+    kuiper: {
+        key: 'kuiper', target: 'kuiper', title: 'Пояс Койпера',
+        kindLabel: 'пояс Койпера', color: '#8ea4b8',
+        distance: '30–50 <em>а.е.</em>',
+        map: '600 частиц пыли за Нептуном',
+        rowTail: '30–50 а.е.',
+        note: 'Родина короткопериодических комет'
+    },
+    oort: {
+        key: 'oort', target: 'oort', title: 'Облако Оорта',
+        kindLabel: 'облако Оорта', color: '#7f92a8',
+        distance: '1300–1800 <em>ед. карты</em>',
+        map: '350 частиц на дальней границе карты',
+        rowTail: '1300–1800 ед.',
+        note: 'Родина долгопериодических комет'
+    }
+};
+
+// Группы малых тел в дереве. В список попадают только именованные тела: у
+// безымянных частиц пояса/облаков нет карточки и выбора на карте.
+const TREE_SMALL_GROUPS = [
+    { key: 'belt',   title: 'Пояс астероидов',  color: '#b9a88f', items: notables, region: REGION_INFO.belt },
+    { key: 'nea',    title: 'Околоземные',      color: '#d8d8d8', items: neaBodies.filter(b => b.name) },
+    { key: 'trojan', title: 'Троянцы Юпитера',  color: '#cfcfcf', items: trojanBodies },
+    { key: 'comet',  title: 'Кометы',           color: '#bff6ff', items: cometBodies }
+];
+
+// Пояс Койпера и облако Оорта — не группы с телами, а отдельные области.
+const TREE_REGION_ROWS = [REGION_INFO.kuiper, REGION_INFO.oort];
+
+/** Экранировать текст для HTML-шаблона дерева. */
+function esc(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+/** Строки лун планеты: у Земли — псевдо-луна, у остальных — все из data.js. */
+function moonRowsFor(p) {
+    if (p.name === 'Earth') return [{ n: 'Луна / Moon', period: moonPeriod }];
+    return moonsByPlanet[p.name] || [];
+}
+
+function moonPeriodLabel(days) {
+    if (days == null) return '';
+    return (days < 100 ? days.toFixed(2) : days.toFixed(1)) + ' d';
+}
+
+function smallKindLabel(b) {
+    if (b.kind === 'asteroid') return 'пояс';
+    if (b.kind === 'nea') return 'ОЗА';
+    if (b.kind === 'trojan') return b.camp === 4 ? 'L4' : 'L5';
+    if (b.kind === 'comet') return 'комета';
+    return '';
+}
+
+/** Цель текущего кадра для планеты: её view-координаты и луны. */
+function planetTarget(p) {
+    return (state.hoverTargets || []).find(t => t.kind === 'planet' && t.p === p) || null;
+}
+
+/** Цель текущего кадра для луны; при сбое — планета, вокруг которой она летит. */
+function moonTarget(p, m) {
+    const pt = planetTarget(p);
+    if (!pt) return null;
+    const mh = pt.moons.find(x => x.m.n === m.n);
+    return mh ? { x: mh.mx, y: mh.my } : { x: pt.x, y: pt.y };
+}
+
+/** Навести камеру на тело по таблице VIEW_TARGETS. */
+function focusBody(kind, obj) {
+    const t = VIEW_TARGETS[kind];
+    if (!t) return;
+    const x = Number.isFinite(obj && obj.x) ? obj.x : t.x;
+    const y = Number.isFinite(obj && obj.y) ? obj.y : t.y;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    flyToCamera(x, y, t.zoom, 0.8);
+}
+
+/** Навести камеру на пояс/облако: координаты и масштаб — из таблицы. */
+function focusRegion(region) {
+    const t = VIEW_TARGETS[region.target];
+    if (!t) return;
+    flyToCamera(t.x, t.y, t.zoom, 0.9);
+}
+
 /** Построить дерево «планета → луны», блок «Объект» и сворачивание блоков. */
 export function buildSidePanel() {
     const treeEl = document.getElementById('lootTree');
+
+    // Солнце — первая строка: на карте оно выбирается, значит должно быть и здесь.
+    const sunLi = document.createElement('li');
+    sunLi.className = 'planet leaf';
+    sunLi.dataset.kind = 'sun';
+    sunLi.dataset.name = 'Sun';
+    sunLi.innerHTML =
+        '<div class="node">' +
+            '<span class="dot" style="background:' + COLORS.sun + '"></span>' +
+            '<span class="pname">' + RU.Sun + ' / Sun</span>' +
+        '</div>';
+    sunLi.querySelector('.node').addEventListener('click', () => {
+        selectBody({ kind: 'sun', name: 'Солнце / Sun' });
+        focusBody('sun');
+    });
+    treeEl.appendChild(sunLi);
 
     planets.forEach(p => {
         const li = document.createElement('li');
         li.className = 'planet';
         li.dataset.kind = 'planet';
         li.dataset.name = p.name;
-        const moons = moonTree[p.name] || [];
+        const moons = moonRowsFor(p);
         li.innerHTML =
             '<div class="node">' +
                 '<span class="caret">▶</span>' +
@@ -87,14 +223,16 @@ export function buildSidePanel() {
                 '<span class="cnt">☾ ' + moonTotals[p.name] + '</span>' +
             '</div>' +
             '<ul class="loot">' +
-                moons.map(([n, t]) =>
-                    '<li data-kind="moon" data-name="' + n + '" data-planet="' + p.name + '">' +
-                    n + '<i>' + t + '</i></li>').join('') +
+                moons.map(m =>
+                    '<li data-kind="moon" data-name="' + esc(m.n) + '" data-planet="' + esc(p.name) + '">' +
+                    esc(m.n) + '<i>' + moonPeriodLabel(m.period) + '</i></li>').join('') +
             '</ul>';
         // клик по шапке планеты: выбрать планету; клик по карет-зоне — только раскрыть
         li.querySelector('.node').addEventListener('click', e => {
             li.classList.toggle('open');
             selectBody({ kind: 'planet', p });
+            const t = planetTarget(p);
+            if (t) focusBody('planet', t);
         });
         li.querySelectorAll('.loot li').forEach(mEl => {
             mEl.addEventListener('click', () => {
@@ -102,12 +240,76 @@ export function buildSidePanel() {
                 const planet = planets.find(x => x.name === pName);
                 const m = moonFromTree(planet, mEl.dataset.name);
                 selectBody({ kind: 'moon', p: planet, m });
+                const t = moonTarget(planet, m);
+                if (t) focusBody('moon', t);
             });
         });
         treeEl.appendChild(li);
     });
 
-    // Солнце в дереве нет — выбирается только кликом по канвасу.
+    // Малые тела — четыре раскрывающиеся группы после планет. У пояса
+    // астероидов шапка ещё и выбирает весь пояс: клик показывает кольцо и
+    // раскрывает четыре крупных тела. У остальных групп шапка только раскрывает.
+    TREE_SMALL_GROUPS.forEach(group => {
+        if (!group.items.length) return;
+        const li = document.createElement('li');
+        li.className = 'planet small-group';
+        li.dataset.kind = 'small-group';
+        li.dataset.name = group.key;
+        if (group.region) li.dataset.region = group.region.key;
+        li.innerHTML =
+            '<div class="node">' +
+                '<span class="caret">▶</span>' +
+                '<span class="dot" style="background:' + group.color + '"></span>' +
+                '<span class="pname">' + group.title + '</span>' +
+                '<span class="cnt">' + group.items.length + '</span>' +
+            '</div>' +
+            '<ul class="loot small-loot">' +
+                group.items.map((b, i) =>
+                    '<li data-kind="small" data-id="' + esc(b.id) + '" data-index="' + i + '"' +
+                        ' title="' + esc(b.name || b.ru) + '">' +
+                        '<span class="sname">' + esc(b.ru || b.name) + '</span>' +
+                        '<i>' + smallKindLabel(b) + '</i></li>').join('') +
+            '</ul>';
+        li.querySelector('.node').addEventListener('click', () => {
+            li.classList.toggle('open');
+            if (group.region) {
+                selectBody({ kind: 'region', region: group.region });
+                focusRegion(group.region);
+            }
+        });
+        li.querySelectorAll('.loot li').forEach(el => {
+            el.addEventListener('click', () => {
+                const b = group.items[Number(el.dataset.index)];
+                selectBody({ kind: b.kind, name: b.name,
+                    orbit: b.poly ? { poly: b.poly } : b.orbit,
+                    p: null, m: null, small: b });
+                focusBody(b.kind, b);
+            });
+        });
+        treeEl.appendChild(li);
+    });
+
+    // Области без отдельных тел: пояс Койпера и облако Оорта. Клик выбирает
+    // область и показывает её кольцо целиком.
+    TREE_REGION_ROWS.forEach(region => {
+        const li = document.createElement('li');
+        li.className = 'planet leaf region-row';
+        li.dataset.kind = 'region';
+        li.dataset.region = region.key;
+        li.title = region.note;
+        li.innerHTML =
+            '<div class="node">' +
+                '<span class="dot" style="background:' + region.color + '"></span>' +
+                '<span class="pname">' + region.title + '</span>' +
+                '<span class="cnt">' + region.rowTail + '</span>' +
+            '</div>';
+        li.querySelector('.node').addEventListener('click', () => {
+            selectBody({ kind: 'region', region });
+            focusRegion(region);
+        });
+        treeEl.appendChild(li);
+    });
 
     // Блок «03 Малые тела»: статические строки-группы, клик — полёт и выбор.
     buildSmallBodiesBlock();
@@ -124,15 +326,15 @@ export function buildSidePanel() {
 /* ---------- Блок «03 Малые тела»: группы-источники метеоритов Земли ---------- */
 
 // Строки блока. У групп-представителей клик — полёт камеры и выбор тела;
-// у Койпера и Оорта выбора нет — камера просто показывает кольцо; строки
+// у Койпера и Оорта клик выбирает область и показывает кольцо; строки
 // метеоритов (met) ведут к Марсу и Луне и подсвечены отдельным типом.
 const SMALL_ROWS = [
-    { name: 'Главный пояс',          note: '99% метеоритов Земли',    to: 'Церера', z: 4 },
+    { name: 'Пояс астероидов',       note: '99% метеоритов Земли',    region: REGION_INFO.belt },
     { name: 'Околоземные (ОЗА)',     note: 'пересекают орбиту Земли', to: 'Эрос',   z: 4 },
     { name: 'Троянцы Юпитера',       note: 'попутчики Юпитера',       to: 'Гектор', z: 4 },
     { name: 'Кометы',                note: 'метеорные потоки',        to: 'Галлея', z: 3.5 },
-    { name: 'Пояс Койпера',          note: 'родина короткопериодических комет', cam: [0, 0, 0.38] },
-    { name: 'Облако Оорта',          note: 'родина долгопериодических комет',   cam: [0, 0, 0.3] },
+    { name: 'Пояс Койпера',          note: 'родина короткопериодических комет', region: REGION_INFO.kuiper },
+    { name: 'Облако Оорта',          note: 'родина долгопериодических комет',   region: REGION_INFO.oort },
     { name: 'Марсианские метеориты', note: '≈300 найдено на Земле',   to: 'Mars',   z: 5, met: true },
     { name: 'Лунные метеориты',      note: '≈500 найдено на Земле',   to: 'Луна',   z: 8, met: true }
 ];
@@ -149,9 +351,14 @@ function smallRowTarget(row) {
     return tg.find(t => t.small && t.name.indexOf(row.to) === 0) || null;
 }
 
-/** Клик по строке блока: полёт камеры и выбор (Койпер/Оорт — только полёт). */
+/** Клик по строке блока: полёт камеры и выбор (Койпер/Оорт — выбор области). */
 function onSmallRowClick(row) {
-    if (row.cam) {   // выбора нет — просто показываем кольцо издалека
+    if (row.region) {
+        selectBody({ kind: 'region', region: row.region });
+        focusRegion(row.region);
+        return;
+    }
+    if (row.cam) {   // резерв для будущих строк-областей без карточки
         flyToCamera(row.cam[0], row.cam[1], row.cam[2], 1.0);
         return;
     }
@@ -224,7 +431,7 @@ function moonFromTree(planet, name) {
 /**
  * Выбрать объект (канвас или дерево): обновить state.selected, блок «Объект»
  * и подсветку в дереве. sel = null сбрасывает выбор.
- * Виды: {kind:'sun'|'planet'|'moon'|'base', p, m}.
+ * Виды: {kind:'sun'|'planet'|'moon'|'small'|'region'|'base', p, m, small, region}.
  */
 export function selectBody(sel) {
     state.selected = sel;
@@ -241,7 +448,7 @@ function renderObjectInfo() {
     document.getElementById('objectBlock').classList.toggle('hidden', !sel);
 
     if (!sel) {
-        box.innerHTML = '<div class="obj-empty">Кликните по солнцу, планете, луне или базе на карте</div>';
+        box.innerHTML = '<div class="obj-empty">Кликните по солнцу, планете, луне, области или базе на карте</div>';
         return;
     }
 
@@ -274,6 +481,8 @@ function renderObjectInfo() {
         html = trojanInfoHTML(sel.small);
     } else if (sel.kind === 'comet') {
         html = cometInfoHTML(sel.small);
+    } else if (sel.kind === 'region') {
+        html = regionInfoHTML(sel.region);
     } else if (sel.kind === 'base') {
         html = sel.local ? newBaseInfoHTML(sel.local) : '';
     } else {
@@ -354,17 +563,29 @@ function cometInfoHTML(b) {
         '<div class="obj-note">Хвост направлен от Солнца и ярче всего у перигелия</div>';
 }
 
+/** Короткая карточка области: пояс астероидов, пояс Койпера, облако Оорта. */
+function regionInfoHTML(region) {
+    return '<div class="obj-title"><span class="dot" style="background:' + region.color + '"></span>' +
+            '<strong>' + region.title + '</strong></div>' +
+        '<div class="obj-kind">Область · ' + region.kindLabel + '</div>' +
+        '<div class="obj-rows">' +
+            row('Расстояние', region.distance) +
+            row('На карте', region.map) +
+        '</div>' +
+        '<div class="obj-note">' + region.note + '</div>';
+}
+
 /** Блок «Объект» для малого тела главного пояса (Церера, Веста, Паллада, Гигея). */
 function asteroidInfoHTML(b) {
     return '<div class="obj-title"><span class="dot" style="background:#cfcfcf"></span>' +
             '<strong>' + b.name + '</strong></div>' +
-        '<div class="obj-kind">' + b.note + ' · Главный пояс</div>' +
+        '<div class="obj-kind">' + b.note + ' · Пояс астероидов</div>' +
         row('Большая полуось', b.a + ' <em>а.е.</em>') +
         row('Эксцентриситет', b.e) +
         row('Период обращения', fmtPeriod(b.T)) +
         row('Перигелий / афелий', (b.a * (1 - b.e)).toFixed(2) + ' / ' + (b.a * (1 + b.e)).toFixed(2) + ' <em>а.е.</em>') +
         row('Диаметр', fmtRu(b.dia) + ' <em>км</em>') +
-        '<div class="obj-note">Главный пояс — главный источник метеоритов Земли</div>';
+        '<div class="obj-note">Пояс астероидов — главный источник метеоритов Земли</div>';
 }
 
 /* ---------- Звёздные базы: секция в карточке, кнопка создания ---------- */
@@ -716,24 +937,50 @@ function pluralRu(n, forms) {
     return forms[2];
 }
 
-/** Подсветить выбранный объект в дереве и раскрыть его планету. */
+/** Подсветить выбранный объект в дереве и раскрыть его группу. */
 function highlightTree() {
     const sel = state.selected;
     document.querySelectorAll('#lootTree .sel').forEach(el => el.classList.remove('sel'));
 
-    if (!sel || sel.kind === 'sun' || !sel.p) return; // у малых тел строки в дереве нет
-
+    if (!sel) return;
     const tree = document.getElementById('lootTree');
+
+    if (sel.kind === 'sun') {
+        const sunLi = tree.querySelector('li[data-kind="sun"]');
+        if (sunLi) sunLi.classList.add('sel');
+        return;
+    }
+
+    // Область: пояс астероидов — шапка группы, Койпер/Оорт — отдельные строки.
+    if (sel.kind === 'region') {
+        const regionLi = tree.querySelector('li[data-region="' + sel.region.key + '"]');
+        if (regionLi) regionLi.classList.add('sel');
+        return;
+    }
+
+    // Малые тела: строка в одной из четырёх групп; группу раскрываем.
+    if (sel.small) {
+        const smallLi = Array.from(tree.querySelectorAll('li[data-kind="small"]'))
+            .find(el => el.dataset.id === sel.small.id);
+        if (!smallLi) return;
+        const group = smallLi.closest('.small-group');
+        if (group) group.classList.add('open');
+        smallLi.classList.add('sel');
+        return;
+    }
+
+    if (!sel.p) return;
     const li = Array.from(tree.children).find(el => el.dataset.name === sel.p.name);
     if (!li) return;
     li.classList.add('open');
 
-    if (sel.kind === 'base') return; // у базы нет строки в дереве — раскрываем только Землю
+    if (sel.kind === 'base') return; // у базы нет строки в дереве — раскрываем только планету
 
     if (sel.kind === 'planet') {
         li.classList.add('sel');
-    } else {
-        const mEl = li.querySelector('.loot li[data-name="' + sel.m.n + '"]');
+    } else if (sel.m) {
+        const mEl = Array.from(li.querySelectorAll('.loot li'))
+            .find(el => el.dataset.kind === 'moon' && el.dataset.name === sel.m.n);
         if (mEl) mEl.classList.add('sel');
     }
 }

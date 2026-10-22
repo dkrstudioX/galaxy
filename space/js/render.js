@@ -238,6 +238,10 @@ export function renderScene(ctx) {
         }
     });
 
+    // Проекции — поверх сфер: у крупных планет радиус больше высоты над полом,
+    // иначе линия целиком пряталась бы за телом (видна была бы только у Меркурия).
+    drawProjectionLines(ctx, groups, planetPos, zoom);
+
     // Подписи групп: имена тел через запятую, затем базы на них. Подписаны все
     // показанные тела — планеты, одиночные луны и малые тела: имя видно всегда,
     // а не только при наведении (подсказка при наведении остаётся).
@@ -340,6 +344,45 @@ function drawFloorShadows(ctx, groups, planetPos, zoom) {
         if (rep.kind === 'moon' && rep.m.r >= 1.5) shadow(ctx, rep.x, fy, rep.m.r, zoom);
         if (rep.kind === 'small' && rep.r >= 1.5) shadow(ctx, rep.x, fy, rep.r, zoom);
     });
+}
+
+/**
+ * Вертикальные линии от тел до их проекции на плоскость эклиптики. Это тот
+ * же приём, что у кометы (drawComet рисует свою ножку сам), но для планет,
+ * лун и остальных показанных малых тел. Рисуется поверх сфер: иначе у планет
+ * с радиусом больше высоты над полом линия полностью скрыта телом. Фон —
+ * пыль и безымянные частицы — линий не получает: это не выбираемые тела.
+ */
+function drawProjectionLines(ctx, groups, planetPos, zoom) {
+    const minH = 1 / zoom;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(127,216,255,0.45)';
+    ctx.lineWidth = 1 / zoom;
+    ctx.beginPath();
+
+    planets.forEach(p => {
+        const pos = planetPos.get(p);
+        projectionLine(ctx, pos.x, pos.y, pos.floorY, minH);
+    });
+
+    groups.forEach(g => {
+        const rep = g.rep;
+        if (rep.kind !== 'moon' && rep.kind !== 'small') return;
+        // У кометы уже есть собственная ножка и тень — не дублируем.
+        if (rep.kind === 'small' && rep.small && rep.small.kind === 'comet') return;
+        const fy = rep.floorY ?? rep.y;
+        projectionLine(ctx, rep.x, rep.y, fy, minH);
+    });
+
+    ctx.stroke();
+    ctx.restore();
+}
+
+/** Одна вертикальная линия; слишком короткую (меньше пикселя) не рисуем. */
+function projectionLine(ctx, x, y, floorY, minH) {
+    if (Math.abs(y - floorY) < minH) return;
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, floorY);
 }
 
 // --- Тела ----------------------------------------------------------------------

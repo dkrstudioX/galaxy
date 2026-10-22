@@ -265,6 +265,13 @@ const oortDust = makeDustRing(Array.from({ length: 350 }, () => {
     };
 }));
 
+/** Границы областей в view-единицах — для подсветки выбранного пояса/облака. */
+export const REGION_BOUNDS = {
+    belt: { rMin: BELT_MIN, rMax: BELT_MAX },
+    kuiper: { rMin: kuiperDust.rMin, rMax: kuiperDust.rMax },
+    oort: { rMin: oortDust.rMin, rMax: oortDust.rMax }
+};
+
 /** Нарисовать кольцо пыли: точки вне кадра пропускаются. */
 function drawDustRing(ctx, ring, zoom) {
     const half = Math.hypot(state.W, state.H) / 2 / zoom + 2;

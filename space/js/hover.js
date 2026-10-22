@@ -10,6 +10,7 @@ import { state } from './state.js';
 import { screenToWorld } from './math.js';
 import { COLORS, ISO_K } from './config.js';
 import { orbitEllipsePath } from './iso.js';
+import { REGION_BOUNDS } from './smallbodies.js';
 
 /** Минимальный радиус попадания в пикселях экрана — чтобы легко попадать в мелкие луны. */
 const MIN_HIT_MOON_PX = 6;
@@ -42,6 +43,18 @@ export function drawHover(ctx, hoverTargets) {
  */
 export function drawSelection(ctx, sel, hoverTargets) {
     if (!sel) return;
+
+    // У области нет тела и орбиты — показываем её границы пунктиром, иначе
+    // разреженная пыль Койпера/Оорта почти не читается на общем плане.
+    if (sel.kind === 'region') {
+        const bounds = REGION_BOUNDS[sel.region.key];
+        if (!bounds) return;
+        [bounds.rMin, bounds.rMax].forEach(r => {
+            drawOrbitOverlay(ctx, { kind: 'region', orbit: { cx: 0, cy: 0, r } },
+                'rgba(127,216,255,0.32)');
+        });
+        return;
+    }
 
     const target = hoverTargets.find(t =>
         sel.kind === 'sun' ? t.kind === 'sun' :

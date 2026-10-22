@@ -152,6 +152,14 @@ canvas { display: block; width: 100vw; height: 100vh; }
 .tree .loot li i { font-style: normal; color: #637a7a; font-size: 9px; }
 .tree .loot li::before { content: "☾"; color: #6e8b8b; margin-right: 2px; }
 
+/* малые тела: свой маркер, длинные имена режутся «…», тип — справа */
+.tree .small-loot li::before { content: "✦"; color: #9c7ee1; }
+.tree .small-loot li .sname {
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tree .small-loot li i { flex: none; }
+
 /* выбранный объект подсвечивается и в дереве, и на карте */
 .tree .sel > .node, .tree li.sel {
     background: rgba(122, 236, 224, .10) !important;
