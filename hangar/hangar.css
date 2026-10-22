@@ -349,8 +349,6 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 .panel-head div span { color: #a9c8ff; font: 500 9px "IBM Plex Mono"; padding: 4px 5px; border: 1px solid rgba(127, 232, 255, .34); }
 .panel-head strong { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .09em; }
 .panel-head small { color: #68828e; font: 9px "IBM Plex Mono"; text-transform: uppercase; }
-.cargo-capacity { height: 2px; background: rgba(127, 232, 255, .1); }
-.cargo-capacity span { display: block; height: 100%; background: var(--holo); box-shadow: 0 0 10px rgba(127, 232, 255, .55); }
 .item-list { flex: 1; min-height: 0; padding: 7px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(127, 232, 255, .28) transparent; }
 .list-empty,
 .trade-empty {
