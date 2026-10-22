@@ -68,7 +68,7 @@ state.js ───────────────────────�
 | `js/base.js` | SVG-иконки (`icon`, `iconMarkup`, `iconForCategory`, `shipGlyph`), `fmt`, `plural`, `pad2`, `byId`, `isMassName`, общее окно `openDialog` | — |
 | `js/state.js` | объект `state`: вкладка, категория/подкатегория, выбранные корабль и предмет, режим перегрузки, демо-запас «Ангара» | — |
 | `js/catalog.js` | `shopItems` из `Store.objects()`, табы трёх групп (`categories`) из `Store.catalogGroups()`, `hangarResources` | `base` |
-| `js/categories.js` | дерево категорий: `inSubtree`/`inCategory`, `buildSubcategories`, `filteredItems`, `activeBranch`, `groupCategoryId`, `groupedShopItems`, `currentShop`, `activeResource` | `base`, `catalog`, `state` |
+| `js/categories.js` | дерево категорий: `inSubtree`/`inCategory`, `buildSubcategories`, `filteredItems`, `itemSubcategoryId`, `groupedShopItems`, `currentShop`, `activeResource` | `base`, `catalog`, `state` |
 | `js/ship.js` | запись корабля (`userShipRecords`, `activeUserShip`, `activeShipView`), оборудование в креплениях и трюмах, квадраты слотов и трюмов, панель «01 Корабль», колонка «На корабле», модальные окна и подсказки | `base`, `state`, `catalog`, `categories` |
 | `js/shop.js` | вкладка «Магазин»: табы, чипы, список «В продаже», консоль (купить / сведения), колонка «На корабле» | `base`, `state`, `catalog`, `categories`, `ship` |
 | `js/ship-view.js` | вкладка «Информация о корабле»: шапка, оборудование, трюмы, слоты | `base`, `ship` |
@@ -97,9 +97,11 @@ ship-view → info → hangar-tab → dock → app
   `Store.catalogGroups()`, старые базы приводит к нему
   `Store.ensureCatalogGroups()`.
 - **Ветка** — выбранная категория плюс необязательный чип подкатегории;
-  `activeBranch()` возвращает самую глубокую выбранную категорию.
-- **Группы списка** — `groupedShopItems` кладёт позиции под ближайшую
-  подкатегорию ветки; заголовок не рисуется, если ветка — уже одна категория.
+  она задаёт фильтр витрины, но не заголовки групп.
+- **Группы списка** — `groupedShopItems` всегда кладёт позиции под фактическую
+  подкатегорию товара (первый уровень под корнем), независимо от выбранного
+  таба/чипа. Заголовок группы показывается всегда, в том числе для одной группы.
+  `cargoListHTML` в «На корабле» использует то же правило.
 - **Корабль** — запись `Store.userShips()`: `shipId`, `slots[]`, `holds[]`.
   `activeShipView()` отдаёт запись, объект корабля, крепления и трюмы.
 - **Слот** — крепление ровно под один предмет. **Трюм** — место под любое

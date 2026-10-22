@@ -7,7 +7,7 @@
 import { fmt, plural, icon, iconMarkup, iconForCategory } from './base.js';
 import { state } from './state.js';
 import { shopItems, categories } from './catalog.js';
-import { filteredItems, currentShop, activeBranch, groupedShopItems, buildSubcategories } from './categories.js';
+import { filteredItems, currentShop, groupedShopItems, buildSubcategories } from './categories.js';
 import { activeUserShip, activeShipView, shipEquipmentInBranch, selectedOwnedRow, shipPanelHTML, cargoListHTML, userShipRecords } from './ship.js';
 
 /* ---------- Рендер: магазин ---------- */
@@ -248,15 +248,13 @@ export function renderShop() {
   document.getElementById('shopCount').textContent = filtered.length + ' ' + plural(filtered.length, ['позиция', 'позиции', 'позиций']);
   document.getElementById('categoryTabs').innerHTML = categoryTabsHTML();
   renderSubcategories();
-  /* Список блоками по подкатегориям: заголовок = ближайшая подкатегория ветки.
-     Если вся ветка — одна категория, заголовок не нужен, его заменяет чип. */
+  /* Список блоками по фактическим подкатегориям: заголовок группы виден всегда,
+     даже если после фильтра осталась одна подкатегория. */
   var groups = groupedShopItems(filtered);
-  var showHeads = groups.length > 1 ||
-    (groups.length === 1 && groups[0].cat && groups[0].cat.id !== activeBranch());
   document.getElementById('shopList').innerHTML = filtered.length
     ? groups.map(function (g) {
       var head = '';
-      if (showHeads && g.cat) {
+      if (g.cat) {
         head = '<div class="list-group-head">' +
           '<span class="list-group-icon">' + iconMarkup(g.cat.icon || iconForCategory(g.cat.name), 13) + '</span>' +
           '<strong>' + g.cat.name + '</strong>' +

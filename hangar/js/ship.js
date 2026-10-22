@@ -8,7 +8,7 @@
 import { fmt, plural, iconMarkup, iconForCategory } from './base.js';
 import { state } from './state.js';
 import { shopItems } from './catalog.js';
-import { inCategory, inSubtree, activeBranch, groupCategoryId, categoryOrderIndex } from './categories.js';
+import { inCategory, inSubtree, itemSubcategoryId, categoryOrderIndex } from './categories.js';
 
 /* Купленные корабли: записи пользователя и выбранный корабль. */
 export function userShipRecords() { return window.Store ? Store.userShips() : []; }
@@ -134,10 +134,9 @@ export function cargoListHTML() {
   var rows = shipEquipmentInBranch(view);
   if (!rows.length) return '<div class="list-empty">В этой категории на корабле ничего нет</div>';
 
-  var branch = activeBranch();
   var groups = [], index = {};
   rows.forEach(function (r) {
-    var id = groupCategoryId(r.item.categoryId, branch);
+    var id = itemSubcategoryId(r.item.categoryId);
     if (!index[id]) {
       index[id] = { cat: window.Store && id ? Store.byId('categories', id) : null, rows: [] };
       groups.push(index[id]);
@@ -149,12 +148,10 @@ export function cargoListHTML() {
     return (a.cat ? (order[a.cat.id] || 0) : 0) - (b.cat ? (order[b.cat.id] || 0) : 0);
   });
 
-  /* Заголовок группы, как в витрине: он не нужен, если ветка — одна категория. */
-  var showHeads = groups.length > 1 ||
-    (groups.length === 1 && groups[0].cat && groups[0].cat.id !== branch);
+  /* Заголовок группы показываем всегда — он не зависит от выбранной ветки. */
   return groups.map(function (g) {
     var head = '';
-    if (showHeads && g.cat) {
+    if (g.cat) {
       head = '<div class="list-group-head">' +
         '<span class="list-group-icon">' + iconMarkup(g.cat.icon || iconForCategory(g.cat.name), 13) + '</span>' +
         '<strong>' + g.cat.name + '</strong>' +

@@ -245,19 +245,12 @@ function filteredItems() {
   });
 }
 
-/* Ветка, по которой сейчас собран список: выбранный чип или таб. */
-function activeBranch() {
-  return state.category === 'all' ? 'all' : (state.subcategory || state.category);
-}
-/* Категория-группа объекта: ближайшая подкатегория выбранной ветки. */
-function groupCategoryId(itemCategoryId, branch) {
+/* Фактическая подкатегория объекта — первый уровень под корнем.
+   Не зависит от выбранного таба/чипа: товар всегда попадает в свою группу. */
+function itemSubcategoryId(itemCategoryId) {
   var chain = window.Store ? Store.categoryChain(itemCategoryId) : [];
   if (!chain.length) return '';
-  if (branch === 'all') return chain[0].id;
-  for (var i = 0; i < chain.length; i++) {
-    if (chain[i].id === branch) return chain[i + 1] ? chain[i + 1].id : chain[i].id;
-  }
-  return chain[0].id;
+  return chain[1] ? chain[1].id : chain[0].id;
 }
 /* Порядок категорий в дереве — группы идут как в админке. */
 var categoryOrder = null;
@@ -273,12 +266,12 @@ function categoryOrderIndex() {
   })('');
   return categoryOrder;
 }
-/* Список магазина блоками: позиции собираются под заголовком своей подкатегории. */
+/* Список магазина блоками: позиции собираются под заголовком своей подкатегории
+   независимо от того, какой таб или чип выбран. */
 function groupedShopItems(list) {
-  var branch = activeBranch();
   var groups = [], index = {};
   list.forEach(function (it) {
-    var id = groupCategoryId(it.categoryId, branch);
+    var id = itemSubcategoryId(it.categoryId);
     if (!index[id]) {
       index[id] = { cat: window.Store && id ? Store.byId('categories', id) : null, items: [] };
       groups.push(index[id]);
@@ -440,10 +433,9 @@ function cargoListHTML() {
   var rows = shipEquipmentInBranch(view);
   if (!rows.length) return '<div class="list-empty">В этой категории на корабле ничего нет</div>';
 
-  var branch = activeBranch();
   var groups = [], index = {};
   rows.forEach(function (r) {
-    var id = groupCategoryId(r.item.categoryId, branch);
+    var id = itemSubcategoryId(r.item.categoryId);
     if (!index[id]) {
       index[id] = { cat: window.Store && id ? Store.byId('categories', id) : null, rows: [] };
       groups.push(index[id]);
@@ -455,12 +447,10 @@ function cargoListHTML() {
     return (a.cat ? (order[a.cat.id] || 0) : 0) - (b.cat ? (order[b.cat.id] || 0) : 0);
   });
 
-  /* Заголовок группы, как в витрине: он не нужен, если ветка — одна категория. */
-  var showHeads = groups.length > 1 ||
-    (groups.length === 1 && groups[0].cat && groups[0].cat.id !== branch);
+  /* Заголовок группы показываем всегда — он не зависит от выбранной ветки. */
   return groups.map(function (g) {
     var head = '';
-    if (showHeads && g.cat) {
+    if (g.cat) {
       head = '<div class="list-group-head">' +
         '<span class="list-group-icon">' + iconMarkup(g.cat.icon || iconForCategory(g.cat.name), 13) + '</span>' +
         '<strong>' + g.cat.name + '</strong>' +
@@ -1056,15 +1046,13 @@ function renderShop() {
   document.getElementById('shopCount').textContent = filtered.length + ' ' + plural(filtered.length, ['позиция', 'позиции', 'позиций']);
   document.getElementById('categoryTabs').innerHTML = categoryTabsHTML();
   renderSubcategories();
-  /* Список блоками по подкатегориям: заголовок = ближайшая подкатегория ветки.
-     Если вся ветка — одна категория, заголовок не нужен, его заменяет чип. */
+  /* Список блоками по фактическим подкатегориям: заголовок группы виден всегда,
+     даже если после фильтра осталась одна подкатегория. */
   var groups = groupedShopItems(filtered);
-  var showHeads = groups.length > 1 ||
-    (groups.length === 1 && groups[0].cat && groups[0].cat.id !== activeBranch());
   document.getElementById('shopList').innerHTML = filtered.length
     ? groups.map(function (g) {
       var head = '';
-      if (showHeads && g.cat) {
+      if (g.cat) {
         head = '<div class="list-group-head">' +
           '<span class="list-group-icon">' + iconMarkup(g.cat.icon || iconForCategory(g.cat.name), 13) + '</span>' +
           '<strong>' + g.cat.name + '</strong>' +

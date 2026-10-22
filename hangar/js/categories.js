@@ -48,19 +48,12 @@ export function filteredItems() {
   });
 }
 
-/* Ветка, по которой сейчас собран список: выбранный чип или таб. */
-export function activeBranch() {
-  return state.category === 'all' ? 'all' : (state.subcategory || state.category);
-}
-/* Категория-группа объекта: ближайшая подкатегория выбранной ветки. */
-export function groupCategoryId(itemCategoryId, branch) {
+/* Фактическая подкатегория объекта — первый уровень под корнем.
+   Не зависит от выбранного таба/чипа: товар всегда попадает в свою группу. */
+export function itemSubcategoryId(itemCategoryId) {
   var chain = window.Store ? Store.categoryChain(itemCategoryId) : [];
   if (!chain.length) return '';
-  if (branch === 'all') return chain[0].id;
-  for (var i = 0; i < chain.length; i++) {
-    if (chain[i].id === branch) return chain[i + 1] ? chain[i + 1].id : chain[i].id;
-  }
-  return chain[0].id;
+  return chain[1] ? chain[1].id : chain[0].id;
 }
 /* Порядок категорий в дереве — группы идут как в админке. */
 var categoryOrder = null;
@@ -76,12 +69,12 @@ export function categoryOrderIndex() {
   })('');
   return categoryOrder;
 }
-/* Список магазина блоками: позиции собираются под заголовком своей подкатегории. */
+/* Список магазина блоками: позиции собираются под заголовком своей подкатегории
+   независимо от того, какой таб или чип выбран. */
 export function groupedShopItems(list) {
-  var branch = activeBranch();
   var groups = [], index = {};
   list.forEach(function (it) {
-    var id = groupCategoryId(it.categoryId, branch);
+    var id = itemSubcategoryId(it.categoryId);
     if (!index[id]) {
       index[id] = { cat: window.Store && id ? Store.byId('categories', id) : null, items: [] };
       groups.push(index[id]);
