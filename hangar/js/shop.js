@@ -1,14 +1,14 @@
 // =============================================================================
 // shop.js — вкладка «Магазин»: табы категорий и чипы подкатегорий, список
-// «В продаже» блоками, центральная консоль (купить / сведения о корабле /
-// выбранный предмет) и колонка «На корабле» с оборудованием корабля.
+// «В продаже» блоками, колонки «Корабль» и «На корабле», правая консоль
+// (купить / сведения о корабле / выбранный предмет).
 // =============================================================================
 
-import { fmt, plural, icon, iconMarkup, iconForCategory } from './base.js';
+import { fmt, icon, iconMarkup, iconForCategory } from './base.js';
 import { state } from './state.js';
 import { shopItems, categories } from './catalog.js';
 import { filteredItems, currentShop, groupedShopItems, buildSubcategories } from './categories.js';
-import { activeUserShip, activeShipView, shipEquipmentInBranch, selectedOwnedRow, shipPanelHTML, cargoListHTML, userShipRecords } from './ship.js';
+import { activeUserShip, selectedOwnedRow, shipPanelHTML, cargoListHTML } from './ship.js';
 
 /* ---------- Рендер: магазин ---------- */
 
@@ -245,7 +245,6 @@ export function renderShop() {
   var marketGrid = document.querySelector('.market-grid');
   if (cargoPanel) cargoPanel.hidden = hideCargo;
   if (marketGrid) marketGrid.classList.toggle('no-cargo', hideCargo);
-  document.getElementById('shopCount').textContent = filtered.length + ' ' + plural(filtered.length, ['позиция', 'позиции', 'позиций']);
   document.getElementById('categoryTabs').innerHTML = categoryTabsHTML();
   renderSubcategories();
   /* Список блоками по фактическим подкатегориям: заголовок группы виден всегда,
@@ -269,18 +268,6 @@ export function renderShop() {
   document.getElementById('shopConsole').innerHTML = shopConsoleHTML();
   var shipInfo = document.getElementById('shipInfo');
   if (shipInfo) shipInfo.innerHTML = shipPanelHTML();
-  var shipMeta = document.getElementById('shipPanelMeta');
-  if (shipMeta) {
-    var shipsTotal = userShipRecords().length;
-    shipMeta.textContent = shipsTotal ? shipsTotal + ' в ангаре' : 'нет кораблей';
-  }
   document.getElementById('cargoList').innerHTML = cargoListHTML();
-  var cargoCount = document.getElementById('cargoCount');
-  if (cargoCount) {
-    var positions = shipEquipmentInBranch(activeShipView()).length;
-    cargoCount.textContent = positions
-      ? positions + ' ' + plural(positions, ['позиция', 'позиции', 'позиций'])
-      : 'пусто';
-  }
   document.getElementById('noticeShop').textContent = state.notice;
 }
