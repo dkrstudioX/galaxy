@@ -640,6 +640,24 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 .ship-slot b { color: #d9e9ef; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ship-slot span { flex: none; }
 
+/* Колонка 4 магазина — сведения о выбранном объекте в той же сетке, что у корабля */
+.shop-panel { min-height: 0; }
+.shop-panel-body { padding: 14px 16px 18px; }
+.shop-panel-body .ship-title { overflow-wrap: anywhere; }
+.shop-panel-body .ship-row b { text-align: right; }
+.shop-panel-body .ship-row b small { color: #5d7a86; font: 8px "IBM Plex Mono"; letter-spacing: .04em; }
+.shop-panel-body .ship-sub { line-height: 1.45; }
+.shop-panel-body .trade-cargo-list { margin-top: 0; max-height: 180px; }
+.shop-panel-body .trade-cargo-row { padding: 5px 0; border-top: 0; border-bottom: 1px solid rgba(127, 232, 255, .09); }
+.shop-panel-body .trade-cargo-row:last-child { border-bottom: 0; }
+.shop-panel-body .trade-cargo-name { color: #d9e9ef; font: 11px Manrope, sans-serif; }
+.shop-panel-body .trade-cargo-kg { font-weight: 500; }
+.shop-panel-body .trade-sale-total { margin-top: 0; padding-top: 7px; }
+.shop-panel-body .trade-empty { margin: 0; }
+.shop-note { color: #718b97; text-transform: none; letter-spacing: 0; font-size: 10px; }
+.shop-price-rows .ship-row b { color: #d8f7ff; font: 600 12px "IBM Plex Mono"; }
+.shop-actions { width: 100%; margin-top: auto; padding-top: 4px; }
+
 /* Слоты квадратами: магазин, карточка корабля, модальное окно */
 .slots-body { padding: 14px 16px 16px; }
 .slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px; }

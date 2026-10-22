@@ -57,6 +57,11 @@ function isCapacityName(name) {
   return n === 'вместимость' || n === 'ёмкость' || n === 'емкость';
 }
 
+/* Строка характеристик в четвёртой колонке — как в карточке корабля. */
+function shopRowHTML(label, value) {
+  return '<div class="ship-row"><span>' + label + '</span><b>' + value + '</b></div>';
+}
+
 /* Центр: объект из админки — информация и кнопка «Купить». */
 function shopObjectConsole(item) {
   if (!item) {
@@ -65,22 +70,26 @@ function shopObjectConsole(item) {
   var raw = window.Store ? Store.byId('objects', item.id) : null;
   var capacity = raw && window.Store ? Store.capacityOf(raw) : 0;
   var allowed = capacity ? Store.prop2List(raw.prop2) : [];
-  var lines = '<span class="trade-preview-stats">' + item.categoryPath + '</span>';
-  lines += '<span class="trade-preview-stats">' +
-    (item.mass ? 'Масса: ' + fmt(item.mass) + ' кг' : 'Единица груза: 1 кг за единицу') + '</span>';
+
+  var rows = item.mass
+    ? shopRowHTML('Масса', fmt(item.mass) + ' кг')
+    : shopRowHTML('Единица груза', '1 кг за единицу');
   item.props.forEach(function (p) {
     if (capacity && isCapacityName(p.name)) return;
-    lines += '<span class="trade-preview-stats">' + p.name + ': ' + p.value + '</span>';
+    rows += shopRowHTML(p.name, p.value);
   });
-  /* Контейнер: те же стили, что у состава купленного, — что можно положить. */
+  if (capacity) rows += shopRowHTML('Вместимость', fmt(capacity) + ' кг');
+
+  /* Контейнер: что можно положить внутрь. */
+  var container = '';
   if (capacity) {
-    lines += '<span class="trade-cargo-label">Можно положить</span>';
+    container += '<span class="ship-sub">Можно положить</span>';
     if (allowed.length) {
       var byName = {};
       Store.resourceObjects().forEach(function (res) {
         byName[res.name.trim().toLowerCase()] = res;
       });
-      lines += '<div class="trade-cargo-list">' + allowed.map(function (name) {
+      container += '<div class="trade-cargo-list shop-cargo-list">' + allowed.map(function (name) {
         var res = byName[name.trim().toLowerCase()];
         return '<div class="trade-cargo-row">' +
           '<span class="trade-cargo-icon">' + iconMarkup(res ? res.icon : 'resource', 13) + '</span>' +
@@ -88,26 +97,31 @@ function shopObjectConsole(item) {
           '</div>';
       }).join('') + '</div>';
     } else {
-      lines += '<span class="trade-cargo-total">Материалы не заданы</span>';
+      container += '<span class="ship-sub shop-note">Материалы не заданы</span>';
     }
-    lines += '<span class="trade-cargo-total">Вместимость: ' + fmt(capacity) + ' кг</span>';
   }
-  var price = item.price
-    ? '<span class="trade-preview-price">' + fmt(item.price) + ' ¤<small> / ' + (item.isResource ? 'кг' : 'шт.') + '</small></span>' +
-      (item.sale ? '<span class="trade-preview-stats">продажа: ' + fmt(item.sale) + ' ¤</span>' : '')
-    : '<span class="trade-preview-stats">Цена не задана</span>';
-  if (item.isShip) lines += '<span class="trade-preview-stats">корабль · покупка попадёт в ангар</span>';
+
+  var priceRows = item.price
+    ? shopRowHTML('Цена', fmt(item.price) + ' ¤ <small>/ ' + (item.isResource ? 'кг' : 'шт.') + '</small>') +
+      (item.sale ? shopRowHTML('Продажа', fmt(item.sale) + ' ¤') : '')
+    : shopRowHTML('Цена', 'не задана');
+
+  var note = '';
+  if (item.isShip) note = '<span class="ship-sub shop-note">корабль · покупка попадёт в ангар</span>';
   else {
     var target = activeUserShip();
-    lines += '<span class="trade-preview-stats">' +
+    note = '<span class="ship-sub shop-note">' +
       (target ? 'покупка на корабль «' + target.name + '»' : 'нужен корабль — купите его первым') + '</span>';
   }
-  return '<div class="trade-preview">' +
-    '<span class="trade-preview-icon">' + iconMarkup(item.icon, 27) + '</span>' +
-    '<strong>' + item.name + '</strong>' +
-    lines + price +
-    '</div>' +
-    '<button class="trade-button buy" data-action="buy">' + (item.isShip ? 'Купить корабль' : 'Купить') + icon('arrowRight') + '</button>';
+
+  return '<span class="ship-sub">' + item.categoryPath + '</span>' +
+    '<strong class="ship-title">' + item.name + '</strong>' +
+    '<div class="ship-rows">' + rows + '</div>' +
+    container +
+    '<div class="ship-rows shop-price-rows">' + priceRows + '</div>' +
+    note +
+    '<div class="shop-actions"><button class="trade-button buy" data-action="buy">' +
+    (item.isShip ? 'Купить корабль' : 'Купить') + icon('arrowRight') + '</button></div>';
 }
 
 /* Запись о выбранном в доке корабле: пока она есть, консоль предлагает продать. */
@@ -121,21 +135,14 @@ export function ownedShipRecord() {
 /* Разбивка продажи корабля: корпус, оборудование, груз и итого. */
 function shipSaleCardHTML(value) {
   if (!value || !value.ok) {
-    return '<span class="trade-preview-stats">' +
+    return '<span class="ship-sub shop-note">' +
       ((value && value.error) || 'Цена продажи не задана') + '</span>';
   }
-  function row(iconName, label, price) {
-    return '<div class="trade-cargo-row">' +
-      '<span class="trade-cargo-icon">' + iconMarkup(iconName, 13) + '</span>' +
-      '<span class="trade-cargo-name">' + label + '</span>' +
-      '<span class="trade-cargo-kg">' + fmt(price) + ' ¤</span>' +
-      '</div>';
-  }
-  return '<span class="trade-cargo-label">Стоимость продажи</span>' +
-    '<div class="trade-cargo-list">' +
-    row('ship', 'Корабль', value.shipPrice) +
-    row('grid', 'Оборудование · ' + value.gearCount + ' шт.', value.gearPrice) +
-    row('resource', 'Груз · ' + fmt(value.cargoKg) + ' кг', value.cargoPrice) +
+  return '<span class="ship-sub">Стоимость продажи</span>' +
+    '<div class="ship-rows shop-price-rows">' +
+    shopRowHTML('Корабль', fmt(value.shipPrice) + ' ¤') +
+    shopRowHTML('Оборудование', value.gearCount + ' шт. · ' + fmt(value.gearPrice) + ' ¤') +
+    shopRowHTML('Груз', fmt(value.cargoKg) + ' кг · ' + fmt(value.cargoPrice) + ' ¤') +
     '</div>' +
     '<div class="trade-sale-total"><span>Итого</span><b>' + fmt(value.total) + ' ¤</b></div>';
 }
@@ -146,16 +153,15 @@ function ownedShipConsole(rec) {
   var cat = ship ? Store.byId('categories', ship.categoryId) : null;
   var value = window.Store ? Store.shipSaleValue(rec) : { ok: false, error: 'Store не загружен' };
   var bought = rec.boughtAt ? new Date(rec.boughtAt).toLocaleDateString('ru-RU') : '';
-  var lines = '<span class="trade-preview-stats">' + (cat ? Store.categoryPath(cat.id) : 'корабль') + '</span>';
-  if (ship) lines += '<span class="trade-preview-stats">Масса: ' + fmt(Store.massOf(ship)) + ' кг</span>';
-  lines += '<span class="trade-preview-stats">в ангаре с ' + bought + '</span>';
-  return '<div class="trade-preview">' +
-    '<span class="trade-preview-icon">' + iconMarkup(ship ? ship.icon : 'ship', 27) + '</span>' +
-    '<strong>' + rec.name + '</strong>' +
-    lines + shipSaleCardHTML(value) +
-    '</div>' +
-    '<button class="trade-button sell" data-action="sell-ship">' +
-    icon('arrowLeft') + 'Продать корабль</button>';
+  var rows = '';
+  if (ship) rows += shopRowHTML('Масса', fmt(Store.massOf(ship)) + ' кг');
+  if (bought) rows += shopRowHTML('В ангаре с', bought);
+  return '<span class="ship-sub">' + (cat ? Store.categoryPath(cat.id) : 'корабль') + '</span>' +
+    '<strong class="ship-title">' + rec.name + '</strong>' +
+    (rows ? '<div class="ship-rows">' + rows + '</div>' : '') +
+    shipSaleCardHTML(value) +
+    '<div class="shop-actions"><button class="trade-button sell" data-action="sell-ship">' +
+    icon('arrowLeft') + 'Продать корабль</button></div>';
 }
 
 /* Карточка груза контейнера: ресурс, где лежит, сколько и продажа 1 кг. */
@@ -163,23 +169,21 @@ function ownedCargoConsole(row) {
   var item = row.item;
   var sale = window.Store ? Store.priceSale(item) : 0;
   var total = sale * row.amount;
-  var lines = '<span class="trade-preview-stats">' +
-    (window.Store ? Store.categoryPath(item.categoryId) : '') + '</span>';
-  lines += '<span class="trade-preview-stats">Контейнер: «' + row.boxName + '»</span>';
-  lines += '<span class="trade-preview-stats">Место: ' + row.place + '</span>';
-  lines += '<span class="trade-preview-stats">В наличии: ' + fmt(row.amount) + ' кг · ' +
-    fmt(total) + ' ¤</span>';
-  var price = sale
-    ? '<span class="trade-preview-price">' + fmt(sale) + ' ¤<small> / кг</small></span>'
-    : '<span class="trade-preview-stats">Цена продажи не задана</span>';
+  var rows = shopRowHTML('Контейнер', '«' + row.boxName + '»') +
+    shopRowHTML('Место', row.place) +
+    shopRowHTML('В наличии', fmt(row.amount) + ' кг · ' + fmt(total) + ' ¤');
+  var priceRows = sale
+    ? shopRowHTML('Цена продажи', fmt(sale) + ' ¤ <small>/ кг</small>')
+    : shopRowHTML('Цена продажи', 'не задана');
   var sell = sale
-    ? '<button class="trade-button sell" data-action="sell-cargo-unit">' +
-      icon('arrowLeft') + 'Продать 1 кг</button>'
+    ? '<div class="shop-actions"><button class="trade-button sell" data-action="sell-cargo-unit">' +
+      icon('arrowLeft') + 'Продать 1 кг</button></div>'
     : '';
-  return '<div class="trade-preview">' +
-    '<span class="trade-preview-icon resource">' + iconMarkup(item.icon || 'resource', 27) + '</span>' +
-    '<strong>' + item.name + '</strong>' + lines + price +
-    '</div>' + sell;
+  return '<span class="ship-sub">' + (window.Store ? Store.categoryPath(item.categoryId) : '') + '</span>' +
+    '<strong class="ship-title">' + item.name + '</strong>' +
+    '<div class="ship-rows">' + rows + '</div>' +
+    '<div class="ship-rows shop-price-rows">' + priceRows + '</div>' +
+    sell;
 }
 
 /* Консоль выбранного предмета на корабле: где стоит, масса, груз и продажа. */
@@ -203,29 +207,33 @@ function ownedItemConsole(row) {
       '<span class="trade-cargo-kg">' + fmt(kg) + ' кг</span>' +
       '</div>';
   });
-  var lines = '<span class="trade-preview-stats">' +
-    (window.Store ? Store.categoryPath(item.categoryId) : '') + '</span>';
-  lines += '<span class="trade-preview-stats">Место: ' + row.place + '</span>';
-  if (mass) lines += '<span class="trade-preview-stats">Масса: ' + fmt(mass) + ' кг</span>';
+  var rows = shopRowHTML('Место', row.place);
+  if (mass) rows += shopRowHTML('Масса', fmt(mass) + ' кг');
+  var cargoBlock = '';
   if (cargoKg) {
-    lines += '<span class="trade-cargo-label">Груз в контейнере</span>' +
-      '<div class="trade-cargo-list">' + cargoRows + '</div>' +
-      '<span class="trade-cargo-total">Итого груз: ' + fmt(cargoKg) + ' кг · ' +
-      fmt(cargoValue) + ' ¤</span>';
+    cargoBlock = '<span class="ship-sub">Груз в контейнере</span>' +
+      '<div class="trade-cargo-list shop-cargo-list">' + cargoRows + '</div>' +
+      '<div class="ship-rows shop-price-rows">' +
+      shopRowHTML('Итого груз', fmt(cargoKg) + ' кг · ' + fmt(cargoValue) + ' ¤') +
+      '</div>';
   }
-  var price = sale
-    ? '<span class="trade-preview-price">' + fmt(cargoKg ? sale + cargoValue : sale) + ' ¤' +
-      '<small>' + (cargoKg ? ' вместе с грузом' : ' / шт.') + '</small></span>'
-    : '<span class="trade-preview-stats">Цена продажи не задана</span>';
+  var priceRows = sale
+    ? '<div class="ship-rows shop-price-rows">' +
+      shopRowHTML('Цена продажи', fmt(cargoKg ? sale + cargoValue : sale) + ' ¤' +
+        '<small>' + (cargoKg ? ' вместе с грузом' : ' / шт.') + '</small>') +
+      '</div>'
+    : '<span class="ship-sub shop-note">Цена продажи не задана</span>';
   var sell = sale
-    ? '<button class="trade-button sell" data-action="' +
+    ? '<div class="shop-actions"><button class="trade-button sell" data-action="' +
       (cargoKg ? 'sell-cargo-with' : 'sell-cargo') + '">' + icon('arrowLeft') +
-      (cargoKg ? 'Продать вместе с грузом' : 'Продать') + '</button>'
+      (cargoKg ? 'Продать вместе с грузом' : 'Продать') + '</button></div>'
     : '';
-  return '<div class="trade-preview">' +
-    '<span class="trade-preview-icon">' + iconMarkup(item.icon, 27) + '</span>' +
-    '<strong>' + item.name + '</strong>' + lines + price +
-    '</div>' + sell;
+  return '<span class="ship-sub">' + (window.Store ? Store.categoryPath(item.categoryId) : '') + '</span>' +
+    '<strong class="ship-title">' + item.name + '</strong>' +
+    '<div class="ship-rows">' + rows + '</div>' +
+    cargoBlock +
+    priceRows +
+    sell;
 }
 
 function shopConsoleHTML() {
