@@ -61,7 +61,7 @@ function slotsPanelHTML(view) {
 function holdsPanelHTML(view) {
   if (!view.holds.length) return '';
   var total = view.holds.reduce(function (n, h) {
-    var cap = Store.slotCapacity(h);
+    var cap = Store.holdCapacity(h);
     return n + (isFinite(cap) ? cap : 0);
   }, 0);
   var mass = Store.shipMass(view.rec);

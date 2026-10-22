@@ -524,7 +524,7 @@ function holdsListHTML(view) {
     return '<div class="hold-empty">У этого корабля нет трюмов</div>';
   }
   return '<div class="hold-list">' + view.holds.map(function (hold, hi) {
-    var cap = Store.slotCapacity(hold);
+    var cap = Store.holdCapacity(hold);
     /* Вместимость трюма занимает оборудование; груз в контейнерах — только масса. */
     var gear = Store.contentsMass(hold.contents);
     var cargo = Store.cargoMass(hold.contents);
@@ -1142,7 +1142,7 @@ function slotsPanelHTML(view) {
 function holdsPanelHTML(view) {
   if (!view.holds.length) return '';
   var total = view.holds.reduce(function (n, h) {
-    var cap = Store.slotCapacity(h);
+    var cap = Store.holdCapacity(h);
     return n + (isFinite(cap) ? cap : 0);
   }, 0);
   var mass = Store.shipMass(view.rec);

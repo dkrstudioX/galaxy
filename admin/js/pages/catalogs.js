@@ -9,7 +9,7 @@
   function renderProps(root) {
     root.appendChild(UI.pageHead({
       title: 'Свойства',
-      subtitle: 'Справочник свойств: название и значение по умолчанию. Свойство «Масса» (или «Вес») используется для расчёта вместимости слотов.',
+      subtitle: 'Справочник свойств: название и значение по умолчанию. Свойство «Масса» (или «Вес») используется для расчёта массы содержимого и загрузки трюмов.',
       addLabel: 'Добавить свойство',
       onAdd: function () { openPropModal(null); }
     }));
@@ -95,7 +95,7 @@
   function renderSlots(root) {
     root.appendChild(UI.pageHead({
       title: 'Слоты',
-      subtitle: 'Справочник креплений: слот принимает только совместимое оборудование (тот же тип крепления). Вместимость — в килограммах. Трюмы задаются у корабля, а не здесь.',
+      subtitle: 'Справочник креплений: слот принимает только совместимое оборудование (тот же тип крепления). Трюмы с их вместимостью задаются у корабля, а не здесь.',
       addLabel: 'Добавить слот',
       onAdd: function () { openSlotModal(null); }
     }));
@@ -112,14 +112,7 @@
 
     root.appendChild(UI.table({
       columns: [
-        { title: 'Название', render: function (s) { return h('span', { class: 'cell-main', text: s.name }); } },
-        {
-          title: 'Вместимость',
-          render: function (s) {
-            var cap = Store.slotCapacity(s);
-            return h('span', { class: isFinite(cap) ? '' : 'muted', text: isFinite(cap) ? Store.fmtNum(cap) + ' кг' : '∞' });
-          }
-        }
+        { title: 'Название', render: function (s) { return h('span', { class: 'cell-main', text: s.name }); } }
       ],
       rows: items,
       actions: function (s) {
@@ -133,17 +126,11 @@
 
   function openSlotModal(existing) {
     var nameInput = UI.input({ value: existing ? existing.name : '', placeholder: 'Например: Оружие' });
-    var capInput = UI.input({
-      type: 'number', min: 0, step: 'any',
-      value: existing ? existing.capacity : '',
-      placeholder: 'Без ограничения'
-    });
     var body = h('div', {},
       UI.field('Название', nameInput),
-      UI.field('Вместимость, кг', capInput, 'Сколько массы содержимого помещается в слот корабля. Пусто — без ограничения.'),
       h('div', {
         class: 'hint',
-        text: 'Крепление принимает только оборудование, у которого выбран этот же слот. Трюмы задаются у корабля на странице «Объекты».'
+        text: 'Крепление принимает только оборудование, у которого выбран этот же слот. Вместимости у крепления нет: в нём помещается ровно один предмет. Трюмы задаются у корабля на странице «Корабли».'
       })
     );
 
@@ -154,12 +141,11 @@
         var name = nameInput.value.trim();
         if (!name) return 'Укажите название слота.';
         if (Store.nameTaken('slots', name, existing ? existing.id : null)) return 'Слот с таким названием уже есть.';
-        var capacity = capInput.value.trim();
         if (existing) {
-          Store.patch('slots', existing.id, { name: name, capacity: capacity, kind: 'mount' });
+          Store.patch('slots', existing.id, { name: name, kind: 'mount' });
           UI.toast('Слот изменён', 'ok');
         } else {
-          Store.createSlot(name, capacity, 'mount');
+          Store.createSlot(name, 'mount');
           UI.toast('Слот добавлен', 'ok');
         }
         App.refresh();

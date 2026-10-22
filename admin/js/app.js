@@ -5,23 +5,28 @@
   var h = UI.h;
 
   /* Метка сборки: видна в консоли, помогает понять, какая версия открыта. */
-  var BUILD = 'v21 · 21.10.2026';
+  var BUILD = 'v23 · 22.10.2026';
   console.info('Galaxy Admin — сборка ' + BUILD);
 
   var ROUTES = [
     { hash: '#/home', label: 'Админка', section: null, page: 'home' },
     { hash: '#/props', label: 'Свойства', section: 'Справочники', page: 'props' },
     { hash: '#/slots', label: 'Слоты', section: 'Справочники', page: 'slots' },
-    { hash: '#/categories/ships', label: 'Категории кораблей', section: 'Каталог', page: 'categories', group: 'ships' },
-    { hash: '#/categories/resources', label: 'Категории ресурсов', section: 'Каталог', page: 'categories', group: 'resources' },
-    { hash: '#/categories/equipment', label: 'Категории оборудования', section: 'Каталог', page: 'categories', group: 'equipment' },
-    { hash: '#/objects', label: 'Объекты', section: 'Каталог', page: 'objects' }
+    { hash: '#/objects/ships', label: 'Корабли', section: 'Каталог', page: 'objects', group: 'ships' },
+    { hash: '#/objects/equipment', label: 'Оборудование', section: 'Каталог', page: 'objects', group: 'equipment' },
+    { hash: '#/objects/resources', label: 'Ресурсы', section: 'Каталог', page: 'objects', group: 'resources' },
+    { hash: '#/categories/ships', label: 'Категории кораблей', section: 'Категории', page: 'categories', group: 'ships' },
+    { hash: '#/categories/resources', label: 'Категории ресурсов', section: 'Категории', page: 'categories', group: 'resources' },
+    { hash: '#/categories/equipment', label: 'Категории оборудования', section: 'Категории', page: 'categories', group: 'equipment' }
   ];
 
-  /* Старые адреса: корабли и товары слились в объекты, категории — в три группы. */
+  /* Старые адреса: общий список объектов разделён на три страницы. */
   var ALIASES = {
-    '#/ships': '#/objects',
-    '#/goods': '#/objects',
+    '#/objects': '#/objects/ships',
+    '#/ships': '#/objects/ships',
+    '#/equipment': '#/objects/equipment',
+    '#/goods': '#/objects/equipment',
+    '#/resources': '#/objects/resources',
     '#/categories': '#/categories/ships',
     '#/categories/ship': '#/categories/ships',
     '#/categories/goods': '#/categories/equipment'
@@ -62,6 +67,7 @@
     navLinks.forEach(function (l) { l.el.classList.toggle('active', l.route === route); });
 
     var pageEl = document.getElementById('page');
+    pageEl.classList.toggle('page-wide', route.page === 'objects');
     UI.clear(pageEl);
     var page = window.Pages[route.page];
     if (page) page.render(pageEl, route);

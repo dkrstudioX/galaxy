@@ -15,6 +15,15 @@
     );
   }
 
+  function groupCount(key) {
+    var group = Store.catalogGroups()[key];
+    if (!group) return 0;
+    var ids = {};
+    ids[group.root.id] = true;
+    Store.categoryDescendants(group.root.id).forEach(function (c) { ids[c.id] = true; });
+    return Store.objects().filter(function (o) { return ids[o.categoryId]; }).length;
+  }
+
   function exportData() {
     var blob = new Blob([Store.exportJSON()], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -39,7 +48,7 @@
     if (hasData) {
       UI.confirm({
         title: 'Загрузить демо-данные?',
-        text: 'Текущие данные будут заменены демонстрационным набором: категории, слоты с вместимостью, объекты с массой, баланс 3 500 000 ¤ и один купленный корабль «Челнок».',
+        text: 'Текущие данные будут заменены демонстрационным набором: категории, крепления, объекты с массой, трюмы кораблей, баланс 3 500 000 ¤ и один купленный корабль «Челнок».',
         okLabel: 'Загрузить',
         onOk: apply
       });
@@ -71,7 +80,9 @@
     }));
 
     root.appendChild(h('div', { class: 'stats' },
-      statCard('Объекты', c.objects, '#/objects'),
+      statCard('Корабли', groupCount('ships'), '#/objects/ships'),
+      statCard('Оборудование', groupCount('equipment'), '#/objects/equipment'),
+      statCard('Ресурсы', groupCount('resources'), '#/objects/resources'),
       statCard('Категории', c.categories, '#/categories'),
       statCard('Свойства', c.props, '#/props'),
       statCard('Слоты', c.slots, '#/slots')
@@ -83,7 +94,7 @@
         h('li', {}, 'Создайте ', link('#/props', 'свойства'), ' — они понадобятся категориям.'),
         h('li', {}, 'Создайте ', link('#/slots', 'слоты'), ' — кораблям они назначаются как собственные, а предметы в них вставляются.'),
         h('li', {}, 'Опишите ', link('#/categories', 'категории'), ' — дерево категорий задаёт наборы свойств.'),
-        h('li', {}, 'Добавьте ', link('#/objects', 'объекты'), ': отметьте «Это корабль» либо укажите слот, в который вставляется предмет.')
+        h('li', {}, 'Добавьте ', link('#/objects/ships', 'корабли'), ', ', link('#/objects/equipment', 'оборудование'), ' или ', link('#/objects/resources', 'ресурсы'), ' — каждая группа редактируется на своей странице.')
       )
     ));
 

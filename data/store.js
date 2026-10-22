@@ -112,14 +112,21 @@
       return { id: str(p.id) || uid(), name: str(p.name).trim(), value: str(p.value) };
     }).filter(function (p) { return p.name; });
 
-    /* Слоты: capacity — вместимость в кг, kind — 'cargo' (принимает любой
-       груз, кроме кораблей) или 'mount' (только совместимые предметы). */
+    /* Слоты: kind — 'cargo' (старые грузовые слоты, мигрируют в трюмы)
+       или 'mount' (только совместимые предметы). Вместимости у крепления нет. */
     out.slots = arr(data.slots).filter(isObj).map(function (s) {
       return {
-        id: str(s.id) || uid(), name: str(s.name).trim(), capacity: str(s.capacity).trim(),
+        id: str(s.id) || uid(), name: str(s.name).trim(),
         kind: s.kind === 'cargo' ? 'cargo' : 'mount'
       };
     }).filter(function (s) { return s.name; });
+
+    /* Вместимость старых «грузовых слотов» нужна только для миграции в трюмы
+       (pruneRefs), в самой записи слота её больше нет. */
+    var legacySlotCaps = {};
+    arr(data.slots).filter(isObj).forEach(function (s) {
+      if (s.kind === 'cargo') legacySlotCaps[str(s.id)] = str(s.capacity).trim();
+    });
 
     /* Категории — одно дерево: прежние типы 'ship' и 'goods' больше не различаются,
        parentId сохраняется ('' — корневая). isShip — категория корабля:
@@ -174,7 +181,7 @@
       };
     }).filter(function (u) { return u.shipId || u.name; });
 
-    pruneRefs(out);
+    pruneRefs(out, legacySlotCaps);
     return out;
 
     function makeObject(o) {
@@ -217,7 +224,7 @@
   }
 
   /* Убираем ссылки на несуществующие записи, чтобы база всегда была согласованной. */
-  function pruneRefs(out) {
+  function pruneRefs(out, legacySlotCaps) {
     var propIds = {}, catById = {}, slotIds = {}, objIds = {}, slotById = {};
     out.props.forEach(function (p) { propIds[p.id] = true; });
     out.categories.forEach(function (c) { catById[c.id] = c; });
@@ -273,7 +280,11 @@
           if (!slotIds[e.slotId]) return;
           var tpl = slotById[e.slotId];
           if (tpl && tpl.kind === 'cargo') {
-            o.holds.push({ name: tpl.name, capacity: tpl.capacity, contents: cleanContents(e.contents, o) });
+            o.holds.push({
+              name: tpl.name,
+              capacity: (legacySlotCaps && legacySlotCaps[tpl.id]) || '0',
+              contents: cleanContents(e.contents, o)
+            });
             return;
           }
           e.contents = cleanContents(e.contents, o);
@@ -809,11 +820,16 @@
     return total;
   }
 
+  /* Вместимость трюма в кг: пусто или не число — без ограничения. */
+  function holdCapacity(hold) {
+    if (!hold) return Infinity;
+    var cap = parseFloat(str(hold.capacity).replace(',', '.'));
+    return isFinite(cap) && cap >= 0 ? cap : Infinity;
+  }
+
   /* Свободная вместимость трюма по массе оборудования (груз контейнеров не в счёт). */
   function holdFree(hold) {
-    var cap = parseFloat(str(hold && hold.capacity).replace(',', '.'));
-    if (!isFinite(cap) || cap < 0) return Infinity;
-    return Math.max(0, cap - contentsMass(hold && hold.contents));
+    return Math.max(0, holdCapacity(hold) - contentsMass(hold && hold.contents));
   }
 
   /* Свободная вместимость контейнера: «Вместимость» минус его груз. */
@@ -1326,8 +1342,8 @@
     d.credits = DEFAULT_CREDITS;
 
     function addProp(name, value) { var p = { id: uid(), name: name, value: value }; d.props.push(p); return p; }
-    function addSlot(name, capacity, kind) {
-      var s = { id: uid(), name: name, capacity: capacity || '', kind: kind === 'cargo' ? 'cargo' : 'mount' };
+    function addSlot(name) {
+      var s = { id: uid(), name: name, kind: 'mount' };
       d.slots.push(s);
       return s;
     }
@@ -1388,18 +1404,18 @@
     var thrust = addProp('Тяга', '100');
     var fuelUse = addProp('Расход топлива', '2');
 
-    /* Крепления под оборудование (вместимость — в кг).
+    /* Крепления под оборудование: одно крепление — один предмет.
        Трюмы больше не шаблоны слотов: они задаются у корабля. */
-    var slotTurret = addSlot('Орудийная башня', '120');
-    var slotGun = addSlot('Пулемётная точка', '60');
-    var slotShield = addSlot('Щитовой генератор', '150');
-    var slotEngine = addSlot('Двигатель', '300');
-    var slotRadar = addSlot('Радар', '80');
-    var slotMining = addSlot('Добывающий модуль', '400');
-    var slotRefinery = addSlot('Перерабатывающий модуль', '600');
+    var slotTurret = addSlot('Орудийная башня');
+    var slotGun = addSlot('Пулемётная точка');
+    var slotShield = addSlot('Щитовой генератор');
+    var slotEngine = addSlot('Двигатель');
+    var slotRadar = addSlot('Радар');
+    var slotMining = addSlot('Добывающий модуль');
+    var slotRefinery = addSlot('Перерабатывающий модуль');
     /* Отдельное крепление под грузовой отсек: контейнер встаёт сюда,
        а если оно занято — в трюм. */
-    var slotCargoBay = addSlot('Грузовой отсек', '');
+    var slotCargoBay = addSlot('Грузовой отсек');
 
     /* ---------- Категории: три корня — оборудование, ресурсы, корабли ---------- */
 
@@ -1615,8 +1631,8 @@
     drop: drop,
 
     createProp: function (name, value) { return insert('props', { name: name, value: value }); },
-    createSlot: function (name, capacity, kind) {
-      return insert('slots', { name: name, capacity: capacity || '', kind: kind === 'cargo' ? 'cargo' : 'mount' });
+    createSlot: function (name, kind) {
+      return insert('slots', { name: name, kind: kind === 'cargo' ? 'cargo' : 'mount' });
     },
     createCategory: function (name, propIds, parentId, isShip, icon) {
       return insert('categories', {
@@ -1661,12 +1677,8 @@
     categoryProps: categoryProps,
     categoryNameTaken: categoryNameTaken,
 
-    /* Вместимость слота: пусто или не число — без ограничения. */
-    slotCapacity: function (slot) {
-      if (!slot) return Infinity;
-      var n = parseFloat(str(slot.capacity).replace(',', '.'));
-      return isFinite(n) && n >= 0 ? n : Infinity;
-    },
+    /* Вместимость трюма: пусто или не число — без ограничения. */
+    holdCapacity: holdCapacity,
     massOf: massValue,
     cargoUnits: cargoUnitsOf,
     /* Свойство, которым задаётся масса (для форм и подсказок). */

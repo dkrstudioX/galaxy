@@ -5,6 +5,44 @@
   var h = UI.h;
   window.Pages = window.Pages || {};
 
+  /* Отдельные страницы каталога: один и тот же редактор объектов,
+     но с фиксированной веткой категорий и своим набором колонок. */
+  var GROUPS = {
+    ships: {
+      title: 'Корабли',
+      addLabel: 'Добавить корабль',
+      newTitle: 'Новый корабль',
+      editTitle: 'Изменить корабль',
+      allLabel: 'Все корабли',
+      empty: 'Пока нет ни одного корабля. Например: «Челнок».',
+      subtitle: 'Корабли каталога: крепления, трюмы, масса и цены. Справа — только корабли выбранной ветки.'
+    },
+    equipment: {
+      title: 'Оборудование',
+      addLabel: 'Добавить оборудование',
+      newTitle: 'Новое оборудование',
+      editTitle: 'Изменить оборудование',
+      allLabel: 'Всё оборудование',
+      empty: 'Пока нет оборудования. Например: «Лазер M-1».',
+      subtitle: 'Оборудование каталога: масса, совместимый слот, материалы prop_2 и цены.'
+    },
+    resources: {
+      title: 'Ресурсы',
+      addLabel: 'Добавить ресурс',
+      newTitle: 'Новый ресурс',
+      editTitle: 'Изменить ресурс',
+      allLabel: 'Все ресурсы',
+      empty: 'Пока нет ресурсов. Например: «Железо».',
+      subtitle: 'Ресурсы каталога: цена за килограмм. У ресурсов нет массы, слота и prop_2.'
+    }
+  };
+
+  function groupMeta(key) { return key ? GROUPS[key] || null : null; }
+
+  function catalogGroup(key) {
+    return key ? Store.catalogGroups()[key] || null : null;
+  }
+
   /* ---------- Общие части форм ---------- */
 
   /* Каждый предмет — отдельная запись: количество разворачивается в строки
@@ -20,11 +58,20 @@
     return out;
   }
 
-  /* В объекте выбирается только подкатегория (2-й уровень): она задаёт ветку. */
-  function categoryOptions(emptyLabel) {
+  /* В объекте выбирается только подкатегория (2-й уровень): она задаёт ветку.
+     Для страницы группы показываем только категории этой группы. */
+  function categoryOptions(emptyLabel, group) {
+    var allowed = null;
+    if (group) {
+      allowed = {};
+      allowed[group.root.id] = true;
+      Store.categoryDescendants(group.root.id).forEach(function (c) { allowed[c.id] = true; });
+    }
     return [{ value: '', label: emptyLabel }].concat(
       Store.categoryTree()
-        .filter(function (node) { return node.cat.parentId; })
+        .filter(function (node) {
+          return node.cat.parentId && (!allowed || allowed[node.cat.id]);
+        })
         .map(function (node) { return { value: node.cat.id, label: Store.categoryPath(node.cat.id) }; })
     );
   }
@@ -135,8 +182,21 @@
 
   /* ---------- Объекты ---------- */
 
-  /* Слева — категории, справа — объекты выбранной категории (с подкатегориями). */
+  /* Слева — категории, справа — объекты выбранной категории (с подкатегориями).
+     Выбранная ветка запоминается отдельно для «Все объекты» и каждой группы. */
+  var activeGroup = '';
+  var selectedByGroup = {};
   var selectedCategory = '';
+
+  function selectCategory(id) {
+    selectedCategory = id;
+    selectedByGroup[activeGroup] = id;
+  }
+
+  function categoryInGroup(categoryId, group) {
+    if (!group) return true;
+    return Store.categoryChain(categoryId).some(function (c) { return c.id === group.root.id; });
+  }
 
   /* Объекты выбранной категории вместе со всеми вложенными подкатегориями
      на любую глубину (дерево не ограничено двумя уровнями). */
@@ -156,7 +216,7 @@
     return h('button', {
       class: 'cat-item' + (selectedCategory === id ? ' active' : ''),
       title: isShip ? 'Категория кораблей' : label,
-      onclick: function () { selectedCategory = id; App.refresh(); }
+      onclick: function () { selectCategory(id); App.refresh(); }
     },
       h('span', { class: 'cat-indent', style: 'width:' + (depth * 14) + 'px' }),
       mark,
@@ -164,11 +224,42 @@
     );
   }
 
-  /* Слева: «Все объекты», категории первого уровня и подкатегории выбранной ветки. */
-  function categoryPanel() {
+  function childRows(parentId, depth) {
+    var rows = [];
+    (function walk(pid, level) {
+      Store.childCategories(pid).forEach(function (cat) {
+        rows.push({ cat: cat, depth: level });
+        walk(cat.id, level + 1);
+      });
+    })(parentId, depth);
+    return rows;
+  }
+
+  /* Слева: категории выбранной группы или всё дерево на странице «Все объекты». */
+  function categoryPanel(group) {
     var panel = h('aside', { class: 'card cat-panel' },
       h('div', { class: 'cat-panel-title', text: 'Категории' })
     );
+
+    if (group) {
+      var meta = groupMeta(group.key);
+      panel.appendChild(categoryRow(group.root.id, meta.allLabel, 0,
+        group.root.icon || Icons.forCategory(group.root.name), group.root.isShip));
+
+      var groupRows = childRows(group.root.id, 1);
+      if (!groupRows.length) {
+        panel.appendChild(h('div', { class: 'cat-panel-title cat-panel-sub', text: 'Подкатегории' }));
+        panel.appendChild(h('div', { class: 'cat-panel-empty', text: 'У этой группы нет подкатегорий' }));
+        return panel;
+      }
+      panel.appendChild(h('div', { class: 'cat-panel-title cat-panel-sub', text: 'Подкатегории' }));
+      groupRows.forEach(function (row) {
+        panel.appendChild(categoryRow(row.cat.id, row.cat.name, row.depth,
+          row.cat.icon || Icons.forCategory(row.cat.name), Store.categoryIsShip(row.cat.id)));
+      });
+      return panel;
+    }
+
     panel.appendChild(categoryRow('', 'Все объекты', 0, 'grid', false));
     Store.childCategories('').forEach(function (cat) {
       panel.appendChild(categoryRow(cat.id, cat.name, 1, cat.icon || Icons.forCategory(cat.name), Store.categoryIsShip(cat.id)));
@@ -180,14 +271,7 @@
     var root = chain.length ? chain[0] : null;
     if (!root) return panel;
 
-    var rows = [];
-    (function walk(parentId, depth) {
-      Store.childCategories(parentId).forEach(function (cat) {
-        rows.push({ cat: cat, depth: depth });
-        walk(cat.id, depth + 1);
-      });
-    })(root.id, 2);
-
+    var rows = childRows(root.id, 2);
     if (!rows.length) {
       panel.appendChild(h('div', { class: 'cat-panel-title cat-panel-sub', text: 'Подкатегории' }));
       panel.appendChild(h('div', { class: 'cat-panel-empty', text: 'У этой категории нет подкатегорий' }));
@@ -240,15 +324,94 @@
     );
   }
 
-  function renderObjects(root) {
+  function objectColumns(groupKey) {
+    var columns = [
+      {
+        title: 'Название',
+        render: function (o) {
+          var cat = Store.byId('categories', o.categoryId);
+          var mark = h('span', { class: 'obj-icon' });
+          mark.innerHTML = Icons.svg(o.icon || Icons.forCategory(cat ? cat.name : ''), 18);
+          return h('div', { class: 'obj-name' }, mark, h('span', { class: 'cell-main', text: o.name }));
+        }
+      },
+      {
+        title: 'Категория',
+        render: function (o) {
+          var c = Store.byId('categories', o.categoryId);
+          return h('span', { class: c ? '' : 'muted', text: c ? Store.categoryPath(c.id) : '—' });
+        }
+      }
+    ];
+
+    if (!groupKey) {
+      columns.push({ title: 'Тип', render: function (o) { return typeChip(Store.categoryIsShip(o.categoryId)); } });
+    }
+    if (groupKey !== 'resources') {
+      columns.push({
+        title: 'Масса',
+        render: function (o) {
+          var m = Store.massOf(o);
+          return h('span', { class: (m ? '' : 'muted') + ' nowrap', text: m ? Store.fmtNum(m) + ' кг' : '—' });
+        }
+      });
+    }
+    if (groupKey === 'equipment' || !groupKey) {
+      columns.push({
+        title: 'prop_2',
+        render: function (o) {
+          var list = o.prop2 || [];
+          if (!list.length) return h('span', { class: 'muted', text: '0' });
+          return h('span', { class: 'prop2-cell', text: list.join(', '), title: list.join(', ') });
+        }
+      });
+    }
+
+    columns.push({
+      title: 'Покупка',
+      render: function (o) {
+        var p = Store.priceBuy(o);
+        return h('span', { class: (p ? '' : 'muted') + ' nowrap', text: p ? Store.fmtNum(p) + ' ¤' : '—' });
+      }
+    }, {
+      title: 'Продажа',
+      render: function (o) {
+        var p = Store.priceSale(o);
+        return h('span', { class: (p ? '' : 'muted') + ' nowrap', text: p ? Store.fmtNum(p) + ' ¤' : '—' });
+      }
+    });
+
+    if (groupKey !== 'resources') {
+      columns.push({ title: 'Слоты', render: function (o) { return slotsSummary(o); } });
+    }
+    return columns;
+  }
+
+  function renderObjects(root, route) {
+    var groupKey = route && route.group ? route.group : '';
+    var meta = groupMeta(groupKey);
+    var group = catalogGroup(groupKey);
+    if (groupKey && !group) groupKey = '';
+
+    if (activeGroup !== groupKey) {
+      activeGroup = groupKey;
+      selectedCategory = selectedByGroup[groupKey] || (group ? group.root.id : '');
+    }
+
+    if (selectedCategory && !Store.byId('categories', selectedCategory)) selectedCategory = '';
+    if (group && selectedCategory && !categoryInGroup(selectedCategory, group)) selectedCategory = group.root.id;
+    if (group && !selectedCategory) selectedCategory = group.root.id;
+    selectedByGroup[groupKey] = selectedCategory;
+
     var current = selectedCategory ? Store.byId('categories', selectedCategory) : null;
-    if (!current) selectedCategory = '';
+    var addCategory = selectedCategory || (group ? group.root.id : '');
+    function addObject() { openObjectModal(null, addCategory, groupKey); }
 
     root.appendChild(UI.pageHead({
-      title: 'Объекты',
-      subtitle: 'Слева — категории первого уровня и их подкатегории, справа — объекты выбранной ветки. Объект всегда привязан к подкатегории, а тип (слоты или слот вставки) задаёт её корневая категория.',
-      addLabel: 'Добавить объект',
-      onAdd: function () { openObjectModal(null, selectedCategory); }
+      title: meta ? meta.title : 'Объекты',
+      subtitle: meta ? meta.subtitle : 'Слева — категории первого уровня и их подкатегории, справа — объекты выбранной ветки. Объект всегда привязан к подкатегории, а тип (слоты или слот вставки) задаёт её корневая категория.',
+      addLabel: meta ? meta.addLabel : 'Добавить объект',
+      onAdd: addObject
     }));
 
     var items = sortObjects(objectsIn(selectedCategory));
@@ -256,78 +419,36 @@
     main.appendChild(sortTools());
 
     if (!items.length) {
+      var emptyText;
+      if (current && !(group && current.id === group.root.id)) {
+        emptyText = 'В категории «' + current.name + '» пока нет объектов — ни своих, ни в подкатегориях.';
+      } else if (meta) {
+        emptyText = meta.empty;
+      } else if (Store.categories().length) {
+        emptyText = 'Пока нет ни одного объекта. Например: корабль «Титан» или предмет «Лазер Mk I».';
+      } else {
+        emptyText = 'Пока нет ни одного объекта. Сначала создайте категорию — она задаст список свойств.';
+      }
       main.appendChild(UI.emptyState({
-        text: current
-          ? 'В категории «' + current.name + '» пока нет объектов — ни своих, ни в подкатегориях.'
-          : (Store.categories().length
-            ? 'Пока нет ни одного объекта. Например: корабль «Титан» или предмет «Лазер Mk I».'
-            : 'Пока нет ни одного объекта. Сначала создайте категорию — она задаст список свойств.'),
-        addLabel: 'Добавить объект',
-        onAdd: function () { openObjectModal(null, selectedCategory); }
+        text: emptyText,
+        addLabel: meta ? meta.addLabel : 'Добавить объект',
+        onAdd: addObject
       }));
     } else {
       main.appendChild(UI.table({
         className: 'table-dense',
-        columns: [
-          {
-            title: 'Название',
-            render: function (o) {
-              var cat = Store.byId('categories', o.categoryId);
-              var mark = h('span', { class: 'obj-icon' });
-              mark.innerHTML = Icons.svg(o.icon || Icons.forCategory(cat ? cat.name : ''), 18);
-              return h('div', { class: 'obj-name' }, mark, h('span', { class: 'cell-main', text: o.name }));
-            }
-          },
-          {
-            title: 'Категория',
-            render: function (o) {
-              var c = Store.byId('categories', o.categoryId);
-              return h('span', { class: c ? '' : 'muted', text: c ? Store.categoryPath(c.id) : '—' });
-            }
-          },
-          { title: 'Тип', render: function (o) { return typeChip(Store.categoryIsShip(o.categoryId)); } },
-          {
-            title: 'Масса',
-            render: function (o) {
-              var m = Store.massOf(o);
-              return h('span', { class: (m ? '' : 'muted') + ' nowrap', text: m ? Store.fmtNum(m) + ' кг' : '—' });
-            }
-          },
-          {
-            title: 'prop_2',
-            render: function (o) {
-              var list = o.prop2 || [];
-              if (!list.length) return h('span', { class: 'muted', text: '0' });
-              return h('span', { class: 'prop2-cell', text: list.join(', '), title: list.join(', ') });
-            }
-          },
-          {
-            title: 'Покупка',
-            render: function (o) {
-              var p = Store.priceBuy(o);
-              return h('span', { class: (p ? '' : 'muted') + ' nowrap', text: p ? Store.fmtNum(p) + ' ¤' : '—' });
-            }
-          },
-          {
-            title: 'Продажа',
-            render: function (o) {
-              var p = Store.priceSale(o);
-              return h('span', { class: (p ? '' : 'muted') + ' nowrap', text: p ? Store.fmtNum(p) + ' ¤' : '—' });
-            }
-          },
-          { title: 'Слоты', render: function (o) { return slotsSummary(o); } }
-        ],
+        columns: objectColumns(groupKey),
         rows: items,
         actions: function (o) {
           return UI.editDelete(
-            function () { openObjectModal(o); },
+            function () { openObjectModal(o, null, groupKey); },
             function () { deleteObject(o); }
           );
         }
       }));
     }
 
-    root.appendChild(h('div', { class: 'split' }, categoryPanel(), main));
+    root.appendChild(h('div', { class: 'split' }, categoryPanel(group), main));
   }
 
   /* Для корабля — сводка его слотов с содержимым, для предмета — куда он вставляется. */
@@ -354,7 +475,7 @@
     (o.holds || []).forEach(function (hd) {
       var names = namesOf(hd.contents);
       parts.push('трюм «' + hd.name + '» ' + Store.fmtNum(Store.contentsMass(hd.contents)) + '/' +
-        Store.fmtNum(Store.slotCapacity(hd)) + ' кг' + (names.length ? ' (' + names.join(', ') + ')' : ''));
+        Store.fmtNum(Store.holdCapacity(hd)) + ' кг' + (names.length ? ' (' + names.join(', ') + ')' : ''));
     });
     var text = parts.join(', ');
     return h('span', { class: (parts.length ? '' : 'muted') + ' slots-cell', text: parts.length ? text : '—', title: text });
@@ -397,8 +518,7 @@
 
   /* Редактор слотов объекта: одинаковые слоты можно добавлять сколько угодно,
      порядок меняется перетаскиванием за ручку или кнопками ↑ ↓.
-     У каждого слота — содержимое по умолчанию; сумма масс (масса × количество)
-     не должна превышать вместимость слота. */
+     У каждого слота — содержимое по умолчанию; вместимости у крепления нет. */
   function buildSlotsSection(slots, slotEntries, excludeId) {
     if (!slots.length) {
       return {
@@ -436,42 +556,10 @@
       });
       slotSelect.classList.add('slot-select');
 
-      var capBadge = h('span', { class: 'cap-badge' });
-
-      function currentSlot() { return Store.byId('slots', slotSelect.value); }
-
-      function usedNow() {
-        var sum = 0;
-        contentRows.forEach(function (cr) {
-          var it = Store.byId('objects', cr.itemSelect.value);
-          sum += (parseInt(cr.qtyInput.value, 10) || 0) * Store.cargoUnits(it);
-        });
-        return sum;
-      }
-
-      function refreshBadge() {
-        var cap = Store.slotCapacity(currentSlot());
-        var used = usedNow();
-        var over = used > cap + 1e-9;
-        capBadge.textContent = Store.fmtNum(used) + ' / ' + (isFinite(cap) ? Store.fmtNum(cap) + ' кг' : '∞');
-        capBadge.classList.toggle('cap-over', over);
-        capBadge.title = over ? 'Слот перегружен' : 'Занято груза в слоте';
-      }
-
-      /* Сколько единиц предмета ещё помещается в слот. */
-      function maxQtyFor(item) {
-        var cap = Store.slotCapacity(currentSlot());
-        if (!isFinite(cap)) return Infinity;
-        var m = Store.cargoUnits(item);
-        if (m <= 0) return Infinity;
-        return Math.max(0, Math.floor((cap - usedNow()) / m));
-      }
-
       function removeContentRow(cr) {
         var i = contentRows.indexOf(cr);
         if (i > -1) contentRows.splice(i, 1);
         if (cr.el.parentNode) cr.el.parentNode.removeChild(cr.el);
-        refreshBadge();
       }
 
       function refreshItemOptions(cr) {
@@ -494,29 +582,6 @@
         cr.qtyInput = UI.input({ type: 'number', min: 1, step: 1, value: qty || 1 });
         cr.qtyInput.classList.add('content-qty');
         cr.qtyInput.title = 'Сколько одинаковых добавить: каждый станет отдельной строкой';
-
-        /* Количество не должно превышать остаток вместимости. */
-        function syncQty() {
-          var it = Store.byId('objects', cr.itemSelect.value);
-          if (!it) { refreshBadge(); return; }
-          var q = parseInt(cr.qtyInput.value, 10);
-          if (!q || q < 1) q = 1;
-          var cap = Store.slotCapacity(currentSlot());
-          var unit = Store.cargoUnits(it);
-          if (isFinite(cap) && unit > 0) {
-            var own = q * unit;
-            var limit = Math.max(0, Math.floor((cap - (usedNow() - own)) / unit));
-            if (q > limit) {
-              q = Math.max(1, limit);
-              UI.toast('В слоте хватает места только на ' + q + ' шт.', 'warn');
-            }
-          }
-          cr.qtyInput.value = String(q);
-          refreshBadge();
-        }
-
-        cr.itemSelect.addEventListener('change', syncQty);
-        cr.qtyInput.addEventListener('change', syncQty);
 
         cr.el = h('div', { class: 'content-row' },
           cr.itemSelect, cr.qtyInput,
@@ -553,36 +618,17 @@
       }
 
       addItemSel.addEventListener('change', function () {
-        var it = Store.byId('objects', addItemSel.value);
-        addBtn.disabled = !it;
-        if (!it) return;
-        var maxQ = maxQtyFor(it);
-        if (maxQ < 1) {
-          UI.toast('В слоте нет места для «' + it.name + '»', 'warn');
-          addBtn.disabled = true;
-          return;
-        }
-        if (maxQ < (parseInt(addQty.value, 10) || 1)) addQty.value = String(maxQ);
+        addBtn.disabled = !Store.byId('objects', addItemSel.value);
       });
 
       function tryAdd() {
         var it = Store.byId('objects', addItemSel.value);
         if (!it) return;
-        var maxQ = maxQtyFor(it);
-        if (maxQ < 1) {
-          UI.toast('В слоте нет места для «' + it.name + '»', 'warn');
-          return;
-        }
-        var q = parseInt(addQty.value, 10) || 1;
-        if (q > maxQ) {
-          q = maxQ;
-          UI.toast('В слоте хватает места только на ' + q + ' шт.', 'warn');
-        }
+        var q = Math.max(1, parseInt(addQty.value, 10) || 1);
         addContentRow(it.id, String(q));
         addItemSel.value = '';
         addBtn.disabled = true;
         addQty.value = '1';
-        refreshBadge();
       }
 
       var addRowEl = h('div', { class: 'content-row content-new' }, addItemSel, addQty, addBtn);
@@ -600,14 +646,12 @@
           }
         });
         refreshAddOptions();
-        refreshBadge();
         if (dropped) UI.toast('Содержимое, не подходящее к новому слоту, убрано', 'warn');
       });
 
       var headEl = h('div', { class: 'slot-item-head' },
         handle,
         slotSelect,
-        capBadge,
         h('button', { class: 'icon-btn', text: '\u2191', title: 'Выше', onclick: function () { move(row, -1); } }),
         h('button', { class: 'icon-btn', text: '\u2193', title: 'Ниже', onclick: function () { move(row, 1); } }),
         h('button', {
@@ -643,7 +687,6 @@
       rowStates.push(state);
 
       refreshAddOptions();
-      refreshBadge();
 
       listEl.appendChild(row);
       return row;
@@ -681,7 +724,7 @@
       el: h('div', {},
         listEl,
         h('div', { class: 'slot-add-row' }, addSelect),
-        h('div', { class: 'hint', text: 'Одинаковые слоты можно добавлять сколько угодно. Порядок меняется перетаскиванием за ручку слева или кнопками ↑ ↓. Сумма масс содержимого не должна превышать вместимость слота.' })
+        h('div', { class: 'hint', text: 'Одинаковые слоты можно добавлять сколько угодно. Порядок меняется перетаскиванием за ручку слева или кнопками ↑ ↓. Крепление принимает только совместимое оборудование; вместимости у него нет.' })
       ),
       collect: function () {
         return rowStates.map(function (st) {
@@ -851,10 +894,12 @@
     };
   }
 
-  function openObjectModal(existing, presetCategoryId) {
+  function openObjectModal(existing, presetCategoryId, groupKey) {
     var isEdit = !!existing;
-    var categories = Store.categoryTree();
-    var hasLeaf = categories.some(function (node) { return node.cat.parentId; });
+    var meta = groupMeta(groupKey);
+    var group = catalogGroup(groupKey);
+    var options = categoryOptions('— выберите подкатегорию —', group);
+    var hasLeaf = options.some(function (o) { return o.value; });
 
     /* Объект привязывается к подкатегории: если пришли из корневой категории,
        подставляем её первую подкатегорию. */
@@ -867,7 +912,7 @@
 
     var nameInput = UI.input({ value: isEdit ? existing.name : '', placeholder: 'Например: Титан' });
     var catSelect = UI.select({
-      options: categoryOptions('— выберите подкатегорию —'),
+      options: options,
       value: presetId
     });
     var priceBuyInput = UI.input({
@@ -966,14 +1011,17 @@
     function syncType() {
       var known = !!catSelect.value;
       var isShip = known && Store.categoryIsShip(catSelect.value);
+      var isResource = known && Store.isResourceObject({ categoryId: catSelect.value });
       shipBlock.hidden = !isShip;
       holdsBlock.hidden = !isShip;
-      prop2Block.hidden = isShip || !known;
-      itemBlock.hidden = isShip || !known;
+      prop2Block.hidden = isShip || !known || isResource;
+      itemBlock.hidden = isShip || !known || isResource;
       if (!known) {
         typeHint.textContent = 'Выберите подкатегорию: у ветки кораблей объект получает слоты, у остальных — слот вставки.';
       } else if (isShip) {
         typeHint.textContent = 'Категория кораблей: у объекта будут собственные слоты, сам он никуда не вставляется.';
+      } else if (isResource) {
+        typeHint.textContent = 'Категория ресурсов: объект хранится как груз, у него нет слота и prop_2.';
       } else {
         typeHint.textContent = 'Категория не корабль: объект вставляется в выбранный слот или в любой.';
       }
@@ -986,7 +1034,10 @@
       h('div', { class: 'field' },
         h('label', { class: 'field-label', text: 'Подкатегория' }),
         catSelect,
-        hasLeaf ? null : h('div', { class: 'hint', text: 'Подкатегорий пока нет — создайте их на странице «Категории»: объект привязывается к подкатегории.' }),
+        hasLeaf ? null : h('div', {
+          class: 'hint',
+          text: (group ? 'В этой группе' : '') + ' подкатегорий пока нет — создайте их на странице «Категории»: объект привязывается к подкатегории.'
+        }),
         typeHint
       ),
       h('div', { class: 'field' },
@@ -1006,7 +1057,7 @@
     );
 
     UI.modal({
-      title: isEdit ? 'Изменить объект' : 'Новый объект',
+      title: meta ? (isEdit ? meta.editTitle : meta.newTitle) : (isEdit ? 'Изменить объект' : 'Новый объект'),
       wide: true,
       body: body,
       onSave: function () {
@@ -1014,18 +1065,15 @@
         if (!name) return 'Укажите название объекта.';
         if (!catSelect.value) return 'Выберите подкатегорию.';
         var isShip = Store.categoryIsShip(catSelect.value);
-        if (!isShip && !anySlotRow.input.checked && !slotSelect.value) {
+        var isResource = Store.isResourceObject({ categoryId: catSelect.value });
+        if (!isShip && !isResource && !anySlotRow.input.checked && !slotSelect.value) {
           return 'Выберите слот или отметьте «Вставляется в любой слот».';
         }
 
         var slotEntries = isShip ? slotsSection.collect() : [];
         for (var i = 0; i < slotEntries.length; i++) {
-          var sl = Store.byId('slots', slotEntries[i].slotId);
-          if (!sl) return 'Выберите слот в каждой строке списка слотов.';
-          var used = Store.usedMass(slotEntries[i].contents);
-          var cap = Store.slotCapacity(sl);
-          if (used > cap + 1e-9) {
-            return 'Слот «' + sl.name + '» перегружен: ' + Store.fmtNum(used) + ' кг из ' + Store.fmtNum(cap) + ' кг.';
+          if (!Store.byId('slots', slotEntries[i].slotId)) {
+            return 'Выберите слот в каждой строке списка слотов.';
           }
         }
 
@@ -1044,8 +1092,8 @@
           price_sale: priceSaleInput.value.trim(),
           icon: iconField.value(),
           values: collectInputs(inputs),
-          slotId: isShip || anySlotRow.input.checked ? null : slotSelect.value,
-          prop2: isShip ? [] : prop2Field.value(),
+          slotId: isShip || isResource || anySlotRow.input.checked ? null : slotSelect.value,
+          prop2: isShip || isResource ? [] : prop2Field.value(),
           slots: slotEntries,
           holds: holdEntries
         };

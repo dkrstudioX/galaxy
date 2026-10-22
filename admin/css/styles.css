@@ -112,6 +112,7 @@ body.modal-open { overflow: hidden; }
 
 .content { flex: 1; min-width: 0; padding: 30px 38px 60px; }
 #page { max-width: 1200px; }
+#page.page-wide { max-width: none; }
 
 /* ---------- Заголовок страницы ---------- */
 
