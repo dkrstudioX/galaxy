@@ -1364,8 +1364,8 @@ function renderDock() {
 
 // ===== app.js =====
 // =============================================================================
-// app.js — точка входа и каркас: шапка, вкладки, полный рендер, делегирование
-// кликов, подсказки и старт. Здесь же покупка/продажа — единственные действия,
+// app.js — точка входа и каркас: шапка, полный рендер, делегирование кликов,
+// подсказки и старт. Здесь же покупка/продажа — единственные действия,
 // которые меняют Store.
 // =============================================================================
 
@@ -1376,46 +1376,18 @@ function renderDock() {
 
 
 
-
-
-
-/* ---------- Рендер: шапка и вкладки ---------- */
+/* ---------- Рендер: шапка ---------- */
 
 function renderTop() {
   var balance = window.Store ? Store.credits() : 0;
   document.getElementById('creditsValue').innerHTML = fmt(balance) + ' <i>¤</i>';
 }
 
-function renderTabs() {
-  var buttons = document.querySelectorAll('.primary-tabs button');
-  for (var i = 0; i < buttons.length; i++) {
-    buttons[i].classList.toggle('active', buttons[i].getAttribute('data-tab') === state.tab);
-  }
-  document.getElementById('view-shop').hidden = state.tab !== 'shop';
-  document.getElementById('view-hangar').hidden = state.tab !== 'hangar';
-  document.getElementById('view-info').hidden = state.tab !== 'info';
-  document.getElementById('view-ship').hidden = state.tab !== 'ship';
-}
-
-/* ---------- Рендер: информация о корабле ---------- */
-
-function renderShipView() {
-  var rec = activeUserShip();
-  var ship = rec && window.Store ? Store.byId('objects', rec.shipId) : null;
-  var title = document.getElementById('shipViewTitle');
-  if (title) title.textContent = ship ? 'Корабль «' + ship.name + '»' : 'Корабль';
-  document.getElementById('shipViewContent').innerHTML = shipViewHTML();
-}
-
 /* ---------- Полный рендер ---------- */
 
 function render() {
   renderTop();
-  renderTabs();
-  if (state.tab === 'shop') renderShop();
-  else if (state.tab === 'hangar') renderHangar();
-  else if (state.tab === 'ship') renderShipView();
-  else renderInfo();
+  renderShop();
 }
 
 /* ---------- Действия (аналоги обработчиков из App.tsx) ---------- */
@@ -1445,7 +1417,6 @@ function changeSubcategory(next) {
    справа показываем карточку этого предмета с продажей. */
 function selectCargoItem(item, key) {
   var chain = window.Store ? Store.categoryChain(item.categoryId) : [];
-  state.tab = 'shop';
   state.category = chain.length ? chain[0].id : 'all';
   state.subcategory = '';
   state.selectedShop = '';
@@ -1558,10 +1529,8 @@ document.addEventListener('click', function (e) {
   if (!el) return;
   var action = el.getAttribute('data-action');
   var id = el.getAttribute('data-id') || '';
-  var dir = parseInt(el.getAttribute('data-dir'), 10);
 
-  if (action === 'tab') state.tab = el.getAttribute('data-tab');
-  else if (action === 'category') changeCategory(el.getAttribute('data-cat'));
+  if (action === 'category') changeCategory(el.getAttribute('data-cat'));
   else if (action === 'subcategory') changeSubcategory(el.getAttribute('data-sub'));
   else if (action === 'select-shop') { state.selectedShop = id; state.selectedCargo = ''; state.ownedShipId = ''; }
   else if (action === 'add-credits') {
@@ -1607,14 +1576,6 @@ document.addEventListener('click', function (e) {
     selectCargoItem(held, 'hold:' + hi + ':' + ii);
     return;
   }
-  else if (action === 'select-resource') {
-    state.selectedResource = id;
-    state.transferMode = el.getAttribute('data-mode');
-    state.transferAmount = 1;
-  }
-  else if (action === 'transfer-amount') state.transferAmount = Math.min(99, Math.max(1, state.transferAmount + dir));
-  else if (action === 'transfer') transferResource();
-  else if (action === 'info-section') state.infoSection = el.getAttribute('data-sec');
   else if (action === 'select-user-ship') {
     state.userShipId = el.getAttribute('data-id');
     state.ownedShipId = el.getAttribute('data-rec') || '';

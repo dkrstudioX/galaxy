@@ -57,37 +57,6 @@
     </div>
   </header>
 
-  <nav class="primary-tabs">
-    <button data-action="tab" data-tab="info">
-      <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
-        <circle cx="12" cy="12" r="9"></circle>
-        <path d="M12 11v6M12 7h.01"></path>
-      </svg>
-      Информация о базе
-    </button>
-    <button data-action="tab" data-tab="ship">
-      <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
-        <path d="m12 3 5 7-1 8-4-2-4 2-1-8 5-7Z"></path>
-        <path d="M10 12h4M12 3v7"></path>
-      </svg>
-      Информация о корабле
-    </button>
-    <button data-action="tab" data-tab="shop">
-      <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
-        <path d="M4 9h16l-1-5H5L4 9Z"></path>
-        <path d="M6 9v11h12V9M9 20v-6h6v6"></path>
-      </svg>
-      Магазин
-    </button>
-    <button data-action="tab" data-tab="hangar">
-      <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">
-        <path d="M3 20V9l9-6 9 6v11M7 20v-8h10v8"></path>
-        <path d="M9 16h6M9 12h6"></path>
-      </svg>
-      Ангар
-    </button>
-  </nav>
-
   <div class="content">
     <section class="shop-view" id="view-shop">
       <div class="section-title">
@@ -123,61 +92,6 @@
           <div class="ship-panel-body shop-panel-body" id="shopConsole"></div>
         </div>
       </div>
-    </section>
-
-    <section class="shop-view hangar-view" id="view-hangar" hidden>
-      <div class="section-title">
-        <div>
-          <span class="eyebrow">ГРУЗОВОЙ ТЕРМИНАЛ // C-12</span>
-          <h1>Ресурсы ангара</h1>
-        </div>
-        <div class="terminal-status"><span></span> <span id="noticeHangar">Торговый терминал подключён</span></div>
-      </div>
-
-      <div class="market-grid hangar-grid">
-        <div class="inventory-panel">
-          <div class="panel-head">
-            <div><span>01</span><strong>На базе</strong></div>
-            <small>Хранилище 68%</small>
-          </div>
-          <div class="cargo-capacity"><span style="width:68%"></span></div>
-          <div class="item-list" id="baseList"></div>
-        </div>
-
-        <div class="trade-console hangar-console" id="hangarConsole"></div>
-
-        <div class="inventory-panel">
-          <div class="panel-head">
-            <div><span>02</span><strong>На корабле</strong></div>
-            <small>Груз 19 / 24</small>
-          </div>
-          <div class="cargo-capacity"><span style="width:79%"></span></div>
-          <div class="item-list" id="shipResList"></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="info-view" id="view-info" hidden>
-      <div class="section-title">
-        <div>
-          <span class="eyebrow">АНГАР // СЕКТОР C</span>
-          <h1>База «Helios VII»</h1>
-        </div>
-        <div class="terminal-status"><span></span> Стыковка завершена</div>
-      </div>
-
-      <div id="infoContent"></div>
-    </section>
-
-    <section class="info-view" id="view-ship" hidden>
-      <div class="section-title">
-        <div>
-          <span class="eyebrow">АНГАР // ЛИЧНЫЙ КОРАБЛЬ</span>
-          <h1 id="shipViewTitle">Корабль</h1>
-        </div>
-        <div class="terminal-status"><span></span> Готов к вылету</div>
-      </div>
-      <div id="shipViewContent"></div>
     </section>
 
     <div id="shipDock"></div>
