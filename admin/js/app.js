@@ -5,7 +5,7 @@
   var h = UI.h;
 
   /* Метка сборки: видна в консоли, помогает понять, какая версия открыта. */
-  var BUILD = 'v23 · 22.10.2026';
+  var BUILD = 'v24 · 22.10.2026';
   console.info('Galaxy Admin — сборка ' + BUILD);
 
   var ROUTES = [
@@ -67,7 +67,8 @@
     navLinks.forEach(function (l) { l.el.classList.toggle('active', l.route === route); });
 
     var pageEl = document.getElementById('page');
-    pageEl.classList.toggle('page-wide', route.page === 'objects');
+    /* Каталог и категории занимают всю ширину контента, как таблицы оборудования. */
+    pageEl.classList.toggle('page-wide', route.page === 'objects' || route.page === 'categories');
     UI.clear(pageEl);
     var page = window.Pages[route.page];
     if (page) page.render(pageEl, route);
