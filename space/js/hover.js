@@ -17,7 +17,7 @@ const MIN_HIT_MOON_PX = 6;
 const MIN_HIT_PLANET_PX = 8;
 
 /**
- * Найти тело под курсором и нарисовать его орбиту + подсказку.
+ * Найти тело под курсором и нарисовать его орбиту (если есть) + подсказку.
  * @param {CanvasRenderingContext2D} ctx
  * @param {Array} hoverTargets — результат renderScene() этого кадра
  */
@@ -28,21 +28,27 @@ export function drawHover(ctx, hoverTargets) {
     const hover = findBodyAt(hoverTargets, mouseX, mouseY);
     if (!hover) return;
 
-    // орбита наведённого тела (у солнца орбиты нет)
-    if (hover.orbit) {
+    // орбита наведённой планеты/луны/базы; у солнца и комет орбиты нет
+    const isComet = hover.kind === 'comet' || (hover.small && hover.small.kind === 'comet');
+    if (hover.orbit && !isComet) {
         drawOrbitOverlay(ctx, hover, COLORS.orbitPlanet);
     }
     drawTooltip(ctx, hover.name, mouseX, mouseY);
 }
 
 /**
- * Нарисовать орбиту выбранного кликом тела — пунктир держится, пока объект выбран.
+ * Нарисовать орбиту выбранного кликом тела: пунктир держится для лун, баз и
+ * областей. У планет орбита видна только при наведении, у комет не рисуется.
  * @param {CanvasRenderingContext2D} ctx
  * @param {?{kind: string, p: object, m: object}} sel — текущий выбор (state.selected)
  * @param {Array} hoverTargets — результат renderScene() этого кадра
  */
 export function drawSelection(ctx, sel, hoverTargets) {
     if (!sel) return;
+
+    // Планета: орбита только в hover. Комета: орбита не показывается вовсе.
+    if (sel.kind === 'planet' || sel.kind === 'comet' ||
+        (sel.small && sel.small.kind === 'comet')) return;
 
     // У области нет тела и орбиты — показываем её границы пунктиром, иначе
     // разреженная пыль Койпера/Оорта почти не читается на общем плане.
@@ -68,9 +74,6 @@ export function drawSelection(ctx, sel, hoverTargets) {
     if (sel.small) {
         // малое тело: орбита по сэмплированным элементам (poly), у троянцев — круг
         orbit = sel.small.poly ? { poly: sel.small.poly } : sel.small.orbit;
-    } else if (sel.kind === 'planet') {
-        // планета: реальная эллиптическая орбита (poly в view), не круг
-        orbit = target.orbit ? { poly: target.orbit } : { cx: 0, cy: 0, r: target.p.dist };
     } else if (sel.kind === 'base') {
         // база летает вокруг Луны Земли — орбита от Луны, не от солнца
         orbit = { cx: target.orbitCx, cy: target.orbitCy, r: target.orbitR };

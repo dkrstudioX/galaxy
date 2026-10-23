@@ -57,7 +57,6 @@ export const COLORS = {
     tooltip: '#ffffff',
     tooltipShadow: 'rgba(0,0,0,0.6)',
     orbitPlanet: 'rgba(120,140,200,0.6)',
-    orbitPlanetFaint: 'rgba(57,74,104,0.9)', // постоянные орбиты планет, как на референсах
     orbitMoon: 'rgba(150,160,180,0.6)',
     orbitSelected: 'rgba(122,236,224,0.8)', // орбита выбранного кликом тела (акцент hangar)
     cometIon: '#bff6ff',

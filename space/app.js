@@ -61,7 +61,6 @@ const COLORS = {
     tooltip: '#ffffff',
     tooltipShadow: 'rgba(0,0,0,0.6)',
     orbitPlanet: 'rgba(120,140,200,0.6)',
-    orbitPlanetFaint: 'rgba(57,74,104,0.9)', // постоянные орбиты планет, как на референсах
     orbitMoon: 'rgba(150,160,180,0.6)',
     orbitSelected: 'rgba(122,236,224,0.8)', // орбита выбранного кликом тела (акцент hangar)
     cometIon: '#bff6ff',
@@ -931,8 +930,8 @@ function cross(a, b) {
 // Именованные тела (крупнейшие тела пояса, именованные ОЗА, троянцы L4/L5,
 // кометы) слипаются по экранному расстоянию общим правилом scene.js
 // clusterBodies: smallBodyList() отдаёт их позиции в кадр, а render.js
-// рисует только показанных представителей через drawSmallBody. Пыль,
-// частицы пояса и пути комет остаются в слое пола (drawSmallBodiesFloor).
+// рисует только показанных представителей через drawSmallBody. Пыль и
+// частицы пояса остаются в слое пола (drawSmallBodiesFloor).
 // =============================================================================
 
 
@@ -1310,8 +1309,8 @@ function smallBodyList() {
 
 /**
  * Слой пола: пыль Койпера/Оорта, полоса и частицы главного пояса, облака
- * троянцев и пути комет. Hover-целей не даёт: именованные тела рисует
- * drawSmallBody в общем слое тел.
+ * троянцев. Hover-целей не даёт: именованные тела рисует drawSmallBody в
+ * общем слое тел. Пути комет не рисуются.
  */
 function drawSmallBodiesFloor(ctx) {
     const { simDays, zoom } = state;
@@ -1362,23 +1361,6 @@ function drawSmallBodiesFloor(ctx) {
             ctx.fill();
         });
     });
-
-    // Пути комет — наклонные, с высотой (полилиния уже в view).
-    ctx.save();
-    ctx.strokeStyle = 'rgba(111,184,216,0.35)';
-    ctx.lineWidth = 1 / zoom;
-    ctx.setLineDash([3 / zoom, 5 / zoom]);
-    cometBodies.forEach(b => {
-        const poly = b.poly;
-        if (!poly || poly.length < 4) return;
-        ctx.beginPath();
-        ctx.moveTo(poly[0], poly[1]);
-        for (let i = 2; i < poly.length; i += 2) ctx.lineTo(poly[i], poly[i + 1]);
-        ctx.closePath();
-        ctx.stroke();
-    });
-    ctx.setLineDash([]);
-    ctx.restore();
 }
 
 /**
@@ -2802,7 +2784,7 @@ const EARTH_MOON = { n: 'Луна / Moon', r: 3, period: moonPeriod, c: '#c9cfd8
 /**
  * Орбиты планет — реальные элементы (эксцентриситет и перигелий из data.js).
  * Считаются один раз: форма орбиты от времени не зависит. Хранятся сразу в
- * view-координатах — по ним рисуются постоянные линии и hover/выбор.
+ * view-координатах — по ним рисуется орбита при наведении на планету.
  */
 const PLANET_ORBITS = new Map();
 planets.forEach(p => {
@@ -2962,10 +2944,9 @@ function renderScene(ctx) {
     });
 
     // === ПОЛ ===
-    // Световое пятно и ореол звезды — до орбит; постоянные орбиты планет —
-    // тонкие эллипсы; пыль/пояс/пути комет — на полу.
+    // Световое пятно и ореол звезды — до тел; пыль и пояса — на полу.
+    // Орбиты планет здесь не рисуются: они появляются только при наведении.
     drawStarFloor(ctx);
-    drawPlanetOrbits(ctx, zoom);
     drawSmallBodiesFloor(ctx);
     drawStarHalo(ctx);
 
@@ -3080,19 +3061,6 @@ function drawStarFloor(ctx) {
 function drawStarHalo(ctx) {
     glow(ctx, 0, 0, SUN_R * 5.2, '#ff9d3c', 0.34);
     glow(ctx, 0, 0, SUN_R * 2.6, '#ffd27a', 0.28);
-}
-
-/** Постоянные орбиты планет: тонкий пунктирный эллипс/полилиния по Кеплеру. */
-function drawPlanetOrbits(ctx, zoom) {
-    ctx.save();
-    ctx.strokeStyle = COLORS.orbitPlanetFaint;
-    ctx.lineWidth = 1 / zoom;
-    ctx.setLineDash([2 / zoom, 7 / zoom]);
-    ctx.beginPath();
-    planets.forEach(p => strokePoly(ctx, PLANET_ORBITS.get(p)));
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
 }
 
 /** Тени на полу: планеты; показанные луны; показанные малые тела.
@@ -3228,14 +3196,6 @@ function groupLine(ctx, text, x, y, color, zoom) {
     ctx.fillText(text, x, y);
 }
 
-/** Начать и замкнуть путь по плоскому массиву x0,y0,x1,y1… (view). */
-function strokePoly(ctx, poly) {
-    if (!poly || poly.length < 4) return;
-    ctx.moveTo(poly[0], poly[1]);
-    for (let i = 2; i < poly.length; i += 2) ctx.lineTo(poly[i], poly[i + 1]);
-    ctx.closePath();
-}
-
 // ===== hover.js =====
 // =============================================================================
 // hover.js — наведение курсора: hit-тест по телам, орбита наведённого тела
@@ -3256,7 +3216,7 @@ const MIN_HIT_MOON_PX = 6;
 const MIN_HIT_PLANET_PX = 8;
 
 /**
- * Найти тело под курсором и нарисовать его орбиту + подсказку.
+ * Найти тело под курсором и нарисовать его орбиту (если есть) + подсказку.
  * @param {CanvasRenderingContext2D} ctx
  * @param {Array} hoverTargets — результат renderScene() этого кадра
  */
@@ -3267,21 +3227,27 @@ function drawHover(ctx, hoverTargets) {
     const hover = findBodyAt(hoverTargets, mouseX, mouseY);
     if (!hover) return;
 
-    // орбита наведённого тела (у солнца орбиты нет)
-    if (hover.orbit) {
+    // орбита наведённой планеты/луны/базы; у солнца и комет орбиты нет
+    const isComet = hover.kind === 'comet' || (hover.small && hover.small.kind === 'comet');
+    if (hover.orbit && !isComet) {
         drawOrbitOverlay(ctx, hover, COLORS.orbitPlanet);
     }
     drawTooltip(ctx, hover.name, mouseX, mouseY);
 }
 
 /**
- * Нарисовать орбиту выбранного кликом тела — пунктир держится, пока объект выбран.
+ * Нарисовать орбиту выбранного кликом тела: пунктир держится для лун, баз и
+ * областей. У планет орбита видна только при наведении, у комет не рисуется.
  * @param {CanvasRenderingContext2D} ctx
  * @param {?{kind: string, p: object, m: object}} sel — текущий выбор (state.selected)
  * @param {Array} hoverTargets — результат renderScene() этого кадра
  */
 function drawSelection(ctx, sel, hoverTargets) {
     if (!sel) return;
+
+    // Планета: орбита только в hover. Комета: орбита не показывается вовсе.
+    if (sel.kind === 'planet' || sel.kind === 'comet' ||
+        (sel.small && sel.small.kind === 'comet')) return;
 
     // У области нет тела и орбиты — показываем её границы пунктиром, иначе
     // разреженная пыль Койпера/Оорта почти не читается на общем плане.
@@ -3307,9 +3273,6 @@ function drawSelection(ctx, sel, hoverTargets) {
     if (sel.small) {
         // малое тело: орбита по сэмплированным элементам (poly), у троянцев — круг
         orbit = sel.small.poly ? { poly: sel.small.poly } : sel.small.orbit;
-    } else if (sel.kind === 'planet') {
-        // планета: реальная эллиптическая орбита (poly в view), не круг
-        orbit = target.orbit ? { poly: target.orbit } : { cx: 0, cy: 0, r: target.p.dist };
     } else if (sel.kind === 'base') {
         // база летает вокруг Луны Земли — орбита от Луны, не от солнца
         orbit = { cx: target.orbitCx, cy: target.orbitCy, r: target.orbitR };

@@ -12,8 +12,8 @@
 // Именованные тела (крупнейшие тела пояса, именованные ОЗА, троянцы L4/L5,
 // кометы) слипаются по экранному расстоянию общим правилом scene.js
 // clusterBodies: smallBodyList() отдаёт их позиции в кадр, а render.js
-// рисует только показанных представителей через drawSmallBody. Пыль,
-// частицы пояса и пути комет остаются в слое пола (drawSmallBodiesFloor).
+// рисует только показанных представителей через drawSmallBody. Пыль и
+// частицы пояса остаются в слое пола (drawSmallBodiesFloor).
 // =============================================================================
 
 import { state } from './state.js';
@@ -393,8 +393,8 @@ export function smallBodyList() {
 
 /**
  * Слой пола: пыль Койпера/Оорта, полоса и частицы главного пояса, облака
- * троянцев и пути комет. Hover-целей не даёт: именованные тела рисует
- * drawSmallBody в общем слое тел.
+ * троянцев. Hover-целей не даёт: именованные тела рисует drawSmallBody в
+ * общем слое тел. Пути комет не рисуются.
  */
 export function drawSmallBodiesFloor(ctx) {
     const { simDays, zoom } = state;
@@ -445,23 +445,6 @@ export function drawSmallBodiesFloor(ctx) {
             ctx.fill();
         });
     });
-
-    // Пути комет — наклонные, с высотой (полилиния уже в view).
-    ctx.save();
-    ctx.strokeStyle = 'rgba(111,184,216,0.35)';
-    ctx.lineWidth = 1 / zoom;
-    ctx.setLineDash([3 / zoom, 5 / zoom]);
-    cometBodies.forEach(b => {
-        const poly = b.poly;
-        if (!poly || poly.length < 4) return;
-        ctx.beginPath();
-        ctx.moveTo(poly[0], poly[1]);
-        for (let i = 2; i < poly.length; i += 2) ctx.lineTo(poly[i], poly[i + 1]);
-        ctx.closePath();
-        ctx.stroke();
-    });
-    ctx.setLineDash([]);
-    ctx.restore();
 }
 
 /**

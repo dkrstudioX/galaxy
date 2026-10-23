@@ -37,7 +37,7 @@ const EARTH_MOON = { n: 'Луна / Moon', r: 3, period: moonPeriod, c: '#c9cfd8
 /**
  * Орбиты планет — реальные элементы (эксцентриситет и перигелий из data.js).
  * Считаются один раз: форма орбиты от времени не зависит. Хранятся сразу в
- * view-координатах — по ним рисуются постоянные линии и hover/выбор.
+ * view-координатах — по ним рисуется орбита при наведении на планету.
  */
 const PLANET_ORBITS = new Map();
 planets.forEach(p => {
@@ -197,10 +197,9 @@ export function renderScene(ctx) {
     });
 
     // === ПОЛ ===
-    // Световое пятно и ореол звезды — до орбит; постоянные орбиты планет —
-    // тонкие эллипсы; пыль/пояс/пути комет — на полу.
+    // Световое пятно и ореол звезды — до тел; пыль и пояса — на полу.
+    // Орбиты планет здесь не рисуются: они появляются только при наведении.
     drawStarFloor(ctx);
-    drawPlanetOrbits(ctx, zoom);
     drawSmallBodiesFloor(ctx);
     drawStarHalo(ctx);
 
@@ -315,19 +314,6 @@ function drawStarFloor(ctx) {
 function drawStarHalo(ctx) {
     glow(ctx, 0, 0, SUN_R * 5.2, '#ff9d3c', 0.34);
     glow(ctx, 0, 0, SUN_R * 2.6, '#ffd27a', 0.28);
-}
-
-/** Постоянные орбиты планет: тонкий пунктирный эллипс/полилиния по Кеплеру. */
-function drawPlanetOrbits(ctx, zoom) {
-    ctx.save();
-    ctx.strokeStyle = COLORS.orbitPlanetFaint;
-    ctx.lineWidth = 1 / zoom;
-    ctx.setLineDash([2 / zoom, 7 / zoom]);
-    ctx.beginPath();
-    planets.forEach(p => strokePoly(ctx, PLANET_ORBITS.get(p)));
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
 }
 
 /** Тени на полу: планеты; показанные луны; показанные малые тела.
@@ -463,10 +449,3 @@ function groupLine(ctx, text, x, y, color, zoom) {
     ctx.fillText(text, x, y);
 }
 
-/** Начать и замкнуть путь по плоскому массиву x0,y0,x1,y1… (view). */
-function strokePoly(ctx, poly) {
-    if (!poly || poly.length < 4) return;
-    ctx.moveTo(poly[0], poly[1]);
-    for (let i = 2; i < poly.length; i += 2) ctx.lineTo(poly[i], poly[i + 1]);
-    ctx.closePath();
-}
