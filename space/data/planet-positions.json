@@ -1,0 +1,302 @@
+{
+  "schema": "galaxy.planet-positions/1",
+  "generatedAt": "2026-10-23T00:00:00Z",
+  "epoch": "2026-10-23T00:00:00Z",
+  "model": {
+    "name": "symmetric-keplerian",
+    "description": "Симметричная кеплеровская модель: реальные эксцентриситеты, перигелии, наклоны, узлы и периоды; эклиптические долготы планет на эпоху распределены равномерно.",
+    "isActualEphemeris": false,
+    "symmetry": {
+      "type": "ecliptic-longitude",
+      "offsetDeg": 0,
+      "stepDeg": 45,
+      "order": [
+        "Mercury",
+        "Venus",
+        "Earth",
+        "Mars",
+        "Jupiter",
+        "Saturn",
+        "Uranus",
+        "Neptune"
+      ]
+    },
+    "coordinateSystems": {
+      "positionAu": "Гелиоцентрическая эклиптическая J2000, правая: x — точка весеннего равноденствия, y — 90° эклиптической долготы, z — север.",
+      "positionMap": "Игровые raw-координаты space/js/math.js orbitPoint3: x вправо, y вниз, z вверх."
+    },
+    "units": {
+      "positionAu": "AU",
+      "positionMap": "world units",
+      "angles": "degrees",
+      "time": "days"
+    },
+    "source": "space/js/data.js; semi-major axes — стандартные J2000."
+  },
+  "planets": [
+    {
+      "id": "mercury",
+      "name": "Mercury",
+      "ru": "Меркурий",
+      "color": "#b5b5b5",
+      "orbit": {
+        "semiMajorAxisAu": 0.387098,
+        "semiMajorAxisMap": 70,
+        "eccentricity": 0.205636,
+        "perihelionLongitudeDeg": 77.458,
+        "inclinationDeg": 7.005,
+        "ascendingNodeLongitudeDeg": 48.331,
+        "periodDays": 87.969,
+        "meanMotionDegPerDay": 4.092350714,
+        "meanAnomalyAtEpochDeg": 304.464359,
+        "meanLongitudeAtEpochDeg": 21.922359,
+        "trueAnomalyAtEpochDeg": 282.3289
+      },
+      "positionAu": {
+        "x": 0.353649225,
+        "y": 0.0,
+        "z": -0.032460045
+      },
+      "distanceAu": 0.355135789,
+      "longitudeDeg": 0.0,
+      "latitudeDeg": -5.244256,
+      "positionMap": {
+        "x": 63.951366,
+        "y": 0.0,
+        "z": -5.86984
+      },
+      "distanceMap": 64.220185
+    },
+    {
+      "id": "venus",
+      "name": "Venus",
+      "ru": "Венера",
+      "color": "#e8cda0",
+      "orbit": {
+        "semiMajorAxisAu": 0.723332,
+        "semiMajorAxisMap": 110,
+        "eccentricity": 0.006777,
+        "perihelionLongitudeDeg": 131.602,
+        "inclinationDeg": 3.395,
+        "ascendingNodeLongitudeDeg": 76.68,
+        "periodDays": 224.701,
+        "meanMotionDegPerDay": 1.602129051,
+        "meanAnomalyAtEpochDeg": 274.128024,
+        "meanLongitudeAtEpochDeg": 45.730024,
+        "trueAnomalyAtEpochDeg": 273.353003
+      },
+      "positionAu": {
+        "x": 0.51099889,
+        "y": 0.51099889,
+        "z": -0.022514615
+      },
+      "distanceAu": 0.723012199,
+      "longitudeDeg": 45.0,
+      "latitudeDeg": -1.78448,
+      "positionMap": {
+        "x": 77.709652,
+        "y": -77.709652,
+        "z": -3.423888
+      },
+      "distanceMap": 109.951367
+    },
+    {
+      "id": "earth",
+      "name": "Earth",
+      "ru": "Земля",
+      "color": "#4488ff",
+      "orbit": {
+        "semiMajorAxisAu": 1.0,
+        "semiMajorAxisMap": 160,
+        "eccentricity": 0.016711,
+        "perihelionLongitudeDeg": 102.938,
+        "inclinationDeg": 0.0,
+        "ascendingNodeLongitudeDeg": 0.0,
+        "periodDays": 365.256,
+        "meanMotionDegPerDay": 0.985610093,
+        "meanAnomalyAtEpochDeg": 347.485566,
+        "meanLongitudeAtEpochDeg": 90.423566,
+        "trueAnomalyAtEpochDeg": 347.062
+      },
+      "positionAu": {
+        "x": 0.0,
+        "y": 0.983699469,
+        "z": 0.0
+      },
+      "distanceAu": 0.983699469,
+      "longitudeDeg": 90.0,
+      "latitudeDeg": 0.0,
+      "positionMap": {
+        "x": 0.0,
+        "y": -157.391915,
+        "z": 0.0
+      },
+      "distanceMap": 157.391915
+    },
+    {
+      "id": "mars",
+      "name": "Mars",
+      "ru": "Марс",
+      "color": "#c1440e",
+      "orbit": {
+        "semiMajorAxisAu": 1.523679,
+        "semiMajorAxisMap": 220,
+        "eccentricity": 0.093394,
+        "perihelionLongitudeDeg": 336.041,
+        "inclinationDeg": 1.85,
+        "ascendingNodeLongitudeDeg": 49.579,
+        "periodDays": 686.98,
+        "meanMotionDegPerDay": 0.524032723,
+        "meanAnomalyAtEpochDeg": 154.853151,
+        "meanLongitudeAtEpochDeg": 130.894151,
+        "trueAnomalyAtEpochDeg": 158.961377
+      },
+      "positionAu": {
+        "x": -1.16938637,
+        "y": 1.16938637,
+        "z": 0.053245718
+      },
+      "distanceAu": 1.654619011,
+      "longitudeDeg": 135.0,
+      "latitudeDeg": 1.844099,
+      "positionMap": {
+        "x": -168.84462,
+        "y": -168.84462,
+        "z": 7.688009
+      },
+      "distanceMap": 238.906083
+    },
+    {
+      "id": "jupiter",
+      "name": "Jupiter",
+      "ru": "Юпитер",
+      "color": "#c88b3a",
+      "orbit": {
+        "semiMajorAxisAu": 5.2026,
+        "semiMajorAxisMap": 380,
+        "eccentricity": 0.048386,
+        "perihelionLongitudeDeg": 14.728,
+        "inclinationDeg": 1.304,
+        "ascendingNodeLongitudeDeg": 100.464,
+        "periodDays": 4332.589,
+        "meanMotionDegPerDay": 0.083091196,
+        "meanAnomalyAtEpochDeg": 163.814247,
+        "meanLongitudeAtEpochDeg": 178.542247,
+        "trueAnomalyAtEpochDeg": 165.27465
+      },
+      "positionAu": {
+        "x": -5.443875622,
+        "y": 0.0,
+        "z": 0.121858199
+      },
+      "distanceAu": 5.445239316,
+      "longitudeDeg": 180.0,
+      "latitudeDeg": 1.282321,
+      "positionMap": {
+        "x": -397.622869,
+        "y": 0.0,
+        "z": 8.900572
+      },
+      "distanceMap": 397.722473
+    },
+    {
+      "id": "saturn",
+      "name": "Saturn",
+      "ru": "Сатурн",
+      "color": "#e8d191",
+      "orbit": {
+        "semiMajorAxisAu": 9.55491,
+        "semiMajorAxisMap": 520,
+        "eccentricity": 0.053862,
+        "perihelionLongitudeDeg": 92.599,
+        "inclinationDeg": 2.488,
+        "ascendingNodeLongitudeDeg": 113.665,
+        "periodDays": 10759.22,
+        "meanMotionDegPerDay": 0.033459675,
+        "meanAnomalyAtEpochDeg": 127.697599,
+        "meanLongitudeAtEpochDeg": 220.296599,
+        "trueAnomalyAtEpochDeg": 132.382694
+      },
+      "positionAu": {
+        "x": -6.984829827,
+        "y": -6.984829827,
+        "z": 0.399797563
+      },
+      "distanceAu": 9.886128337,
+      "longitudeDeg": 225.0,
+      "latitudeDeg": 2.317688,
+      "positionMap": {
+        "x": -380.130374,
+        "y": 380.130374,
+        "z": 21.757895
+      },
+      "distanceMap": 538.025658
+    },
+    {
+      "id": "uranus",
+      "name": "Uranus",
+      "ru": "Уран",
+      "color": "#7de8e8",
+      "orbit": {
+        "semiMajorAxisAu": 19.21845,
+        "semiMajorAxisMap": 660,
+        "eccentricity": 0.047257,
+        "perihelionLongitudeDeg": 170.954,
+        "inclinationDeg": 0.773,
+        "ascendingNodeLongitudeDeg": 74.006,
+        "periodDays": 30685.4,
+        "meanMotionDegPerDay": 0.011731964,
+        "meanAnomalyAtEpochDeg": 93.671505,
+        "meanLongitudeAtEpochDeg": 264.625505,
+        "trueAnomalyAtEpochDeg": 99.047381
+      },
+      "positionAu": {
+        "x": 0.0,
+        "y": -19.318961833,
+        "z": -0.071820171
+      },
+      "distanceAu": 19.319095332,
+      "longitudeDeg": 270.0,
+      "latitudeDeg": -0.213002,
+      "positionMap": {
+        "x": 0.0,
+        "y": 663.451777,
+        "z": -2.466448
+      },
+      "distanceMap": 663.456362
+    },
+    {
+      "id": "neptune",
+      "name": "Neptune",
+      "ru": "Нептун",
+      "color": "#3f54ba",
+      "orbit": {
+        "semiMajorAxisAu": 30.11039,
+        "semiMajorAxisMap": 780,
+        "eccentricity": 0.00859,
+        "perihelionLongitudeDeg": 44.965,
+        "inclinationDeg": 1.77,
+        "ascendingNodeLongitudeDeg": 131.784,
+        "periodDays": 60189.0,
+        "meanMotionDegPerDay": 0.005981159,
+        "meanAnomalyAtEpochDeg": 271.020857,
+        "meanLongitudeAtEpochDeg": 315.985857,
+        "trueAnomalyAtEpochDeg": 270.036532
+      },
+      "positionAu": {
+        "x": 21.289541316,
+        "y": -21.289541316,
+        "z": -0.052195788
+      },
+      "distanceAu": 30.10800331,
+      "longitudeDeg": 315.0,
+      "latitudeDeg": -0.099329,
+      "positionMap": {
+        "x": 551.498743,
+        "y": 551.498743,
+        "z": -1.352115
+      },
+      "distanceMap": 779.938174
+    }
+  ]
+}
