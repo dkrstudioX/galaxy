@@ -1,0 +1,10 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1
+TelepathySettings:
+  m_ObjectHideFlags: 0
+  m_EnableLogging: 0
+  m_LogLevel: 0
+  m_ReceiveTimeout: 300
+  m_SendTimeout: 300
+  m_EnableSecurity: 0

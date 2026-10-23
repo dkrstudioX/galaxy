@@ -1,0 +1,13 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1
+ShaderGraphSettings:
+  m_ObjectHideFlags: 0
+  m_RuntimeShaderSupport: 1
+  m_CodeGen: 0
+  m_DebugMode: 0
+  m_AlwaysRebuildShaders: 0
+  m_PreloadShaders: 0
+  m_ShaderLogSize: 10
+  m_UseGPUShader: 1
+  m_UseComputeShaders: 0

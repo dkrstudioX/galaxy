@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1
+PackageManagerSettings:
+  m_ObjectHideFlags: 0
+  m_EnablePreReleasePackages: 0
+  m_EnablePackageDependencies: 0
+  m_AdvancedSettingsExpanded: 1
+  m_UseAdvancedSettings: 1
+  m_ScopedRegistriesSettingsExpanded: 1
+  m_SeeAllPackageVersions: 0
+  m_IndependentScopes: 0
+  m_AllowModificationsToScopes: 0
+  m_ScopeSelectionMode: 0
+  m_Registries:
+  - m_Id: main
+    m_Name: Unity Package Manager
+    m_URL: https://packages.unity.com
+    m_Scopes: []
+    m_IsBuiltin: 1
+    m_AllowModification: 0
+    m_AllowPrerelease: 0
+  m_TargetPlatforms: []

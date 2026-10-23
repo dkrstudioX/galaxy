@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1
+SceneTemplateSettings:
+  m_ObjectHideFlags: 0
+  m_Templates:
+    m_MainTemplateDir: Templates
+    m_DefaultSceneRootDir: Scenes
+  m_LaunchScene: {fileID: 0}
+  m_RenderingManager: {fileID: 0}
+  m_InputManager: {fileID: 0}
+  m_AudioManager: {fileID: 0}
+  m_Physics2DSettings: {fileID: 0}
+  m_PhysicsSettings: {fileID: 0}
+  m_UseGraphicsSettings: 0
+  m_VRSettings: {fileID: 0}
+  m_CatalogSettings: {fileID: 0}
+  m_PrefabLinks: []

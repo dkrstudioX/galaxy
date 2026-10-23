@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1
+GraphicsSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 13
+  m_Deferred:
+    m_Mode: 1
+    m_PickerMaterial: {fileID: 0}
+    m_PickerHighlightMaterial: {fileID: 0}
+    m_PickerRepulsionMaterial: {fileID: 0}
+  m_DeferredReflections:
+    m_Mode: 1
+    m_PickerMaterial: {fileID: 0}
+    m_PickerHighlightMaterial: {fileID: 0}
+    m_PickerRepulsionMaterial: {fileID: 0}
+  m_ScreenSpaceShadows:
+    m_Mode: 1
+    m_PickerMaterial: {fileID: 0}
+    m_PickerHighlightMaterial: {fileID: 0}
+    m_PickerRepulsionMaterial: {fileID: 0}
+  m_LegacyDeferred:
+    m_Mode: 1
+    m_PickerMaterial: {fileID: 0}
+    m_PickerHighlightMaterial: {fileID: 0}
+    m_PickerRepulsionMaterial: {fileID: 0}
+  m_PrelightUsedOnHidden:
+    m_Mode: 1
+    m_PickerMaterial: {fileID: 0}
+    m_PickerHighlightMaterial: {fileID: 0}
+    m_PickerRepulsionMaterial: {fileID: 0}
+  m_RendererFeatureSet: 0
+  m_PerPlatformDefaultConfig: 0

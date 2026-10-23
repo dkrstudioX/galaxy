@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1
+DynamicsManager:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_DefaultMaterial: {fileID: 0}
+  m_DefaultGravity: {x: 0, y: -9.81, z: 0}
+  m_DefaultMaterial: {fileID: 0}
+  m_ImplicitStart: 0
+  m_ImplicitAngularStart: 0
+  m_DefaultContactMode: 0
+  m_DefaultSolvers: 0
+  m_DefaultSolverIterations: 6
+  m_DefaultSolverVelocityIterations: 1
+  m_BounceThreshold: 2
+  m_SleepThreshold: 0.005
+  m_DefaultContactOffset: 0.01
+  m_DefaultSolverCollisionThreshold: 0.01
+  m_SolverIterations: 6
+  m_SolverVelocityIterations: 1
+  m_QueriesHitTriggers: 1
+  m_QueriesHitTriggersOnEnter: 1
+  m_QueriesHitTriggersOnExit: 1
+  m_EnableAdaptiveForce: 0
+  m_AlwaysShowColliders: 0
+  m_ShowColliderSleep: 0
+  m_ShowColliderContacts: 0
+  m_ShowColliderSleepColor: {r: 0, g: 1, b: 0, a: 0.5}
+  m_ShowColliderContactColor: {r: 1, g: 0, b: 0, a: 0.5}
+  m_ClothContactOffset: 0.01
+  m_ClothBakeInterpolation: 0
+  m_ClothCollisionMassScale: 1
+  m_ClothVelocityDamping: 0

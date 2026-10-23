@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1
+VFXManager:
+  m_ObjectHideFlags: 0
+  m_DefaultBlockType: 0
+  m_DefaultUpdateSpace: 0
+  m_DefaultDamping: 0.05
+  m_DefaultSpring: 0.1
+  m_DefaultDrag: 0.1
+  m_DefaultMass: 1
+  m_DefaultDensity: 0.5
+  m_DefaultViscosity: 0.1
+  m_DefaultBuoyancy: 0.5
+  m_DefaultLift: 0.1
+  m_DefaultDragCoeff: 0.5
+  m_DefaultLiftCoeff: 0.1
+  m_DefaultArea: 1
+  m_DefaultVelocity: 1
+  m_DefaultAngularVelocity: 0.1
+  m_DefaultTorque: 0.1
+  m_DefaultMomentOfInertia: 1
+  m_DefaultCenterOfMass: {x: 0, y: 0, z: 0}
+  m_DefaultCenterOfPressure: {x: 0, y: 0, z: 0}
+  m_DefaultPrincipalAxis: {x: 0, y: 0, z: 0}
+  m_DefaultPrincipalAxisError: 0.01
+  m_DefaultAngularDamping: 0.1
+  m_DefaultLinearDamping: 0.1
+  m_DefaultRollingFriction: 0.1
+  m_DefaultSlidingFriction: 0.2
+  m_DefaultBounciness: 0.5
+  m_DefaultRestitution: 0.5
+  m_DefaultContactOffset: 0.01
+  m_DefaultSolverIterations: 6
+  m_DefaultSolverVelocityIterations: 1
+  m_DefaultMaxAngularVelocity: 7
+  m_DefaultMaxLinearVelocity: 7
+  m_DefaultMinPenetrationForPenalty: 0.01
+  m_DefaultAutoSyncTransforms: 0
+  m_DefaultReuseCollisionCallbacks: 1
+  m_DefaultThreadSafeCoordinationUpdate: 0
+  m_DefaultAllAwakeOnStart: 0
+  m_DefaultValidateCollisions: 1
+  m_DefaultSyncRootMotion: 0
+  m_DefaultInheritVelocity: 1
+  m_DefaultMaxSubSteps: 6
+  m_DefaultWrapAround: 0
+  m_DefaultFixedAngleThreshold: 0.01
+  m_DefaultFixedLinearThreshold: 0.01
