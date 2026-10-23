@@ -449,7 +449,7 @@ export function drawSmallBodiesFloor(ctx) {
 
 /**
  * Нарисовать одно показанное именованное малое тело в общем слое тел.
- * @returns {?Object} hover-цель { kind, name, x, y, r, moons, small }
+ * @returns {?Object} hover-цель { kind, name, x, y, floorY, r, moons, small }
  */
 export function drawSmallBody(ctx, b) {
     const zoom = state.zoom;
@@ -467,7 +467,8 @@ export function drawSmallBody(ctx, b) {
     }
 
     return {
-        kind: b.kind, name: b.name, x: b.x, y: b.y, r: b.r,
+        kind: b.kind, name: b.name, x: b.x, y: b.y,
+        floorY: b.floorY ?? b.y, r: b.r,
         moons: [], small: b
     };
 }
@@ -551,6 +552,7 @@ function drawComet(ctx, b) {
 
     return {
         kind: 'comet', name: b.name, x: b.x, y: b.y,
-        r: Math.max(b.r, 3 / zoom), moons: [], small: b
+        floorY: b.floorY ?? b.y, r: Math.max(b.r, 3 / zoom),
+        moons: [], small: b
     };
 }

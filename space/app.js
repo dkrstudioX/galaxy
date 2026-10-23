@@ -60,7 +60,6 @@ const COLORS = {
     danger: '#ff5f7a', // удаление базы: имя и полоска прогресса (общий красный проекта)
     tooltip: '#ffffff',
     tooltipShadow: 'rgba(0,0,0,0.6)',
-    orbitPlanet: 'rgba(120,140,200,0.6)',
     orbitMoon: 'rgba(150,160,180,0.6)',
     orbitSelected: 'rgba(122,236,224,0.8)', // орбита выбранного кликом тела (акцент hangar)
     cometIon: '#bff6ff',
@@ -1365,7 +1364,7 @@ function drawSmallBodiesFloor(ctx) {
 
 /**
  * Нарисовать одно показанное именованное малое тело в общем слое тел.
- * @returns {?Object} hover-цель { kind, name, x, y, r, moons, small }
+ * @returns {?Object} hover-цель { kind, name, x, y, floorY, r, moons, small }
  */
 function drawSmallBody(ctx, b) {
     const zoom = state.zoom;
@@ -1383,7 +1382,8 @@ function drawSmallBody(ctx, b) {
     }
 
     return {
-        kind: b.kind, name: b.name, x: b.x, y: b.y, r: b.r,
+        kind: b.kind, name: b.name, x: b.x, y: b.y,
+        floorY: b.floorY ?? b.y, r: b.r,
         moons: [], small: b
     };
 }
@@ -1467,7 +1467,8 @@ function drawComet(ctx, b) {
 
     return {
         kind: 'comet', name: b.name, x: b.x, y: b.y,
-        r: Math.max(b.r, 3 / zoom), moons: [], small: b
+        floorY: b.floorY ?? b.y, r: Math.max(b.r, 3 / zoom),
+        moons: [], small: b
     };
 }
 
@@ -2929,7 +2930,8 @@ function renderScene(ctx) {
         if (rep.kind === 'moon') {
             if (!moonHits.has(rep.p)) moonHits.set(rep.p, []);
             moonHits.get(rep.p).push({
-                m: rep.m, md: rep.md, mx: rep.x, my: rep.y, orbitPoly: rep.orbitPoly
+                m: rep.m, md: rep.md, mx: rep.x, my: rep.y,
+                floorY: rep.floorY ?? rep.y, orbitPoly: rep.orbitPoly
             });
         }
         if (rep.kind === 'small') shownSmall.add(rep.id);
@@ -2984,9 +2986,8 @@ function renderScene(ctx) {
         }
     });
 
-    // Проекции — поверх сфер: у крупных планет радиус больше высоты над полом,
-    // иначе линия целиком пряталась бы за телом (видна была бы только у Меркурия).
-    drawProjectionLines(ctx, groups, planetPos, zoom);
+    // Вертикальные проекции рисуются только при наведении (hover.js), чтобы
+    // карта не была перегружена постоянными линиями.
 
     // Подписи групп: имена тел через запятую, затем базы на них. Подписаны все
     // показанные тела — планеты, одиночные луны и малые тела: имя видно всегда,
@@ -3019,9 +3020,9 @@ function renderScene(ctx) {
     });
     hoverTargets.push({ kind: 'sun', name: 'Солнце / Sun', x: 0, y: 0, r: SUN_R, moons: [] });
     planets.forEach(p => {
-        const { x, y } = planetPos.get(p);
+        const { x, y, floorY } = planetPos.get(p);
         hoverTargets.push({
-            kind: 'planet', p, x, y, moons: moonHits.get(p) || [],
+            kind: 'planet', p, x, y, floorY, moons: moonHits.get(p) || [],
             orbit: PLANET_ORBITS.get(p)
         });
     });
@@ -3077,45 +3078,6 @@ function drawFloorShadows(ctx, groups, planetPos, zoom) {
         if (rep.kind === 'moon' && rep.m.r >= 1.5) shadow(ctx, rep.x, fy, rep.m.r, zoom);
         if (rep.kind === 'small' && rep.r >= 1.5) shadow(ctx, rep.x, fy, rep.r, zoom);
     });
-}
-
-/**
- * Вертикальные линии от тел до их проекции на плоскость эклиптики. Это тот
- * же приём, что у кометы (drawComet рисует свою ножку сам), но для планет,
- * лун и остальных показанных малых тел. Рисуется поверх сфер: иначе у планет
- * с радиусом больше высоты над полом линия полностью скрыта телом. Фон —
- * пыль и безымянные частицы — линий не получает: это не выбираемые тела.
- */
-function drawProjectionLines(ctx, groups, planetPos, zoom) {
-    const minH = 1 / zoom;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(127,216,255,0.45)';
-    ctx.lineWidth = 1 / zoom;
-    ctx.beginPath();
-
-    planets.forEach(p => {
-        const pos = planetPos.get(p);
-        projectionLine(ctx, pos.x, pos.y, pos.floorY, minH);
-    });
-
-    groups.forEach(g => {
-        const rep = g.rep;
-        if (rep.kind !== 'moon' && rep.kind !== 'small') return;
-        // У кометы уже есть собственная ножка и тень — не дублируем.
-        if (rep.kind === 'small' && rep.small && rep.small.kind === 'comet') return;
-        const fy = rep.floorY ?? rep.y;
-        projectionLine(ctx, rep.x, rep.y, fy, minH);
-    });
-
-    ctx.stroke();
-    ctx.restore();
-}
-
-/** Одна вертикальная линия; слишком короткую (меньше пикселя) не рисуем. */
-function projectionLine(ctx, x, y, floorY, minH) {
-    if (Math.abs(y - floorY) < minH) return;
-    ctx.moveTo(x, y);
-    ctx.lineTo(x, floorY);
 }
 
 // --- Тела ----------------------------------------------------------------------
@@ -3198,8 +3160,8 @@ function groupLine(ctx, text, x, y, color, zoom) {
 
 // ===== hover.js =====
 // =============================================================================
-// hover.js — наведение курсора: hit-тест по телам, орбита наведённого тела
-// и текстовая подсказка с названием (просто текст без рамки).
+// hover.js — наведение курсора: hit-тест по телам, орбита наведённого тела,
+// вертикальная проекция до эклиптики и текстовая подсказка с названием.
 // Здесь же — орбита и маркер ВЫБРАННОГО объекта (клик) и экспорт findBodyAt
 // для обработчика клика в input.js.
 // Вызывается из main.js ПОСЛЕ renderScene и уже вне мирового transform.
@@ -3227,10 +3189,12 @@ function drawHover(ctx, hoverTargets) {
     const hover = findBodyAt(hoverTargets, mouseX, mouseY);
     if (!hover) return;
 
-    // орбита наведённой планеты/луны/базы; у солнца и комет орбиты нет
+    // Орбита наведённой планеты/луны/малого тела/базы. У Солнца и комет её нет.
+    // Вертикальная проекция рисуется только вместе с орбитой наведения.
     const isComet = hover.kind === 'comet' || (hover.small && hover.small.kind === 'comet');
     if (hover.orbit && !isComet) {
-        drawOrbitOverlay(ctx, hover, COLORS.orbitPlanet);
+        drawDropLine(ctx, hover);
+        drawOrbitOverlay(ctx, hover, '#ffffff', true);
     }
     drawTooltip(ctx, hover.name, mouseX, mouseY);
 }
@@ -3291,7 +3255,8 @@ function drawSelection(ctx, sel, hoverTargets) {
  * Hit-тест: перебираем цели с конца (планеты добавлены после солнца, луны
  * проверяются первыми — они мельче и лежат поверх).
  * Экспортируется для выбора объекта по клику (input.js).
- * @returns {?{kind: string, name: string, orbit: ?{cx, cy, r}, p: object, m: object}}
+ * @returns {?{kind: string, name: string, orbit: ?{cx, cy, r},
+ *   x: number, y: number, floorY: number, p: object, m: object}}
  */
 function findBodyAt(hoverTargets, mouseX, mouseY) {
     const w = screenToWorld(mouseX, mouseY, state);
@@ -3307,6 +3272,7 @@ function findBodyAt(hoverTargets, mouseX, mouseY) {
                 return {
                     kind: 'moon', name: mh.m.n,
                     orbit: mh.orbitPoly ? { poly: mh.orbitPoly } : { cx: t.x, cy: t.y, r: mh.md },
+                    x: mh.mx, y: mh.my, floorY: mh.floorY, r: mh.m.r,
                     p: t.p, m: mh.m
                 };
             }
@@ -3330,14 +3296,65 @@ function findBodyAt(hoverTargets, mouseX, mouseY) {
             let orbit = null;
             if (t.small) orbit = t.small.poly ? { poly: t.small.poly } : t.small.orbit;
             else if (t.kind !== 'sun') orbit = t.orbit ? { poly: t.orbit } : { cx: 0, cy: 0, r: t.p.dist };
-            return { kind: t.kind, name, orbit, p: t.p || null, m: null, small: t.small || null };
+            return {
+                kind: t.kind, name, orbit,
+                x: t.x, y: t.y, floorY: t.floorY, r: bodyR,
+                p: t.p || null, m: null, small: t.small || null
+            };
         }
     }
     return null;
 }
 
-/** Пунктирная орбита тела в мировой системе координат. */
-function drawOrbitOverlay(ctx, hover, color) {
+/**
+ * Вертикальная линия от наведённого тела до его проекции на плоскость
+ * эклиптики. Рисуется в экранных координатах: толщина и затухание не зависят
+ * от зума.
+ */
+function drawDropLine(ctx, hover) {
+    if (hover.floorY == null || hover.x == null || hover.y == null) return;
+
+    const { W, H, zoom, camX, camY } = state;
+    const x = W / 2 + (hover.x - camX) * zoom;
+    const y = H / 2 + (hover.y - camY) * zoom;
+    const floorY = H / 2 + (hover.floorY - camY) * zoom;
+    const dir = Math.sign(floorY - y);
+    if (!dir || Math.abs(floorY - y) < 1) return;
+
+    // Как и прежние постоянные проекции, линия идёт от центра тела к полу:
+    // у крупных планет радиус больше высоты над эклиптикой, и если обрезать
+    // её по краю сферы, проекция исчезает совсем.
+    const startY = y;
+
+    const g = ctx.createLinearGradient(x, startY, x, floorY);
+    g.addColorStop(0, 'rgba(255,255,255,0.02)');
+    g.addColorStop(0.14, 'rgba(255,255,255,0.78)');
+    g.addColorStop(0.74, 'rgba(255,255,255,0.42)');
+    g.addColorStop(1, 'rgba(255,255,255,0.02)');
+
+    ctx.save();
+    ctx.setLineDash([]);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x, startY);
+    ctx.lineTo(x, floorY);
+
+    // Мягкое свечение и белое ядро: края линии уходят в прозрачность.
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+}
+
+/**
+ * Пунктирная орбита тела в мировой системе координат.
+ * @param {boolean} cord — белая «шнурковая» обводка для орбиты наведения:
+ *   толще в 3 раза, промежуток между пунктирами в 4 раза больше, мягкие края.
+ */
+function drawOrbitOverlay(ctx, hover, color, cord = false) {
     const { zoom, camX, camY, W, H } = state;
 
     ctx.save();
@@ -3345,9 +3362,6 @@ function drawOrbitOverlay(ctx, hover, color) {
     ctx.scale(zoom, zoom);
     ctx.translate(-camX, -camY);
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1 / zoom;
-    ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.beginPath();
     if (hover.orbit.poly) {
         // сэмплированная петля (малые тела, кометы, планеты): эллипс по (a,e)
@@ -3372,7 +3386,28 @@ function drawOrbitOverlay(ctx, hover, color) {
     } else {
         orbitEllipsePath(ctx, hover.orbit.cx, hover.orbit.cy, hover.orbit.r);
     }
-    ctx.stroke();
+    if (cord) {
+        // Белый «шнурок»: широкая мягкая подложка + яркое ядро. Пунктир в
+        // 3 раза толще прежнего, промежуток — в 4 раза больше.
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.setLineDash([4 / zoom, 16 / zoom]);
+        const passes = [
+            [10 / zoom, 'rgba(255,255,255,0.07)'],
+            [6 / zoom, 'rgba(255,255,255,0.20)'],
+            [3 / zoom, color]
+        ];
+        passes.forEach(([width, style]) => {
+            ctx.lineWidth = width;
+            ctx.strokeStyle = style;
+            ctx.stroke();
+        });
+    } else {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1 / zoom;
+        ctx.setLineDash([4 / zoom, 4 / zoom]);
+        ctx.stroke();
+    }
     ctx.setLineDash([]);
 
     ctx.restore();
