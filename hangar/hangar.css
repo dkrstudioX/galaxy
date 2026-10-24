@@ -57,7 +57,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ===== Сцена станции: тёмный космос, бирюза и фиолет ======================= */
+/* ===== Фон: фото ангара на всю область ===================================== */
 
 .app-shell {
   height: 100vh;
@@ -67,101 +67,23 @@ body {
   position: relative;
   overflow: hidden;
   background-color: var(--bg);
-  background-image:
-    linear-gradient(rgba(117, 223, 210, .028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(117, 223, 210, .028) 1px, transparent 1px),
-    radial-gradient(ellipse 82% 54% at 50% 104%, rgba(53, 232, 216, .10), rgba(24, 80, 90, .04) 48%, transparent 74%),
-    radial-gradient(ellipse 60% 32% at 50% 0%, rgba(124, 58, 237, .10), transparent 72%),
-    radial-gradient(ellipse 36% 46% at 6% 10%, rgba(124, 58, 237, .13), transparent 72%),
-    radial-gradient(ellipse 34% 44% at 94% 8%, rgba(117, 223, 210, .08), transparent 72%),
-    linear-gradient(180deg, #080b14 0%, #05070d 48%, #03040a 100%);
-  background-size: 48px 48px, 48px 48px, cover, cover, cover, cover, cover;
-  background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
 }
 
-.station-backdrop {
-  position: fixed; inset: 125px 0 0; z-index: 0; overflow: hidden; pointer-events: none;
-  opacity: .72;
-}
-.bay-window {
-  position: absolute; top: 2%; left: 18%; width: 64%; height: 67%; overflow: hidden;
-  border: 2px solid rgba(150, 190, 255, .20);
-  border-top-width: 10px;
-  clip-path: polygon(7% 0, 93% 0, 100% 13%, 100% 87%, 93% 100%, 7% 100%, 0 87%, 0 13%);
+/* Фото из src/main.jpg на всю область; затемняющий градиент держит
+   контраст панелей и текста. Слой фиксированный — на мобильном он
+   не «уезжает» при прокрутке. */
+.app-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
   background:
-    radial-gradient(circle at 72% 26%, rgba(170, 136, 246, .14), transparent 24%),
-    radial-gradient(circle at 32% 65%, rgba(117, 223, 210, .08), transparent 27%),
-    linear-gradient(155deg, #0a1020 0%, #060a14 52%, #03040a 100%);
-  box-shadow: inset 0 0 80px rgba(1, 4, 10, .85), 0 0 60px rgba(117, 223, 210, .07);
-}
-.bay-window::before,
-.bay-window::after {
-  content: ""; position: absolute; top: -10%; width: 3px; height: 120%;
-  background: linear-gradient(180deg, transparent, rgba(117, 223, 210, .22), transparent);
-}
-.bay-window::before { left: 28%; transform: rotate(-3deg); }
-.bay-window::after { right: 28%; transform: rotate(3deg); }
-.planet {
-  position: absolute; right: 7%; top: 11%; width: 200px; aspect-ratio: 1; border-radius: 50%;
-  background:
-    radial-gradient(circle at 33% 28%, #b9a4ff 0, #5b4a9a 18%, #14334d 45%, #0a1a2a 68%, #03040a 69%);
-  box-shadow: -22px -11px 50px rgba(170, 136, 246, .16), inset -34px -14px 45px rgba(1, 4, 10, .8);
-  opacity: .62;
-}
-.planet::after {
-  content: ""; position: absolute; left: -28%; top: 46%; width: 156%; height: 16%;
-  border: 2px solid rgba(170, 136, 246, .26); border-radius: 50%; transform: rotate(-12deg);
-}
-.stars { position: absolute; inset: 0; background-repeat: repeat; }
-.stars-near {
-  opacity: .55;
-  background-image:
-    radial-gradient(circle, #d9f7ff 0 1px, transparent 1.5px),
-    radial-gradient(circle, #75dfd2 0 1px, transparent 1.5px);
-  background-size: 97px 83px, 149px 127px;
-  background-position: 18px 23px, 61px 44px;
-}
-.stars-far {
-  opacity: .30;
-  background-image: radial-gradient(circle, #fff 0 .7px, transparent 1px);
-  background-size: 53px 47px;
-  background-position: 11px 7px;
-}
-.bay-beam {
-  position: absolute; top: -8%; width: 23%; height: 92%;
-  background:
-    linear-gradient(90deg, rgba(4, 8, 14, .98), rgba(10, 18, 30, .92) 48%, rgba(4, 8, 14, .96)),
-    linear-gradient(#16303a, #060c16);
-  border: 1px solid rgba(150, 190, 255, .16);
-  box-shadow: inset 0 0 30px rgba(0, 0, 0, .75);
-}
-.beam-left { left: -7%; transform: skewX(-11deg); border-right: 9px solid rgba(150, 190, 255, .16); }
-.beam-right { right: -7%; transform: skewX(11deg); border-left: 9px solid rgba(150, 190, 255, .16); }
-.bay-ceiling {
-  position: absolute; left: 10%; top: -12%; width: 80%; height: 25%;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 9%, rgba(117, 223, 210, .08) 9.3% 10%, transparent 10.3% 19%),
-    linear-gradient(180deg, #04080f, rgba(8, 14, 24, .9));
-  clip-path: polygon(0 0, 100% 0, 88% 100%, 12% 100%);
-}
-.bay-floor {
-  position: absolute; left: -15%; right: -15%; bottom: -21%; height: 58%;
-  transform: perspective(400px) rotateX(55deg);
-  transform-origin: bottom;
-  background:
-    linear-gradient(90deg, transparent 49.75%, rgba(117, 223, 210, .16) 50%, transparent 50.25%),
-    repeating-linear-gradient(90deg, transparent 0 9.8%, rgba(117, 223, 210, .08) 10% 10.2%),
-    repeating-linear-gradient(0deg, transparent 0 38px, rgba(117, 223, 210, .07) 39px 40px),
-    linear-gradient(180deg, rgba(8, 16, 26, .75), #03040a);
-  border-top: 1px solid rgba(117, 223, 210, .16);
-  box-shadow: 0 -10px 80px rgba(117, 223, 210, .08);
-}
-.runway-lights {
-  position: absolute; left: 28%; right: 28%; bottom: 3%; display: flex; justify-content: space-between;
-}
-.runway-lights i {
-  width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
-  box-shadow: 0 0 8px 1px rgba(117, 223, 210, .6);
+    linear-gradient(180deg,
+      rgba(5, 7, 13, .62) 0%,
+      rgba(4, 6, 12, .70) 46%,
+      rgba(3, 4, 10, .80) 100%),
+    url("src/main.jpg") center / cover no-repeat;
 }
 
 .scanline {
@@ -777,9 +699,6 @@ body {
 @media (max-width: 720px) {
   body { overflow: auto; }
   .app-shell { height: auto; min-height: 100vh; overflow: visible; }
-  .station-backdrop { inset: 115px 0 0; opacity: .52; }
-  .bay-window { left: 5%; width: 90%; height: 48%; }
-  .planet { width: 130px; }
   .topbar { height: 64px; grid-template-columns: 1fr auto; padding: 0 16px; }
   .station-status { display: none; }
   .brand span:not(.brand-mark) { display: none; }
