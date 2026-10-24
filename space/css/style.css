@@ -82,6 +82,48 @@ canvas { display: block; width: 100vw; height: 100vh; }
     box-shadow: 0 0 18px rgba(169, 133, 245, .45);
 }
 
+/* ===== Пресеты камеры: колонка под HUD, те же сегменты, что у скорости ====== */
+#presets {
+    position: fixed; top: 196px; left: 14px; z-index: 10;
+    display: flex; flex-direction: column;
+    border: 1px solid rgba(150, 190, 255, .16);
+    background: rgba(9, 24, 25, .42);
+    -webkit-backdrop-filter: blur(14px) saturate(1.5);
+    backdrop-filter: blur(14px) saturate(1.5);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
+}
+#presets .btn {
+    height: 27px; min-width: 142px; padding: 0 12px;
+    display: flex; align-items: center; justify-content: flex-start;
+    color: #637d7d; border: 0; border-bottom: 1px solid rgba(120, 160, 170, .12);
+    background: transparent; cursor: pointer;
+    font: 500 9px "IBM Plex Mono", monospace;
+    text-transform: uppercase; letter-spacing: .09em;
+    transition: color .14s ease, background .14s ease;
+}
+#presets .btn:last-child { border-bottom: 0; }
+#presets .btn:hover { color: #9fb3b3; background: rgba(122, 236, 224, .06); }
+#presets .btn:active {
+    color: #100b1b; background: linear-gradient(100deg, #75dfd2, #aa88f6);
+    box-shadow: 0 0 18px rgba(169, 133, 245, .45);
+}
+
+/* ===== Линейка масштаба (левый нижний угол) ================================= */
+#scalebar {
+    position: fixed; bottom: 20px; left: 14px; z-index: 10;
+    display: flex; align-items: center; gap: 8px;
+    pointer-events: none;
+    color: #688080; font: 500 9px "IBM Plex Mono", monospace;
+    letter-spacing: .12em; text-transform: uppercase;
+}
+#scalebar .scale-line {
+    width: 120px; height: 6px; flex: none;
+    border: 1px solid rgba(150, 190, 255, .40);
+    border-top: 0;
+    background: linear-gradient(180deg, rgba(122, 236, 224, .16), rgba(122, 236, 224, 0));
+}
+#scalebar .scale-label { color: #9fb3b3; white-space: nowrap; }
+
 /* ===== Правая колонка: Солнечная система + объект ============================ */
 #sidePanel {
     position: fixed; top: 14px; right: 14px; z-index: 10;
@@ -159,6 +201,42 @@ canvas { display: block; width: 100vw; height: 100vh; }
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tree .small-loot li i { flex: none; }
+
+/* луны: фильтр и «Показать все N» — над списком, в тех же отступах, что строки.
+   У планеты 456 лун список ленивый: строки строятся при раскрытии (ui.js). */
+.tree .moon-tools {
+    display: none; align-items: center; gap: 6px;
+    padding: 2px 8px 5px 27px;
+}
+.tree .planet.open > .moon-tools { display: flex; }
+.tree .moon-filter {
+    flex: 1; min-width: 0; height: 24px; padding: 0 8px;
+    border: 1px solid rgba(120, 160, 170, .18); border-radius: 4px;
+    background: rgba(9, 24, 25, .50); color: #dce8e8;
+    font: 10px "IBM Plex Mono", monospace; outline: none;
+}
+.tree .moon-filter::placeholder { color: #637a7a; }
+.tree .moon-filter:focus { border-color: rgba(122, 236, 224, .40); }
+.tree .moon-more {
+    flex: none; height: 24px; padding: 0 8px;
+    border: 1px solid rgba(150, 190, 255, .20); border-radius: 4px;
+    background: rgba(122, 236, 224, .05); color: #bffcfc;
+    font: 500 8px "IBM Plex Mono", monospace; text-transform: uppercase;
+    letter-spacing: .08em; cursor: pointer; white-space: nowrap;
+}
+.tree .moon-more:hover { background: rgba(122, 236, 224, .12); }
+.tree .moon-more[hidden] { display: none; }
+.tree .loot li .mname {
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tree .loot li.moon-empty {
+    justify-content: center; cursor: default;
+    color: #637a7a; font: 9px "IBM Plex Mono", monospace;
+    text-transform: uppercase; letter-spacing: .10em;
+}
+.tree .loot li.moon-empty::before { content: none; }
+.tree .loot li.moon-empty:hover { background: transparent; }
 
 /* выбранный объект подсвечивается и в дереве, и на карте */
 .tree .sel > .node, .tree li.sel {
@@ -281,6 +359,24 @@ canvas { display: block; width: 100vw; height: 100vh; }
     border-color: rgba(120, 160, 170, .25); background: rgba(120, 160, 170, .06);
     color: #7d9a9a; opacity: .55; cursor: default;
 }
+
+/* ===== Карточка группы тел: список участников, клик летит к телу ============ */
+.group-list { display: flex; flex-direction: column; }
+.group-row {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 2px; cursor: pointer;
+    border-bottom: 1px solid rgba(120, 160, 170, .10);
+    transition: background .12s ease;
+}
+.group-row:last-child { border-bottom: 0; }
+.group-row:hover { background: rgba(122, 236, 224, .05); }
+.group-row .dot { width: 7px; height: 7px; flex: none; border-radius: 50%; }
+.group-row .gname {
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 600 11px "Manrope", sans-serif; color: #dce8e8;
+}
+.group-row small { margin-left: auto; color: #637a7a; font: 9px "IBM Plex Mono", monospace; white-space: nowrap; }
 
 /* ===== Диалог подтверждения: как .slot-modal/.slot-dialog в ангаре ========== */
 .dlg-overlay {

@@ -3,6 +3,10 @@
 // вертикальная проекция до эклиптики и текстовая подсказка с названием.
 // Здесь же — орбита и маркер ВЫБРАННОГО объекта (клик) и экспорт findBodyAt
 // для обработчика клика в input.js.
+//
+// Цели наведения — плоский массив (render.js): группы тел, одиночные тела
+// (Солнце, планеты, луны, малые тела) и базы. У мелких тел hit-радиус не
+// меньше MARKER_PX, поэтому маркер-кольцо всегда ловится курсором.
 // Вызывается из main.js ПОСЛЕ renderScene и уже вне мирового transform.
 // =============================================================================
 
@@ -49,7 +53,8 @@ export function drawSelection(ctx, sel, hoverTargets) {
     if (!sel) return;
 
     // Планета: орбита только в hover. Комета: орбита не показывается вовсе.
-    if (sel.kind === 'planet' || sel.kind === 'comet' ||
+    // Группа: это не тело, своей орбиты у неё нет.
+    if (sel.kind === 'planet' || sel.kind === 'comet' || sel.kind === 'group' ||
         (sel.small && sel.small.kind === 'comet')) return;
 
     // У области нет тела и орбиты — показываем её границы пунктиром, иначе
@@ -64,12 +69,18 @@ export function drawSelection(ctx, sel, hoverTargets) {
         return;
     }
 
-    const target = hoverTargets.find(t =>
-        sel.kind === 'sun' ? t.kind === 'sun' :
-        sel.kind === 'base' ? (t.kind === 'base' && (sel.local ? t.local === sel.local : !t.local)) :
-        sel.small ? t.small === sel.small : t.p === sel.p);
+    let target = null;
+    if (sel.kind === 'sun') target = hoverTargets.find(t => t.kind === 'sun');
+    else if (sel.kind === 'base') {
+        target = hoverTargets.find(t =>
+            t.kind === 'base' && (sel.local ? t.local === sel.local : !t.local));
+    } else if (sel.small) {
+        target = hoverTargets.find(t => t.small === sel.small);
+    } else if (sel.kind === 'moon') {
+        target = hoverTargets.find(t =>
+            t.kind === 'moon' && t.p === sel.p && t.m && t.m.n === sel.m.n);
+    }
     if (!target) return; // тело ещё не в кадре (луна скрыта зумом и т.п.)
-
     if (sel.kind === 'sun') return; // у солнца орбиты нет
 
     let orbit = null;
@@ -77,70 +88,65 @@ export function drawSelection(ctx, sel, hoverTargets) {
         // малое тело: орбита по сэмплированным элементам (poly), у троянцев — круг
         orbit = sel.small.poly ? { poly: sel.small.poly } : sel.small.orbit;
     } else if (sel.kind === 'base') {
-        // база летает вокруг Луны Земли — орбита от Луны, не от солнца
+        // база летает вокруг своего хозяина — орбита от его центра
         orbit = { cx: target.orbitCx, cy: target.orbitCy, r: target.orbitR };
     } else {
-        // луна ищется по имени: объекты лун в кадре и в дереве — разные ссылки
-        const mh = target.moons.find(x => x.m.n === sel.m.n);
-        if (!mh) return;
-        orbit = mh.orbitPoly
-            ? { poly: mh.orbitPoly }
-            : { cx: target.x, cy: target.y, r: mh.md };
+        // луна: орбита вокруг планеты (render.js кладёт её в target.orbit)
+        orbit = target.orbit || { cx: target.x, cy: target.y, r: target.r };
     }
     drawOrbitOverlay(ctx, { kind: sel.kind, orbit }, COLORS.orbitSelected);
 }
 
 /**
- * Hit-тест: перебираем цели с конца (планеты добавлены после солнца, луны
- * проверяются первыми — они мельче и лежат поверх).
+ * Hit-тест: перебираем цели с конца (базы добавлены последними, затем тела,
+ * затем группы) — мелкое тело перехватывает клик у группы.
  * Экспортируется для выбора объекта по клику (input.js).
  * @returns {?{kind: string, name: string, orbit: ?{cx, cy, r},
- *   x: number, y: number, floorY: number, p: object, m: object}}
+ *   x: number, y: number, floorY: number, p: object, m: object,
+ *   small: object, group: object}}
  */
 export function findBodyAt(hoverTargets, mouseX, mouseY) {
     const w = screenToWorld(mouseX, mouseY, state);
 
     for (let i = hoverTargets.length - 1; i >= 0; i--) {
         const t = hoverTargets[i];
-
-        for (let j = t.moons.length - 1; j >= 0; j--) {
-            const mh = t.moons[j];
-            const hitR = Math.max(mh.m.r, MIN_HIT_MOON_PX / state.zoom);
-            if ((w.x - mh.mx) ** 2 + (w.y - mh.my) ** 2 <= hitR * hitR) {
-                // луна: наклонная орбита вокруг своей планеты
-                return {
-                    kind: 'moon', name: mh.m.n,
-                    orbit: mh.orbitPoly ? { poly: mh.orbitPoly } : { cx: t.x, cy: t.y, r: mh.md },
-                    x: mh.mx, y: mh.my, floorY: mh.floorY, r: mh.m.r,
-                    p: t.p, m: mh.m
-                };
-            }
-        }
-
-        // база: орбита вокруг Луны Земли, радиус попадания как у лун
-        if (t.kind === 'base') {
-            const hitR = Math.max(t.r, MIN_HIT_MOON_PX / state.zoom);
-            if ((w.x - t.x) ** 2 + (w.y - t.y) ** 2 <= hitR * hitR) {
-                return { kind: 'base', name: t.name, orbit: { cx: t.orbitCx, cy: t.orbitCy, r: t.orbitR }, p: t.p, m: null, local: t.local || null };
-            }
-            continue;
-        }
-
-        const name = t.name || (t.p ? t.p.name : '');
         const bodyR = t.r || (t.p ? t.p.r : 0);
-        const hitR = Math.max(bodyR, MIN_HIT_PLANET_PX / state.zoom);
-        if ((w.x - t.x) ** 2 + (w.y - t.y) ** 2 <= hitR * hitR) {
-            // орбита: у малых тел — из их элементов (эллипс), у планет — вокруг
-            // солнца; у самого солнца орбиты нет
-            let orbit = null;
-            if (t.small) orbit = t.small.poly ? { poly: t.small.poly } : t.small.orbit;
-            else if (t.kind !== 'sun') orbit = t.orbit ? { poly: t.orbit } : { cx: 0, cy: 0, r: t.p.dist };
+        const minPx = (t.kind === 'moon' || t.kind === 'base')
+            ? MIN_HIT_MOON_PX : MIN_HIT_PLANET_PX;
+        const hitR = Math.max(bodyR, minPx / state.zoom);
+        if ((w.x - t.x) ** 2 + (w.y - t.y) ** 2 > hitR * hitR) continue;
+
+        // База: орбита вокруг хозяина, радиус попадания как у лун.
+        if (t.kind === 'base') {
             return {
-                kind: t.kind, name, orbit,
-                x: t.x, y: t.y, floorY: t.floorY, r: bodyR,
-                p: t.p || null, m: null, small: t.small || null
+                kind: 'base', name: t.name,
+                orbit: { cx: t.orbitCx, cy: t.orbitCy, r: t.orbitR },
+                p: t.p, m: null, local: t.local || null
             };
         }
+
+        // Группа тел: клик открывает список тел в карточке.
+        if (t.kind === 'group') {
+            return {
+                kind: 'group', name: t.name, orbit: null,
+                x: t.x, y: t.y, floorY: t.y, r: t.r,
+                p: null, m: null, small: null, group: t.group
+            };
+        }
+
+        // Тело: орбита из элементов (малые тела), у луны — вокруг планеты,
+        // у планет — вокруг Солнца; у самого Солнца орбиты нет.
+        let orbit = null;
+        if (t.small) orbit = t.small.poly ? { poly: t.small.poly } : t.small.orbit;
+        else if (t.kind === 'moon') orbit = t.orbit || null;
+        else if (t.kind !== 'sun') orbit = t.orbit ? { poly: t.orbit } : { cx: 0, cy: 0, r: t.p.dist };
+
+        return {
+            kind: t.kind, name: t.name || (t.p ? t.p.name : ''),
+            orbit,
+            x: t.x, y: t.y, floorY: t.floorY, r: bodyR,
+            p: t.p || null, m: t.m || null, small: t.small || null
+        };
     }
     return null;
 }

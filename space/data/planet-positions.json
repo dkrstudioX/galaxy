@@ -1,5 +1,5 @@
 {
-  "schema": "galaxy.planet-positions/1",
+  "schema": "galaxy.planet-positions/2",
   "generatedAt": "2026-10-23T00:00:00Z",
   "epoch": "2026-10-23T00:00:00Z",
   "model": {
@@ -22,16 +22,23 @@
       ]
     },
     "coordinateSystems": {
-      "positionAu": "Гелиоцентрическая эклиптическая J2000, правая: x — точка весеннего равноденствия, y — 90° эклиптической долготы, z — север.",
+      "positionAu": "Гелиоцентрическая эклиптическая J2000: x — точка весеннего равноденствия, y — 90° эклиптической долготы (вниз, как на карте), z — север.",
       "positionMap": "Игровые raw-координаты space/js/math.js orbitPoint3: x вправо, y вниз, z вверх."
     },
     "units": {
       "positionAu": "AU",
-      "positionMap": "world units",
+      "positionMap": "world units, 1 а.е. = 1000 wu",
+      "lengthMap": "1 км = 6.684587e-6 wu",
       "angles": "degrees",
       "time": "days"
     },
     "source": "space/js/data.js; semi-major axes — стандартные J2000."
+  },
+  "sun": {
+    "name": "Sun",
+    "ru": "Солнце",
+    "radiusKm": 696340.0,
+    "radiusMap": 4.654745397
   },
   "planets": [
     {
@@ -39,9 +46,11 @@
       "name": "Mercury",
       "ru": "Меркурий",
       "color": "#b5b5b5",
+      "radiusKm": 2439.7,
+      "radiusMap": 0.016308387,
       "orbit": {
         "semiMajorAxisAu": 0.387098,
-        "semiMajorAxisMap": 70,
+        "semiMajorAxisMap": 387.098,
         "eccentricity": 0.205636,
         "perihelionLongitudeDeg": 77.458,
         "inclinationDeg": 7.005,
@@ -54,27 +63,29 @@
       },
       "positionAu": {
         "x": 0.353649225,
-        "y": 0.0,
+        "y": 1e-09,
         "z": -0.032460045
       },
       "distanceAu": 0.355135789,
       "longitudeDeg": 0.0,
       "latitudeDeg": -5.244256,
       "positionMap": {
-        "x": 63.951366,
-        "y": 0.0,
-        "z": -5.86984
+        "x": 353.649225,
+        "y": 1e-06,
+        "z": -32.460045
       },
-      "distanceMap": 64.220185
+      "distanceMap": 355.135789
     },
     {
       "id": "venus",
       "name": "Venus",
       "ru": "Венера",
       "color": "#e8cda0",
+      "radiusKm": 6051.8,
+      "radiusMap": 0.040453784,
       "orbit": {
         "semiMajorAxisAu": 0.723332,
-        "semiMajorAxisMap": 110,
+        "semiMajorAxisMap": 723.332,
         "eccentricity": 0.006777,
         "perihelionLongitudeDeg": 131.602,
         "inclinationDeg": 3.395,
@@ -83,31 +94,33 @@
         "meanMotionDegPerDay": 1.602129051,
         "meanAnomalyAtEpochDeg": 274.128024,
         "meanLongitudeAtEpochDeg": 45.730024,
-        "trueAnomalyAtEpochDeg": 273.353003
+        "trueAnomalyAtEpochDeg": 273.353002
       },
       "positionAu": {
-        "x": 0.51099889,
-        "y": 0.51099889,
-        "z": -0.022514615
+        "x": 0.510998896,
+        "y": -0.510998884,
+        "z": -0.022514616
       },
       "distanceAu": 0.723012199,
       "longitudeDeg": 45.0,
       "latitudeDeg": -1.78448,
       "positionMap": {
-        "x": 77.709652,
-        "y": -77.709652,
-        "z": -3.423888
+        "x": 510.998896,
+        "y": -510.998884,
+        "z": -22.514616
       },
-      "distanceMap": 109.951367
+      "distanceMap": 723.012199
     },
     {
       "id": "earth",
       "name": "Earth",
       "ru": "Земля",
       "color": "#4488ff",
+      "radiusKm": 6371.0,
+      "radiusMap": 0.042587505,
       "orbit": {
         "semiMajorAxisAu": 1.0,
-        "semiMajorAxisMap": 160,
+        "semiMajorAxisMap": 1000.0,
         "eccentricity": 0.016711,
         "perihelionLongitudeDeg": 102.938,
         "inclinationDeg": 0.0,
@@ -119,28 +132,30 @@
         "trueAnomalyAtEpochDeg": 347.062
       },
       "positionAu": {
-        "x": 0.0,
-        "y": 0.983699469,
+        "x": 2e-09,
+        "y": -0.983699469,
         "z": 0.0
       },
       "distanceAu": 0.983699469,
       "longitudeDeg": 90.0,
       "latitudeDeg": 0.0,
       "positionMap": {
-        "x": 0.0,
-        "y": -157.391915,
+        "x": 2e-06,
+        "y": -983.699469,
         "z": 0.0
       },
-      "distanceMap": 157.391915
+      "distanceMap": 983.699469
     },
     {
       "id": "mars",
       "name": "Mars",
       "ru": "Марс",
       "color": "#c1440e",
+      "radiusKm": 3389.5,
+      "radiusMap": 0.022657408,
       "orbit": {
         "semiMajorAxisAu": 1.523679,
-        "semiMajorAxisMap": 220,
+        "semiMajorAxisMap": 1523.679,
         "eccentricity": 0.093394,
         "perihelionLongitudeDeg": 336.041,
         "inclinationDeg": 1.85,
@@ -149,31 +164,33 @@
         "meanMotionDegPerDay": 0.524032723,
         "meanAnomalyAtEpochDeg": 154.853151,
         "meanLongitudeAtEpochDeg": 130.894151,
-        "trueAnomalyAtEpochDeg": 158.961377
+        "trueAnomalyAtEpochDeg": 158.961376
       },
       "positionAu": {
-        "x": -1.16938637,
-        "y": 1.16938637,
+        "x": -1.169386367,
+        "y": -1.169386372,
         "z": 0.053245718
       },
       "distanceAu": 1.654619011,
       "longitudeDeg": 135.0,
       "latitudeDeg": 1.844099,
       "positionMap": {
-        "x": -168.84462,
-        "y": -168.84462,
-        "z": 7.688009
+        "x": -1169.386367,
+        "y": -1169.386372,
+        "z": 53.245718
       },
-      "distanceMap": 238.906083
+      "distanceMap": 1654.619011
     },
     {
       "id": "jupiter",
       "name": "Jupiter",
       "ru": "Юпитер",
       "color": "#c88b3a",
+      "radiusKm": 69911.0,
+      "radiusMap": 0.46732617,
       "orbit": {
         "semiMajorAxisAu": 5.2026,
-        "semiMajorAxisMap": 380,
+        "semiMajorAxisMap": 5202.6,
         "eccentricity": 0.048386,
         "perihelionLongitudeDeg": 14.728,
         "inclinationDeg": 1.304,
@@ -182,31 +199,33 @@
         "meanMotionDegPerDay": 0.083091196,
         "meanAnomalyAtEpochDeg": 163.814247,
         "meanLongitudeAtEpochDeg": 178.542247,
-        "trueAnomalyAtEpochDeg": 165.27465
+        "trueAnomalyAtEpochDeg": 165.274649
       },
       "positionAu": {
-        "x": -5.443875622,
-        "y": 0.0,
+        "x": -5.443875621,
+        "y": -6.2e-08,
         "z": 0.121858199
       },
-      "distanceAu": 5.445239316,
+      "distanceAu": 5.445239315,
       "longitudeDeg": 180.0,
       "latitudeDeg": 1.282321,
       "positionMap": {
-        "x": -397.622869,
-        "y": 0.0,
-        "z": 8.900572
+        "x": -5443.875621,
+        "y": -6.2e-05,
+        "z": 121.858199
       },
-      "distanceMap": 397.722473
+      "distanceMap": 5445.239315
     },
     {
       "id": "saturn",
       "name": "Saturn",
       "ru": "Сатурн",
       "color": "#e8d191",
+      "radiusKm": 58232.0,
+      "radiusMap": 0.389256877,
       "orbit": {
         "semiMajorAxisAu": 9.55491,
-        "semiMajorAxisMap": 520,
+        "semiMajorAxisMap": 9554.91,
         "eccentricity": 0.053862,
         "perihelionLongitudeDeg": 92.599,
         "inclinationDeg": 2.488,
@@ -218,28 +237,30 @@
         "trueAnomalyAtEpochDeg": 132.382694
       },
       "positionAu": {
-        "x": -6.984829827,
-        "y": -6.984829827,
-        "z": 0.399797563
+        "x": -6.984829903,
+        "y": 6.984829743,
+        "z": 0.399797564
       },
-      "distanceAu": 9.886128337,
+      "distanceAu": 9.886128333,
       "longitudeDeg": 225.0,
       "latitudeDeg": 2.317688,
       "positionMap": {
-        "x": -380.130374,
-        "y": 380.130374,
-        "z": 21.757895
+        "x": -6984.829903,
+        "y": 6984.829743,
+        "z": 399.797564
       },
-      "distanceMap": 538.025658
+      "distanceMap": 9886.128333
     },
     {
       "id": "uranus",
       "name": "Uranus",
       "ru": "Уран",
       "color": "#7de8e8",
+      "radiusKm": 25362.0,
+      "radiusMap": 0.169534499,
       "orbit": {
         "semiMajorAxisAu": 19.21845,
-        "semiMajorAxisMap": 660,
+        "semiMajorAxisMap": 19218.45,
         "eccentricity": 0.047257,
         "perihelionLongitudeDeg": 170.954,
         "inclinationDeg": 0.773,
@@ -251,28 +272,30 @@
         "trueAnomalyAtEpochDeg": 99.047381
       },
       "positionAu": {
-        "x": 0.0,
-        "y": -19.318961833,
-        "z": -0.071820171
+        "x": 3.9e-08,
+        "y": 19.318961835,
+        "z": -0.071820172
       },
-      "distanceAu": 19.319095332,
+      "distanceAu": 19.319095334,
       "longitudeDeg": 270.0,
       "latitudeDeg": -0.213002,
       "positionMap": {
-        "x": 0.0,
-        "y": 663.451777,
-        "z": -2.466448
+        "x": 3.9e-05,
+        "y": 19318.961835,
+        "z": -71.820172
       },
-      "distanceMap": 663.456362
+      "distanceMap": 19319.095334
     },
     {
       "id": "neptune",
       "name": "Neptune",
       "ru": "Нептун",
       "color": "#3f54ba",
+      "radiusKm": 24622.0,
+      "radiusMap": 0.164587904,
       "orbit": {
         "semiMajorAxisAu": 30.11039,
-        "semiMajorAxisMap": 780,
+        "semiMajorAxisMap": 30110.39,
         "eccentricity": 0.00859,
         "perihelionLongitudeDeg": 44.965,
         "inclinationDeg": 1.77,
@@ -284,19 +307,19 @@
         "trueAnomalyAtEpochDeg": 270.036532
       },
       "positionAu": {
-        "x": 21.289541316,
-        "y": -21.289541316,
-        "z": -0.052195788
+        "x": 21.289541189,
+        "y": 21.289541445,
+        "z": -0.052195783
       },
-      "distanceAu": 30.10800331,
+      "distanceAu": 30.108003311,
       "longitudeDeg": 315.0,
       "latitudeDeg": -0.099329,
       "positionMap": {
-        "x": 551.498743,
-        "y": 551.498743,
-        "z": -1.352115
+        "x": 21289.541189,
+        "y": 21289.541445,
+        "z": -52.195783
       },
-      "distanceMap": 779.938174
+      "distanceMap": 30108.003311
     }
   ]
 }

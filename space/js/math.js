@@ -1,12 +1,12 @@
 // =============================================================================
 // math.js — чистые функции: астрономическая математика и форматирование.
 // Не знают ни о канвасе, ни о состоянии — легко тестировать и переиспользовать.
-// Плюс маппинг астрономических единиц в условные (якоря AU_ANCHORS из data.js)
-// и решение уравнения Кеплера для эллиптических орбит малых тел.
+// Единый линейный масштаб (units.js): а.е. -> wu, км -> wu, без «сжатых» шкал.
+// Здесь же решение уравнения Кеплера и форматтеры масштаба/углов.
 // =============================================================================
 
-import { J2000_MS, MS_PER_DAY } from './config.js';
-import { AU_ANCHORS } from './data.js';
+import { J2000_MS, MS_PER_DAY, MIN_ZOOM, MAX_ZOOM } from './config.js';
+import { AU_KM, AU_WU, au, km, wuToKm, wuToAu } from './units.js';
 
 /**
  * Угол тела на круговой орбите из симуляционного времени.
@@ -60,25 +60,12 @@ export function makeRng(seed) {
 }
 
 /**
- * Астрономические единицы -> условные единицы карты: кусочно-линейно по
- * якорям AU_ANCHORS (орбиты планет, границы пояса, дальние зоны). За
- * последним якорем — линейное продолжение последнего отрезка.
- * @param {number} au расстояние, а.е.
+ * Астрономические единицы -> мировые единицы карты: единая линейная шкала
+ * (1 а.е. = 1000 wu). Никаких якорей и кусочного сжатия.
+ * @param {number} v расстояние, а.е.
  */
-export function auToDist(au) {
-    const A = AU_ANCHORS;
-    if (au <= A[0][0]) {
-        const k = (A[1][1] - A[0][1]) / (A[1][0] - A[0][0]);
-        return Math.max(0, A[0][1] + (au - A[0][0]) * k);
-    }
-    for (let i = 1; i < A.length; i++) {
-        if (au <= A[i][0]) {
-            const [a0, d0] = A[i - 1], [a1, d1] = A[i];
-            return d0 + (d1 - d0) * (au - a0) / (a1 - a0);
-        }
-    }
-    const [a0, d0] = A[A.length - 2], [a1, d1] = A[A.length - 1];
-    return d1 + (au - a1) * (d1 - d0) / (a1 - a0);
+export function auToDist(v) {
+    return au(v);
 }
 
 /** Период обращения по третьему закону Кеплера (a в а.е.), сутки. */
@@ -181,4 +168,102 @@ export function keplerPoly3(a, e, peri, m0, T, steps = 128, mapDist = auToDist, 
         pts.push(pos.x, pos.y, pos.z);
     }
     return pts;
+}
+
+// --- Форматирование реального масштаба ----------------------------------------
+
+/**
+ * Зум, при котором радиус rWu вписан в меньшую сторону экрана с запасом pad.
+ * @param {number} rWu радиус в мировых единицах
+ * @param {number} W ширина канваса, px
+ * @param {number} H высота канваса, px
+ * @param {number} [pad=1.05] запас 5 %
+ */
+export function fitZoom(rWu, W, H, pad = 1.05) {
+    const side = Math.min(W || 900, H || 900);
+    const z = side / 2 / Math.max(rWu * pad, 1e-12);
+    return clamp(z, MIN_ZOOM, MAX_ZOOM);
+}
+
+/** Километры в компактной записи: 1 737, 12.4, 0.00074. */
+export function fmtKm(v, digits = 1) {
+    if (v == null || !isFinite(v)) return '—';
+    const a = Math.abs(v);
+    if (a >= 1e6) return (v / 1e6).toFixed(2) + ' млн';
+    if (a >= 1e3) return Math.round(v).toLocaleString('ru-RU');
+    if (a >= 100) return v.toFixed(0);
+    if (a >= 1) return v.toFixed(digits);
+    return Number(v.toPrecision(3)).toString();
+}
+
+/** Астрономические единицы в компактной записи. */
+export function fmtAu(v, digits = 3) {
+    if (v == null || !isFinite(v)) return '—';
+    const a = Math.abs(v);
+    if (a >= 1000) return Math.round(v).toLocaleString('ru-RU');
+    if (a >= 100) return v.toFixed(1);
+    if (a >= 1) return v.toFixed(digits);
+    if (a >= 0.01) return v.toFixed(4);
+    if (a >= 0.001) return v.toFixed(5);
+    return v.toExponential(2);
+}
+
+/** «1 px = N км» или «1 px = N а.е.» для HUD. */
+export function fmtScale(zoom) {
+    const wuPerPx = 1 / zoom;
+    const kmPerPx = wuToKm(wuPerPx);
+    return kmPerPx >= AU_KM * 0.1
+        ? fmtAu(wuToAu(wuPerPx)) + ' а.е.'
+        : fmtKm(kmPerPx) + ' км';
+}
+
+/** «N px/а.е.» для HUD. */
+export function fmtPxPerAu(zoom) {
+    const v = zoom * AU_WU;
+    if (v >= 100) return Math.round(v).toLocaleString('ru-RU');
+    if (v >= 1) return v.toFixed(1);
+    if (v >= 0.01) return v.toFixed(3);
+    return v.toExponential(2);
+}
+
+/** Угловой диаметр тела: радиус и расстояние в км -> угловые секунды. */
+export function angularArcsec(radiusKm, distanceKm) {
+    if (!(distanceKm > 0) || !(radiusKm > 0)) return null;
+    return 2 * Math.atan(radiusKm / distanceKm) * 206264.806247;
+}
+
+/** Угловой размер в угловых секундах/минутах/градусах. */
+export function fmtArcsec(v) {
+    if (v == null || !isFinite(v)) return '—';
+    if (v >= 3600) return (v / 3600).toFixed(2) + '°';
+    if (v >= 60) return (v / 60).toFixed(2) + '′';
+    if (v >= 1) return v.toFixed(1) + '″';
+    return v.toFixed(3) + '″';
+}
+
+// Круглые значения для линейки масштаба.
+const KM_STEPS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000,
+    10000, 20000, 50000, 100000, 200000, 500000, 1e6, 2e6, 5e6, 1e7, 2e7, 5e7, 1e8, 2e8, 5e8, 1e9];
+const AU_STEPS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50,
+    100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
+
+/** Ближайшее круглое значение из списка. */
+function nearestStep(steps, target) {
+    return steps.reduce((best, x) =>
+        Math.abs(x - target) < Math.abs(best - target) ? x : best, steps[0]);
+}
+
+/**
+ * Линейка масштаба: круглое расстояние, которое занимает около targetPx.
+ * @returns {{wu: number, px: number, label: string}}
+ */
+export function niceScale(zoom, targetPx = 120) {
+    const wuTarget = targetPx / zoom;
+    const auTarget = wuToAu(wuTarget);
+    if (auTarget >= 0.05) {
+        const v = nearestStep(AU_STEPS, auTarget);
+        return { wu: au(v), px: au(v) * zoom, label: fmtAu(v) + ' а.е.' };
+    }
+    const v = nearestStep(KM_STEPS, wuToKm(wuTarget));
+    return { wu: km(v), px: km(v) * zoom, label: fmtKm(v) + ' км' };
 }

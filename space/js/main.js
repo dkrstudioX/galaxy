@@ -10,6 +10,8 @@
 
 import { state, resize } from './state.js';
 import { MS_PER_DAY } from './config.js';
+import { fitZoom } from './math.js';
+import { au } from './units.js';
 import { initInput } from './input.js';
 import { updateBaseRemovals } from './bases.js';
 import { renderScene } from './render.js';
@@ -23,6 +25,9 @@ const ctx = canvas.getContext('2d');
 const hud = getHudElements();
 
 resize(canvas);
+// Стартовый вид — «Внутренние»: вписываем орбиту Марса с запасом 5 %.
+// Точное значение зависит от размера окна (0.28 при высоте 900 px).
+state.zoom = fitZoom(au(1.523679), state.W, state.H);
 window.addEventListener('resize', () => resize(canvas));
 
 initInput(canvas, getSpeedButtons());

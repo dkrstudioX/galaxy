@@ -82,10 +82,13 @@ export function initInput(canvas, ui) {
     });
 
     // === КОЛЕСО МЫШИ: зум к точке под курсором ===
+    // На дальних видах (Койпер/Оорт) шаг крупнее: иначе до нужного масштаба
+    // приходится крутить колесо сотни раз.
     canvas.addEventListener('wheel', e => {
         e.preventDefault();
         state.fly = null;   // ручной зум перебивает полёт камеры
-        zoomAt(e.clientX, e.clientY, state.zoom * (e.deltaY > 0 ? 0.9 : 1.1));
+        const step = state.zoom < 0.01 ? 1.25 : 1.1;
+        zoomAt(e.clientX, e.clientY, state.zoom * (e.deltaY > 0 ? 1 / step : step));
     }, { passive: false });
 
     // === ПАНОРАМИРОВАНИЕ ПРАВОЙ КНОПКОЙ ===
@@ -191,24 +194,25 @@ function updateSpeedUI(ui) {
 
 /* ---------- Звёздные базы: режим выбора орбиты (кнопка в карточке) ---------- */
 
-/** Позиция хост-тела (планеты/луны) в мировых координатах из целей кадра. */
+/** Позиция хост-тела (планеты/луны) в мировых координатах из state (render.js). */
 function hostPosOf(host) {
-    const tg = state.hoverTargets || [];
-    const t = tg.find(t => t.kind === 'planet' && t.p.name === host.planet);
-    if (!t) return null;
-    if (host.kind === 'planet') return { x: t.x, y: t.y };
-    const mh = t.moons.find(m => m.m.n === host.moon);
-    return mh ? { x: mh.mx, y: mh.my } : null;
+    if (host.kind === 'planet') {
+        const p = state.planetPositions.get(host.planet);
+        return p ? { x: p.x, y: p.y } : null;
+    }
+    const m = state.moonPositions.get(host.planet + ':' + host.moon);
+    return m ? { x: m.x, y: m.y } : null;
 }
 
-/** Снимок соседей для режима базы: планеты и их нарисованные луны (позиции — на момент снимка). */
+/** Снимок соседей для режима базы: планеты и их видимые луны (позиции на момент снимка). */
 function baseHosts() {
     const out = [];
-    (state.hoverTargets || []).forEach(t => {
-        if (t.kind !== 'planet') return;
-        out.push({ kind: 'planet', planet: t.p.name, moon: null, x: t.x, y: t.y });
-        t.moons.forEach(mh =>
-            out.push({ kind: 'moon', planet: t.p.name, moon: mh.m.n, x: mh.mx, y: mh.my }));
+    state.planetPositions.forEach((pos, name) => {
+        out.push({ kind: 'planet', planet: name, moon: null, x: pos.x, y: pos.y });
+    });
+    state.moonPositions.forEach((pos, key) => {
+        const [planet, ...rest] = key.split(':');
+        out.push({ kind: 'moon', planet, moon: rest.join(':'), x: pos.x, y: pos.y });
     });
     return out;
 }
@@ -268,6 +272,7 @@ function confirmBase(x, y) {
         return;
     }
     const rec = createBase(mode, state.baseRadius, mode.ang);
+    if (!rec) { refreshObjectCard(); return; }   // тело меньше 50 км — база не создаётся
     const p = planets.find(q => q.name === rec.planet);
     selectBody({ kind: 'base', name: rec.name, local: rec, p, m: null });
 }

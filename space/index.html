@@ -4,16 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Solar System - Realistic</title>
-    <link rel="stylesheet" href="css/style.css?v=20261043">
+    <link rel="stylesheet" href="css/style.css?v=20261047">
 </head>
 <body>
 <div id="ui" class="glass">
     <div class="hud-title">SOL SYSTEM</div>
     BASE: <b>LUNA-ORBIT</b><br>
+    SCALE: 1 px = <b id="scale">—</b><br>
+    PIXELS: <b id="pxau">—</b> px/а.е.<br>
     ZOOM: <b id="z">1.0x</b><br>
     SPEED: <b id="speed">1x</b><br>
     DATE: <b id="date">—</b><br>
     TIME: +<b id="days">0.0000</b> d
+</div>
+
+<!-- Пресеты камеры: те же сегменты, что у кнопок скорости (стиль .btn). -->
+<div id="presets" class="glass">
+    <button class="btn" data-preset="inner">Внутренние</button>
+    <button class="btn" data-preset="planets">Планеты</button>
+    <button class="btn" data-preset="belt">Пояс</button>
+    <button class="btn" data-preset="kuiper">Койпер</button>
+    <button class="btn" data-preset="oort">Оорт</button>
+    <button class="btn" data-preset="sun">Солнце</button>
+</div>
+
+<!-- Линейка масштаба: длина сегмента и подпись считаются в ui.js (niceScale). -->
+<div id="scalebar">
+    <div class="scale-line"></div>
+    <span class="scale-label">—</span>
 </div>
 
 <div id="controls">
@@ -41,7 +59,7 @@
             <span class="caret">▼</span>
         </div>
         <div class="panel-body" id="objectInfo">
-            <div class="obj-empty">Кликните по солнцу, планете, луне или базе на карте</div>
+            <div class="obj-empty">Кликните по солнцу, планете, луне, области или базе на карте</div>
         </div>
     </div>
 
@@ -75,6 +93,6 @@ window.addEventListener('unhandledrejection', e => window.__bootErrs.push('promi
 <script src="../data/store.js?v=20261070"></script>
 <script src="../data/icons.js?v=20261017"></script>
 <!-- app.js = сборка js/*.js (py build.py), без модулей — чтобы страница открывалась напрямую с file:// -->
-<script src="app.js?v=20261046"></script>
+<script src="app.js?v=20261047"></script>
 </body>
 </html>

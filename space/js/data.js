@@ -1,26 +1,34 @@
 // =============================================================================
-// data.js — астрономические данные: планеты, луны, база.
+// data.js — астрономические данные: планеты, луны, малые тела.
 // Только данные, никакой логики. Периоды сидерические (сутки), долготы L0
-// средние на эпоху J2000 (градусы) — отсюда реалистичные взаимные положения.
+// средние на эпоху J2000 (градусы). Все радиусы и расстояния — в мировых
+// единицах (wu) по единому масштабу units.js: 1 а.е. = 1000 wu.
+//
+// Планеты: r = km(радиус), dist = au(большая полуось). l0 пересчитаны на
+// J2000 так, чтобы на эпоху 2026-10-23 эклиптические долготы были
+// симметричны: 0°, 45°, 90°, … 315° (см. plans/space-real-scale.md).
+// e, peri, inc, node — реальные элементы; положение считается уравнением
+// Кеплера (math.js keplerPos3).
+//
+// Луны: полный каталог moons_data.js (456 спутников шести планет), собранный
+// из JPL SSD и Wikipedia. r = km(rad), a — километры, moonOrbitRadius
+// переводит их в wu без сжатия.
 // =============================================================================
 
-// Планеты. r и dist — условные единицы мира (dist — сжатая большая полуось,
-// порядок и относительные расстояния верные). l0 — средняя долгота на J2000,
-// e — реальный эксцентриситет, peri — долгота перигелия, inc/node — реальное
-// наклонение и долгота восходящего узла к плоскости эклиптики (J2000).
-// Позиция считается уравнением Кеплера (math.js keplerPos3), поэтому форма,
-// наклон и скорость движения соответствуют реальным элементам.
-// rings — рисовать кольца (Сатурн). type оставлен для совместимости.
-// ru — русское имя для подписей на карте и в карточках (ui.js).
+import { au, km } from './units.js';
+import { moonCatalog } from './moons_data.js';
+
+// Планеты. radiusKm/aAu оставлены для карточек и JSON: r и dist — уже
+// пересчитанные мировые единицы.
 export const planets = [
-    { name: 'Mercury', ru: 'Меркурий', color: '#b5b5b5', r: 4,  dist: 70,  period: 87.969,   l0: 252.251, e: 0.205636, peri: 77.458,  inc: 7.005,  node: 48.331,  type: 'rocky' },
-    { name: 'Venus',   ru: 'Венера',   color: '#e8cda0', r: 7,  dist: 110, period: 224.701,  l0: 181.980, e: 0.006777, peri: 131.602, inc: 3.395,  node: 76.680,  type: 'rocky' },
-    { name: 'Earth',   ru: 'Земля',    color: '#4488ff', r: 8,  dist: 160, period: 365.256,  l0: 100.464, e: 0.016711, peri: 102.938, inc: 0.000,  node: 0.000,   type: 'earth' },
-    { name: 'Mars',    ru: 'Марс',     color: '#c1440e', r: 5,  dist: 220, period: 686.980,  l0: 355.453, e: 0.093394, peri: 336.041, inc: 1.850,  node: 49.579,  type: 'rocky' },
-    { name: 'Jupiter', ru: 'Юпитер',   color: '#c88b3a', r: 22, dist: 380, period: 4332.589, l0: 34.396,  e: 0.048386, peri: 14.728,  inc: 1.304,  node: 100.464, type: 'gas' },
-    { name: 'Saturn',  ru: 'Сатурн',   color: '#e8d191', r: 18, dist: 520, period: 10759.22, l0: 49.954,  e: 0.053862, peri: 92.599,  inc: 2.488,  node: 113.665, type: 'gas', rings: true },
-    { name: 'Uranus',  ru: 'Уран',     color: '#7de8e8', r: 12, dist: 660, period: 30685.4,  l0: 313.238, e: 0.047257, peri: 170.954, inc: 0.773,  node: 74.006,  type: 'ice' },
-    { name: 'Neptune', ru: 'Нептун',   color: '#3f54ba', r: 12, dist: 780, period: 60189.0,  l0: 304.880, e: 0.008590, peri: 44.965,  inc: 1.770,  node: 131.784, type: 'ice' }
+    { name: 'Mercury', ru: 'Меркурий', color: '#b5b5b5', r: km(2439.7),  dist: au(0.387098), radiusKm: 2439.7,  aAu: 0.387098, period: 87.969,   l0: 271.670338, e: 0.205636, peri: 77.458,  inc: 7.005,  node: 48.331,  type: 'rocky' },
+    { name: 'Venus',   ru: 'Венера',   color: '#e8cda0', r: km(6051.8),  dist: au(0.723332), radiusKm: 6051.8,  aAu: 0.723332, period: 224.701,  l0: 198.483416, e: 0.006777, peri: 131.602, inc: 3.395,  node: 76.680,  type: 'rocky' },
+    { name: 'Earth',   ru: 'Земля',    color: '#4488ff', r: km(6371.0),  dist: au(1.000000), radiusKm: 6371.0,  aAu: 1.000000, period: 365.256,  l0: 159.822344, e: 0.016711, peri: 102.938, inc: 0.000,  node: 0.000,   type: 'earth' },
+    { name: 'Mars',    ru: 'Марс',     color: '#c1440e', r: km(3389.5),  dist: au(1.523679), radiusKm: 3389.5,  aAu: 1.523679, period: 686.980,  l0: 39.827744,  e: 0.093394, peri: 336.041, inc: 1.850,  node: 49.579,  type: 'rocky' },
+    { name: 'Jupiter', ru: 'Юпитер',   color: '#c88b3a', r: km(69911),   dist: au(5.20260),  radiusKm: 69911,   aAu: 5.20260,  period: 4332.589, l0: 84.954805,  e: 0.048386, peri: 14.728,  inc: 1.304,  node: 100.464, type: 'gas' },
+    { name: 'Saturn',  ru: 'Сатурн',   color: '#e8d191', r: km(58232),   dist: au(9.55491),  radiusKm: 58232,   aAu: 9.55491,  period: 10759.22, l0: 252.676195, e: 0.053862, peri: 92.599,  inc: 2.488,  node: 113.665, type: 'gas', rings: true },
+    { name: 'Uranus',  ru: 'Уран',     color: '#7de8e8', r: km(25362),   dist: au(19.21845), radiusKm: 25362,   aAu: 19.21845, period: 30685.4,  l0: 149.751982, e: 0.047257, peri: 170.954, inc: 0.773,  node: 74.006,  type: 'ice' },
+    { name: 'Neptune', ru: 'Нептун',   color: '#3f54ba', r: km(24622),   dist: au(30.11039), radiusKm: 24622,   aAu: 30.11039, period: 60189.0,  l0: 257.421335, e: 0.008590, peri: 44.965,  inc: 1.770,  node: 131.784, type: 'ice' }
 ];
 
 /** Средняя аномалия планеты на J2000: L0 − долгота перигелия. */
@@ -28,109 +36,85 @@ export function planetM0(p) {
     return p.l0 - p.peri;
 }
 
-// Луна Земли: сидерический период 27.32 суток.
-export const moonDist = 22;          // радиус орбиты Луны от Земли
-export const moonPeriod = 27.321661; // суток
-export const moonL0 = 218.32;        // средняя долгота на J2000, градусы
-export const moonInc = 5.145;        // наклонение к эклиптике, градусы
-export const moonNode = 125.08;      // долгота восходящего узла, градусы
-// Базы игрока: на радиусе baseOrbitRadius виток занимает basePeriod суток,
-// дальше период растёт по закону Кеплера (bases.js); на этом же радиусе
-// рождается стартовая база LUNA-ORBIT.
-export const baseOrbitRadius = 10;
-export const basePeriod = 1;         // суток на виток (на радиусе baseOrbitRadius)
+// Луна Земли: значения остаются экспортами для баз и старых карточек, но
+// рисуется она из общего каталога — отдельного блока в render.js больше нет.
+export const moonDist = km(384400);        // большая полуось Луны, wu
+export const moonPeriod = 27.321661;       // сидерический период, сутки
 
-/**
- * Радиус орбиты i-й луны планеты на карте (единицы мира): главная луна на
- * p.r + 12, дальше шаг 7 — тем же порядком луны раскрываются при зуме.
- * Общий источник для render.js (отрисовка), ui.js (карточка) и bases.js
- * (коридор радиусов орбит баз: база не должна пересекать луну).
- */
+// Базы игрока: период задаётся в bases.js относительно 3R хозяина (один виток
+// в сутки на стартовой орбите). Здесь остаётся только опорное значение.
+export const basePeriod = 1;
+
+// Цвета известных лун: остальные получают нейтральный оттенок из палитры.
+const MOON_COLORS = {
+    Moon: '#c9cfd8',
+    Phobos: '#9c8f84', Deimos: '#b3a89e',
+    Io: '#d8c26a', Europa: '#cbb8a0', Ganymede: '#9a8f85', Callisto: '#7d746c',
+    Amalthea: '#b06a4a', Himalia: '#8a8078', Elara: '#9a948c',
+    Mimas: '#b8bcc2', Enceladus: '#d9dee3', Tethys: '#ccd1d6', Dione: '#c2c7cd',
+    Rhea: '#a8adb5', Titan: '#c79b5a', Hyperion: '#a99a82', Iapetus: '#8f8478',
+    Phoebe: '#7d7568', Janus: '#b9b4a9', Epimetheus: '#b0aba1',
+    Miranda: '#a9b3b8', Ariel: '#b6c0c4', Umbriel: '#7e888d', Titania: '#9aa5ab',
+    Oberon: '#8b969c', Puck: '#9c9a94',
+    Proteus: '#8f9aa3', Triton: '#c3cdd4', Nereid: '#9aa2ab'
+};
+const MOON_PALETTE = ['#a8adb5', '#9c8f84', '#8a8078', '#b3a89e', '#8f9aa3', '#a99f93'];
+
+// moonsByPlanet — та же структура, что была у ручного списка, но собрана из
+// каталога: n, ru, period, a (км), r (wu), c, e, peri, m0, inc, node, rad (км).
+export const moonsByPlanet = {};
+planets.forEach(p => { moonsByPlanet[p.name] = []; });
+moonCatalog.forEach((m, i) => {
+    const list = moonsByPlanet[m.planet];
+    if (!list) return;
+    list.push({
+        n: m.n,
+        ru: m.ru || '',
+        period: m.period,
+        a: m.a,
+        r: km(m.rad),
+        rad: m.rad,
+        c: MOON_COLORS[m.n] || MOON_PALETTE[i % MOON_PALETTE.length],
+        e: m.e,
+        peri: m.peri,
+        m0: m.m0,
+        inc: m.inc,
+        node: m.node,
+        frame: m.frame
+    });
+});
+
+/** Радиус орбиты i-й луны планеты в мировых единицах: без сжатия, km(a). */
 export function moonOrbitRadius(p, i) {
     const list = moonsByPlanet[p.name] || [];
     const m = list[i];
-    if (!m || !m.a) return p.r + 12 + i * 7;
-
-    // Реальные большие полуоси лун сжаты логарифмически, как и вся карта:
-    // порядок и относительный размах сохранены, но Ио и Гималия не разлетаются
-    // на сотни единиц. Внутренняя луна — p.r + 12, внешняя — p.r + 40.
-    const amin = Math.min(...list.map(x => x.a));
-    const amax = Math.max(...list.map(x => x.a));
-    const t = Math.log(m.a / amin + 1) / Math.log(amax / amin + 1);
-    return p.r + 12 + t * 28;
+    return m ? km(m.a) : p.r * 2;
 }
 
-// Главные луны других планет: период (сутки), реальная большая полуось a (км),
-// радиус отрисовки r, цвет c, стартовая фаза phase (градусы, произвольная).
-// inc/node — наклонение и узел орбиты луны относительно эклиптики (J2000):
-// у регулярных лун это плоскость экватора планеты (поэтому у Урана ~98°,
-// у Сатурна ~26.7°), у нерегулярных — собственное наклонение.
-// moonOrbitRadius ставит луны по реальному a (логарифмическое сжатие), поэтому
-// порядок списка не важен; что показано при текущем зуме, решает слипание тел
-// по экранному расстоянию (scene.js clusterBodies).
-export const moonsByPlanet = {
-    Mars: [
-        { n: 'Phobos',   period: 0.3189, a: 9376,     r: 1.5, c: '#9c8f84', phase: 40,  inc: 26.04, node: 125.08 },
-        { n: 'Deimos',   period: 1.2624, a: 23463,    r: 1.3, c: '#b3a89e', phase: 150, inc: 26.58, node: 125.08 }
-    ],
-    Jupiter: [
-        { n: 'Io',       period: 1.769,  a: 421700,   r: 2.3, c: '#d8c26a', phase: 70,  inc: 0.04,  node: 100.46 },
-        { n: 'Europa',   period: 3.551,  a: 671034,   r: 2.0, c: '#cbb8a0', phase: 190, inc: 0.47,  node: 100.46 },
-        { n: 'Ganymede', period: 7.155,  a: 1070412,  r: 2.7, c: '#9a8f85', phase: 300, inc: 0.20,  node: 100.46 },
-        { n: 'Callisto', period: 16.689, a: 1882709,  r: 2.5, c: '#7d746c', phase: 20,  inc: 0.19,  node: 100.46 },
-        { n: 'Amalthea', period: 0.498,  a: 181365,   r: 1.2, c: '#b06a4a', phase: 130, inc: 0.38,  node: 100.46 },
-        { n: 'Himalia',  period: 250.6,  a: 11460000, r: 1.2, c: '#8a8078', phase: 45,  inc: 27.50, node: 40.00 }
-    ],
-    Saturn: [
-        { n: 'Mimas',    period: 0.942,  a: 185539,   r: 1.5, c: '#b8bcc2', phase: 110, inc: 26.73, node: 113.67 },
-        { n: 'Enceladus',period: 1.370,  a: 238037,   r: 1.7, c: '#d9dee3', phase: 250, inc: 26.73, node: 113.67 },
-        { n: 'Rhea',     period: 4.518,  a: 527108,   r: 1.9, c: '#a8adb5', phase: 330, inc: 26.73, node: 113.67 },
-        { n: 'Titan',    period: 15.945, a: 1221870,  r: 2.9, c: '#c79b5a', phase: 80,  inc: 26.73, node: 113.67 },
-        { n: 'Dione',    period: 2.737,  a: 377396,   r: 1.6, c: '#c2c7cd', phase: 15,  inc: 26.73, node: 113.67 },
-        { n: 'Tethys',   period: 1.888,  a: 294619,   r: 1.6, c: '#ccd1d6', phase: 200, inc: 26.73, node: 113.67 },
-        { n: 'Iapetus',  period: 79.32,  a: 3560820,  r: 1.7, c: '#8f8478', phase: 300, inc: 15.47, node: 80.00 }
-    ],
-    Uranus: [
-        { n: 'Miranda',  period: 1.413,  a: 129390,   r: 1.4, c: '#a9b3b8', phase: 210, inc: 97.77, node: 74.01 },
-        { n: 'Ariel',    period: 2.520,  a: 190900,   r: 1.7, c: '#b6c0c4', phase: 20,  inc: 97.77, node: 74.01 },
-        { n: 'Umbriel',  period: 4.144,  a: 266000,   r: 1.5, c: '#7e888d', phase: 95,  inc: 97.77, node: 74.01 },
-        { n: 'Titania',  period: 8.706,  a: 436300,   r: 2.1, c: '#9aa5ab', phase: 140, inc: 97.77, node: 74.01 },
-        { n: 'Oberon',   period: 13.463, a: 583500,   r: 2.0, c: '#8b969c', phase: 260, inc: 97.77, node: 74.01 },
-        { n: 'Puck',     period: 0.762,  a: 86004,    r: 1.1, c: '#9c9a94', phase: 175, inc: 97.77, node: 74.01 }
-    ],
-    Neptune: [
-        { n: 'Proteus',  period: 1.122,  r: 1.5, c: '#8f9aa3', phase: 310, inc: 28.32,  node: 131.78 },
-        { n: 'Triton',   period: 5.877,  r: 2.3, c: '#c3cdd4', phase: 100, inc: 156.88, node: 177.40 },
-        { n: 'Nereid',   period: 360.1,  r: 1.2, c: '#9aa2ab', phase: 220, inc: 35.00,  node: 131.78 }
-    ]
-};
+/** Группы лун для дерева: крупные (rad ≥ 100 км) первыми, затем остальные. */
+export const moonTree = {};
+planets.forEach(p => {
+    const list = (moonsByPlanet[p.name] || []).slice().sort((a, b) => {
+        const major = (b.rad >= 100) - (a.rad >= 100);
+        return major || (a.a - b.a);
+    });
+    moonTree[p.name] = list.map(m => ({
+        n: m.n,
+        ru: m.ru,
+        label: m.ru ? m.ru + ' / ' + m.n : m.n,
+        period: m.period,
+        rad: m.rad,
+        major: m.rad >= 100
+    }));
+});
 
-// Данные для боковой панели «ЛУНЫ СИСТЕМЫ»: имя + период для показа.
-export const moonTree = {
-    Mercury: [],
-    Venus:   [],
-    Earth:   [['Луна / Moon', '27.32 d']],
-    Mars:    [['Phobos', '0.32 d'], ['Deimos', '1.26 d']],
-    Jupiter: [['Io', '1.77 d'], ['Europa', '3.55 d'], ['Ganymede', '7.15 d'], ['Callisto', '16.69 d']],
-    Saturn:  [['Mimas', '0.94 d'], ['Enceladus', '1.37 d'], ['Rhea', '4.52 d'], ['Titan', '15.95 d']],
-    Uranus:  [['Miranda', '1.41 d'], ['Ariel', '2.52 d'], ['Titania', '8.71 d'], ['Oberon', '13.46 d']],
-    Neptune: [['Proteus', '1.12 d'], ['Triton', '5.88 d']]
+// Известное общее число лун у каждой планеты (JPL, октябрь 2026).
+export const moonTotals = {
+    Mercury: 0, Venus: 0, Earth: 1, Mars: 2,
+    Jupiter: 115, Saturn: 292, Uranus: 30, Neptune: 16
 };
-
-// Известное общее число лун у каждой планеты (для счётчика «☾ N» в панели).
-export const moonTotals = { Mercury: 0, Venus: 0, Earth: 1, Mars: 2, Jupiter: 95, Saturn: 146, Uranus: 28, Neptune: 16 };
 
 /* ---------- Малые тела (карта: smallbodies.js) ---------- */
-
-// Отображение астрономических единиц в условные единицы карты: кусочно-линейные
-// якоря — орбиты планет, границы главного пояса, дальние зоны. Пояс остаётся
-// на прежних радиусах 270–350 (якоря 2.2 и 3.5 а.е. подобраны под него).
-// Дальше 50 а.е. шкала сильно сжата (math.js auToDist продолжает линейно).
-export const AU_ANCHORS = [
-    [0.387, 70], [0.723, 110], [1.0, 160], [1.524, 220],
-    [2.2, 270], [3.5, 350], [5.203, 380], [9.537, 520],
-    [19.19, 660], [30.07, 780], [40, 890], [50, 1000]
-];
 
 // Крупнейшие тела главного пояса: Церера (карликовая планета), Веста, Паллада,
 // Гигея. a — а.е., e — эксцентриситет, peri — долгота перигелия (град.),
@@ -165,12 +149,13 @@ export const neas = [
 ];
 
 // Именованные троянцы Юпитера: camp 4 — L4 (впереди Юпитера), 5 — L5 (позади);
-// dAng — смещение от центра облака (град.), dR — от радиуса орбиты Юпитера (ед.).
+// dAng — смещение от центра облака (град.), dR — от радиуса орбиты Юпитера
+// (wu). dia — реальный диаметр (км), нужен для LOD и карточки.
 export const trojanNames = [
-    { n: 'Achilles',  ru: 'Ахиллес',   camp: 4, dAng: -3.2, dR: 6 },
-    { n: 'Agamemnon', ru: 'Агамемнон', camp: 4, dAng: 4.1,  dR: -5 },
-    { n: 'Hektor',    ru: 'Гектор',    camp: 5, dAng: -2.4, dR: 4 },
-    { n: 'Patroclus', ru: 'Патрокл',   camp: 5, dAng: 3.6,  dR: -7 }
+    { n: 'Achilles',  ru: 'Ахиллес',   camp: 4, dAng: -3.2, dR: 6, dia: 135 },
+    { n: 'Agamemnon', ru: 'Агамемнон', camp: 4, dAng: 4.1,  dR: -5, dia: 167 },
+    { n: 'Hektor',    ru: 'Гектор',    camp: 5, dAng: -2.4, dR: 4, dia: 225 },
+    { n: 'Patroclus', ru: 'Патрокл',   camp: 5, dAng: 3.6,  dR: -7, dia: 140 }
 ];
 
 // Кометы: реальные элементы. m0 подобраны так, чтобы сейчас (2026) кометы были

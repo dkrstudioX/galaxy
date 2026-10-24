@@ -52,7 +52,7 @@ export function sphere(ctx, x, y, r, color, opts = {}) {
     const hi = mix(color, '#ffffff', 0.58);
     const lo = mix(color, '#000000', 0.78);
     const g = ctx.createRadialGradient(
-        x - r * 0.33, y - r * 0.33, Math.max(0.05, r * 0.06),
+        x - r * 0.33, y - r * 0.33, Math.max(r * 0.06, 1e-9),
         x, y, r * 1.18
     );
     g.addColorStop(0, hi);

@@ -1,23 +1,35 @@
 // =============================================================================
-// ui.js — DOM-интерфейс: HUD-показатели (зум/скорость/дата), боковые блоки
-// «СОЛНЕЧНАЯ СИСТЕМА» (дерево всех выбираемых тел: Солнце, планеты, луны и
-// малые тела), «ОБЪЕКТ» (информация о выбранном; появляется только с выбором —
-// шапка блока носит имя выбранного) и «МАЛЫЕ ТЕЛА» (группы малых тел: полёт
-// камеры и выбор по клику).
+// ui.js — DOM-интерфейс: HUD-показатели (масштаб/зум/скорость/дата), боковые
+// блоки «СОЛНЕЧНАЯ СИСТЕМА» (дерево всех выбираемых тел: Солнце, планеты,
+// группы лун с фильтром и малыми телами), «ОБЪЕКТ» (информация о выбранном;
+// появляется только с выбором — шапка блока носит имя выбранного) и «МАЛЫЕ
+// ТЕЛА» (группы малых тел: полёт камеры и выбор по клику).
+//
+// Реальный масштаб: карточки показывают радиус и диаметр в километрах,
+// расстояния в а.е. и угловой размер в угловых секундах (пометка «в модели»);
+// HUD — «1 px = N км» и «N px/а.е.» плюс линейка масштаба.
+// Дерево лун ленивое: 456 строк не строятся одновременно — список планеты
+// собирается при раскрытии, фильтр ищет по всем лунам, крупные показаны сразу.
 // Выбор делается кликом по канвасу (selectBody вызывает input.js), по
 // элементу дерева или по строке блока малых тел. Шапка каждого блока
-// сворачивает его — отдельных кнопок «скрыть/показать» нет. Здесь же твин
-// полёта камеры (flyToCamera/updateFlyTo), которым main.js двигает камеру,
-// и модальный confirmDialog (общий стиль ангара: .slot-dialog).
-// Работает с DOM, не с канвасом.
+// сворачивает его. Здесь же твин полёта камеры (flyToCamera/updateFlyTo),
+// которым main.js двигает камеру, и модальный confirmDialog (общий стиль
+// ангара: .slot-dialog). Работает с DOM, не с канвасом.
 // =============================================================================
 
 import { state } from './state.js';
-import { formatSimDate, clamp } from './math.js';
-import { SUN_R, COLORS, MIN_ZOOM, MAX_ZOOM } from './config.js';
-import { planets, moonTotals, moonsByPlanet, moonDist, moonOrbitRadius, moonPeriod } from './data.js';
+import {
+    formatSimDate, clamp, fitZoom, fmtKm, fmtAu, fmtScale, fmtPxPerAu,
+    niceScale, angularArcsec, fmtArcsec
+} from './math.js';
+import { SUN_R, COLORS, MIN_ZOOM, MAX_ZOOM, BASE_ORBIT_K } from './config.js';
+import { planets, moonTotals, moonsByPlanet, moonOrbitRadius, moonTree } from './data.js';
+import { au, km, wuToKm, wuToAu, AU_KM } from './units.js';
 import { notables, neaBodies, trojanBodies, cometBodies } from './smallbodies.js';
-import { bases, basesAt, fitBaseRadius, startBaseRemoval, removalProgress, BASE_REMOVAL_MS } from './bases.js';
+import {
+    bases, basesAt, fitBaseRadius, startBaseRemoval, removalProgress,
+    BASE_REMOVAL_MS, hostRadius, canHostBase
+} from './bases.js';
 
 // Русские имена для блока «ОБЪЕКТ»: планеты хранят их в данных (data.js, поле
 // ru), здесь только солнце — на карте оно не в списке планет.
@@ -27,6 +39,12 @@ const TYPES = {
     rocky: 'Каменная планета', earth: 'Обитаемая планета',
     gas: 'Газовый гигант', ice: 'Ледяной гигант'
 };
+
+/** Порог «крупной» луны: такие показываются в дереве сразу и в фазе планеты. */
+const MOON_MAJOR_KM = 100;
+
+/** Планет с малым числом лун показываем целиком, даже если они мелкие. */
+const MOON_ALL_LIMIT = 8;
 
 function fmtPeriod(days) {
     const d = Math.round(days * 100) / 100;
@@ -47,9 +65,13 @@ function fmtSecondsWord(n) {
 export function getHudElements() {
     return {
         zEl: document.getElementById('z'),
+        scaleEl: document.getElementById('scale'),
+        pxauEl: document.getElementById('pxau'),
         speedEl: document.getElementById('speed'),
         daysEl: document.getElementById('days'),
-        dateEl: document.getElementById('date')
+        dateEl: document.getElementById('date'),
+        barEl: document.querySelector('#scalebar .scale-line'),
+        barLabelEl: document.querySelector('#scalebar .scale-label')
     };
 }
 
@@ -68,30 +90,57 @@ export function updateHud(hud) {
     // что задаёт углы планет. Показывает время, прошедшее с загрузки страницы.
     hud.daysEl.textContent = (state.simDays - state.startSimDays).toFixed(4);
     hud.dateEl.textContent = formatSimDate(state.simDays);
-    hud.zEl.textContent = state.zoom.toFixed(2) + 'x';
+
+    // Масштаб: «1 px = N км» (на широких видах — а.е.) и «N px/а.е.».
+    if (hud.scaleEl) hud.scaleEl.textContent = fmtScale(state.zoom);
+    if (hud.pxauEl) hud.pxauEl.textContent = fmtPxPerAu(state.zoom);
+    if (hud.zEl) hud.zEl.textContent = state.zoom >= 0.01
+        ? (state.zoom >= 1 ? state.zoom.toFixed(2) : state.zoom.toFixed(3)) + 'x'
+        : state.zoom.toExponential(2) + 'x';
+
+    // Линейка масштаба: сегмент фиксированной экранной длины с подписью.
+    if (hud.barEl && hud.barLabelEl) {
+        const s = niceScale(state.zoom, 120);
+        hud.barEl.style.width = Math.max(8, s.px).toFixed(1) + 'px';
+        hud.barLabelEl.textContent = s.label;
+    }
 }
 
 /* ---------- Дерево «01 Солнечная система»: все выбираемые тела ---------- */
 
-// Таблица камеры: что должно оказаться в центре экрана и с каким масштабом.
-// У планет, лун и малых тел координаты меняются со временем, поэтому здесь
-// задан только масштаб, а x/y берутся из текущего кадра. У поясов и облака
-// координаты статические — центр карты.
-const VIEW_TARGETS = {
-    sun:      { x: 0, y: 0, zoom: 1.8 },
-    planet:   { zoom: 3.2 },
-    moon:     { zoom: 12 },
-    asteroid: { zoom: 5 },
-    nea:      { zoom: 5 },
-    trojan:   { zoom: 4 },
-    comet:    { zoom: 4 },
-    belt:     { x: 0, y: 0, zoom: 0.72 },
-    kuiper:   { x: 0, y: 0, zoom: 0.38 },
-    oort:     { x: 0, y: 0, zoom: 0.30 }
-};
+/**
+ * Масштаб вида для тела/области. У планет — вписать внешнюю крупную луну
+ * (радиус ≥ 100 км) или 20R, при этом диск планеты не меньше 8 px. У лун —
+ * 40 px на радиус. У малых тел — MAX_ZOOM: карточка + маркер, а Церера,
+ * Веста и Паллада при этом видны диском.
+ */
+function viewZoomFor(kind, obj) {
+    const W = state.W || 900, H = state.H || 900;
+    if (kind === 'sun') return fitZoom(SUN_R * 1.3, W, H);
+    if (kind === 'inner') return fitZoom(au(1.523679), W, H);
+    if (kind === 'planets') return fitZoom(au(30.11039), W, H);
+    if (kind === 'belt') return fitZoom(au(3.5), W, H);
+    if (kind === 'kuiper') return fitZoom(au(50), W, H);
+    if (kind === 'oort') return clamp(fitZoom(au(100000), W, H), MIN_ZOOM, MAX_ZOOM);
+
+    if (kind === 'planet') {
+        const p = obj && obj.p ? obj.p : obj;
+        const list = moonsByPlanet[p.name] || [];
+        const major = list.filter(m => m.rad >= MOON_MAJOR_KM);
+        const rOuter = major.length
+            ? km(Math.max(...major.map(m => m.a)))
+            : p.r * 20;
+        return clamp(Math.max(fitZoom(rOuter, W, H), 8 / p.r), MIN_ZOOM, MAX_ZOOM);
+    }
+    if (kind === 'moon') {
+        const m = obj && obj.m ? obj.m : obj;
+        return clamp(40 / m.r, 20, MAX_ZOOM);
+    }
+    return MAX_ZOOM;   // asteroid / nea / trojan / comet
+}
 
 // Описание областей: у них нет карточки тела, но есть выбор, подсветка и
-// короткая карточка области. target — ключ в VIEW_TARGETS.
+// короткая карточка области. target — ключ для viewZoomFor.
 const REGION_INFO = {
     belt: {
         key: 'belt', target: 'belt', title: 'Пояс астероидов',
@@ -112,9 +161,9 @@ const REGION_INFO = {
     oort: {
         key: 'oort', target: 'oort', title: 'Облако Оорта',
         kindLabel: 'облако Оорта', color: '#7f92a8',
-        distance: '1300–1800 <em>ед. карты</em>',
+        distance: '2 000–100 000 <em>а.е.</em>',
         map: '350 частиц на дальней границе карты',
-        rowTail: '1300–1800 ед.',
+        rowTail: 'до 100 000 а.е.',
         note: 'Родина долгопериодических комет'
     }
 };
@@ -140,10 +189,9 @@ function esc(s) {
         .replace(/"/g, '&quot;');
 }
 
-/** Строки лун планеты: у Земли — псевдо-луна, у остальных — все из data.js. */
-function moonRowsFor(p) {
-    if (p.name === 'Earth') return [{ n: 'Луна / Moon', period: moonPeriod }];
-    return moonsByPlanet[p.name] || [];
+/** Подпись луны: русское имя, если есть, иначе латиница. */
+function moonLabel(m) {
+    return m.ru ? m.ru + ' / ' + m.n : m.n;
 }
 
 function moonPeriodLabel(days) {
@@ -159,34 +207,51 @@ function smallKindLabel(b) {
     return '';
 }
 
-/** Цель текущего кадра для планеты: её view-координаты и луны. */
+/** Цель текущего кадра для планеты: её view-координаты. */
 function planetTarget(p) {
-    return (state.hoverTargets || []).find(t => t.kind === 'planet' && t.p === p) || null;
+    const pos = state.planetPositions.get(p.name);
+    return pos ? { x: pos.x, y: pos.y } : null;
 }
 
 /** Цель текущего кадра для луны; при сбое — планета, вокруг которой она летит. */
 function moonTarget(p, m) {
-    const pt = planetTarget(p);
-    if (!pt) return null;
-    const mh = pt.moons.find(x => x.m.n === m.n);
-    return mh ? { x: mh.mx, y: mh.my } : { x: pt.x, y: pt.y };
+    const pos = state.moonPositions.get(p.name + ':' + m.n);
+    if (pos) return { x: pos.x, y: pos.y };
+    return planetTarget(p);
 }
 
-/** Навести камеру на тело по таблице VIEW_TARGETS. */
+/** Навести камеру на тело: масштаб считает viewZoomFor. */
 function focusBody(kind, obj) {
-    const t = VIEW_TARGETS[kind];
-    if (!t) return;
-    const x = Number.isFinite(obj && obj.x) ? obj.x : t.x;
-    const y = Number.isFinite(obj && obj.y) ? obj.y : t.y;
+    const x = Number.isFinite(obj && obj.x) ? obj.x : 0;
+    const y = Number.isFinite(obj && obj.y) ? obj.y : 0;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    flyToCamera(x, y, t.zoom, 0.8);
+    flyToCamera(x, y, viewZoomFor(kind, obj), 0.8);
 }
 
-/** Навести камеру на пояс/облако: координаты и масштаб — из таблицы. */
+/** Навести камеру на пояс/облако: центр карты и масштаб области. */
 function focusRegion(region) {
-    const t = VIEW_TARGETS[region.target];
-    if (!t) return;
-    flyToCamera(t.x, t.y, t.zoom, 0.9);
+    flyToCamera(0, 0, viewZoomFor(region.target), 0.9);
+}
+
+/**
+ * Список лун планеты для дерева: фильтр по имени (латиница/кириллица) или
+ * крупные/все. Фильтр ищет по всему каталогу, даже если показаны не все.
+ * Сравнение без разделителей: «S/2019 S 1», «S2019_S_1» и «s 2019 s 1» —
+ * одно и то же имя (в каталоге JPL пробелы заменены подчёркиваниями).
+ */
+function moonRowsFor(p, query, showAll) {
+    const all = moonTree[p.name] || [];
+    const norm = s => String(s || '').toLowerCase().replace(/[\s/_-]+/g, '');
+    const q = norm(query);
+    if (q) {
+        // Сначала точное совпадение имени: «S/2019 S 1» не должно тянуть
+        // за собой S2019_S_10…S2019_S_19 по подстроке.
+        const exact = all.filter(m => norm(m.n) === q || norm(m.ru) === q);
+        if (exact.length) return exact;
+        return all.filter(m => norm(m.n).includes(q) || norm(m.ru).includes(q));
+    }
+    if (showAll || all.length <= MOON_ALL_LIMIT) return all;
+    return all.filter(m => m.major);
 }
 
 /** Построить дерево «планета → луны», блок «Объект» и сворачивание блоков. */
@@ -210,40 +275,99 @@ export function buildSidePanel() {
     treeEl.appendChild(sunLi);
 
     planets.forEach(p => {
+        const total = moonTotals[p.name] || 0;
         const li = document.createElement('li');
         li.className = 'planet';
         li.dataset.kind = 'planet';
         li.dataset.name = p.name;
-        const moons = moonRowsFor(p);
         li.innerHTML =
             '<div class="node">' +
                 '<span class="caret">▶</span>' +
                 '<span class="dot" style="background:' + p.color + '"></span>' +
                 '<span class="pname">' + p.name + '</span>' +
-                '<span class="cnt">☾ ' + moonTotals[p.name] + '</span>' +
+                '<span class="cnt">☾ ' + total + '</span>' +
             '</div>' +
-            '<ul class="loot">' +
-                moons.map(m =>
-                    '<li data-kind="moon" data-name="' + esc(m.n) + '" data-planet="' + esc(p.name) + '">' +
-                    esc(m.n) + '<i>' + moonPeriodLabel(m.period) + '</i></li>').join('') +
-            '</ul>';
-        // клик по шапке планеты: выбрать планету; клик по карет-зоне — только раскрыть
-        li.querySelector('.node').addEventListener('click', e => {
+            (total
+                ? '<div class="moon-tools">' +
+                    '<input class="moon-filter" type="search" placeholder="Фильтр лун" ' +
+                        'aria-label="Фильтр лун ' + esc(p.name) + '">' +
+                    '<button class="moon-more" type="button"></button>' +
+                  '</div>'
+                : '') +
+            '<ul class="loot"></ul>';
+
+        const ul = li.querySelector('.loot');
+        const input = li.querySelector('.moon-filter');
+        const more = li.querySelector('.moon-more');
+        let showAll = false;
+
+        const draw = () => {
+            const rows = moonRowsFor(p, input ? input.value : '', showAll);
+            const frag = document.createDocumentFragment();
+            rows.forEach(m => {
+                const el = document.createElement('li');
+                el.dataset.kind = 'moon';
+                el.dataset.name = m.n;
+                el.dataset.planet = p.name;
+                el.title = moonLabel(m);
+                el.innerHTML = '<span class="mname">' + esc(m.ru || m.n) + '</span>' +
+                    '<i>' + moonPeriodLabel(m.period) + '</i>';
+                frag.appendChild(el);
+            });
+            ul.innerHTML = '';
+            if (rows.length) {
+                ul.appendChild(frag);
+            } else {
+                const empty = document.createElement('li');
+                empty.className = 'moon-empty';
+                empty.textContent = input && input.value.trim()
+                    ? 'Ничего не найдено' : 'Крупных лун нет';
+                ul.appendChild(empty);
+            }
+            if (more) {
+                const canExpand = !input || !input.value.trim();
+                more.hidden = !canExpand || total <= MOON_ALL_LIMIT;
+                more.textContent = showAll ? 'Только крупные' : 'Показать все ' + total;
+            }
+        };
+
+        li._drawMoons = draw;
+        // Показать конкретную луну: снять фильтр и раскрыть весь список.
+        li._showMoon = () => {
+            showAll = true;
+            if (input) input.value = '';
+            draw();
+        };
+        if (input) input.addEventListener('input', draw);
+        if (more) more.addEventListener('click', () => {
+            showAll = !showAll;
+            draw();
+        });
+
+        // клик по шапке планеты: выбрать планету; повторный — свернуть/раскрыть
+        li.querySelector('.node').addEventListener('click', () => {
             li.classList.toggle('open');
+            if (li.classList.contains('open') && !li.dataset.built) {
+                li.dataset.built = '1';
+                draw();
+            }
             selectBody({ kind: 'planet', p });
             const t = planetTarget(p);
-            if (t) focusBody('planet', t);
+            if (t) focusBody('planet', { p, x: t.x, y: t.y });
         });
-        li.querySelectorAll('.loot li').forEach(mEl => {
-            mEl.addEventListener('click', () => {
-                const pName = mEl.dataset.planet;
-                const planet = planets.find(x => x.name === pName);
-                const m = moonFromTree(planet, mEl.dataset.name);
-                selectBody({ kind: 'moon', p: planet, m });
-                const t = moonTarget(planet, m);
-                if (t) focusBody('moon', t);
-            });
+
+        // клик по луне — через делегирование: строки пересобираются фильтром
+        ul.addEventListener('click', e => {
+            const el = e.target.closest('li[data-kind="moon"]');
+            if (!el) return;
+            const planet = planets.find(x => x.name === el.dataset.planet);
+            const m = moonFromTree(planet, el.dataset.name);
+            if (!m) return;
+            selectBody({ kind: 'moon', p: planet, m });
+            const t = moonTarget(planet, m);
+            if (t) focusBody('moon', { m, x: t.x, y: t.y });
         });
+
         treeEl.appendChild(li);
     });
 
@@ -314,6 +438,14 @@ export function buildSidePanel() {
     // Блок «03 Малые тела»: статические строки-группы, клик — полёт и выбор.
     buildSmallBodiesBlock();
 
+    // Пресеты камеры: «Внутренние», «Планеты», «Пояс», «Койпер», «Оорт», «Солнце».
+    document.querySelectorAll('#presets [data-preset]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const key = btn.dataset.preset;
+            flyToCamera(0, 0, viewZoomFor(key), 1.0);
+        });
+    });
+
     // Шапки блоков сворачивают своё тело: отдельные кнопки «скрыть/показать» не нужны.
     document.querySelectorAll('#sidePanel .panel-head').forEach(head => {
         head.addEventListener('click', () => head.parentElement.classList.toggle('collapsed'));
@@ -330,23 +462,28 @@ export function buildSidePanel() {
 // метеоритов (met) ведут к Марсу и Луне и подсвечены отдельным типом.
 const SMALL_ROWS = [
     { name: 'Пояс астероидов',       note: '99% метеоритов Земли',    region: REGION_INFO.belt },
-    { name: 'Околоземные (ОЗА)',     note: 'пересекают орбиту Земли', to: 'Эрос',   z: 4 },
-    { name: 'Троянцы Юпитера',       note: 'попутчики Юпитера',       to: 'Гектор', z: 4 },
-    { name: 'Кометы',                note: 'метеорные потоки',        to: 'Галлея', z: 3.5 },
+    { name: 'Околоземные (ОЗА)',     note: 'пересекают орбиту Земли', to: 'Эрос' },
+    { name: 'Троянцы Юпитера',       note: 'попутчики Юпитера',       to: 'Гектор' },
+    { name: 'Кометы',                note: 'метеорные потоки',        to: 'Галлея' },
     { name: 'Пояс Койпера',          note: 'родина короткопериодических комет', region: REGION_INFO.kuiper },
     { name: 'Облако Оорта',          note: 'родина долгопериодических комет',   region: REGION_INFO.oort },
-    { name: 'Марсианские метеориты', note: '≈300 найдено на Земле',   to: 'Mars',   z: 5, met: true },
-    { name: 'Лунные метеориты',      note: '≈500 найдено на Земле',   to: 'Луна',   z: 8, met: true }
+    { name: 'Марсианские метеориты', note: '≈300 найдено на Земле',   to: 'Mars', met: true },
+    { name: 'Лунные метеориты',      note: '≈500 найдено на Земле',   to: 'Moon', met: true }
 ];
 
 /** Цель текущего кадра для строки блока: представитель, Марс или Луна. */
 function smallRowTarget(row) {
     const tg = state.hoverTargets || [];
-    if (row.to === 'Mars') return tg.find(t => t.kind === 'planet' && t.p.name === 'Mars') || null;
-    if (row.to === 'Луна') {
-        const earth = tg.find(t => t.kind === 'planet' && t.p.name === 'Earth');
-        const mh = earth && earth.moons.find(x => x.m.n.indexOf('Луна') === 0);
-        return mh ? { kind: 'moon', name: mh.m.n, x: mh.mx, y: mh.my, p: earth.p, m: mh.m } : null;
+    if (row.to === 'Mars') {
+        const t = tg.find(t => t.kind === 'planet' && t.p.name === 'Mars');
+        return t || null;
+    }
+    if (row.to === 'Moon') {
+        const earth = planets.find(p => p.name === 'Earth');
+        const m = (moonsByPlanet.Earth || []).find(x => x.n === 'Moon');
+        const pos = state.moonPositions.get('Earth:Moon');
+        if (!earth || !m || !pos) return null;
+        return { kind: 'moon', name: 'Moon', x: pos.x, y: pos.y, p: earth, m };
     }
     return tg.find(t => t.small && t.name.indexOf(row.to) === 0) || null;
 }
@@ -358,21 +495,19 @@ function onSmallRowClick(row) {
         focusRegion(row.region);
         return;
     }
-    if (row.cam) {   // резерв для будущих строк-областей без карточки
-        flyToCamera(row.cam[0], row.cam[1], row.cam[2], 1.0);
-        return;
-    }
     const t = smallRowTarget(row);
     if (!t) return;
-    flyToCamera(t.x, t.y, row.z, 0.8);
     if (t.small) {
         selectBody({ kind: t.kind, name: t.name,
             orbit: t.small.poly ? { poly: t.small.poly } : t.small.orbit,
             p: null, m: null, small: t.small });
+        flyToCamera(t.x, t.y, viewZoomFor(t.kind, t), 0.8);
     } else if (t.kind === 'moon') {
         selectBody({ kind: 'moon', p: t.p, m: t.m });
+        flyToCamera(t.x, t.y, viewZoomFor('moon', t), 0.8);
     } else {
         selectBody({ kind: 'planet', p: t.p });
+        flyToCamera(t.x, t.y, viewZoomFor('planet', t), 0.8);
     }
 }
 
@@ -417,21 +552,16 @@ export function updateFlyTo() {
     if (p >= 1) state.fly = null;
 }
 
-/**
- * Объект луны для выбора из дерева: настоящая луна из moonsByPlanet либо
- (у Земли) псевдо-луна, которую рисует render.js.
- */
+/** Объект луны для выбора из дерева: луна из каталога moonsByPlanet. */
 function moonFromTree(planet, name) {
-    const real = (moonsByPlanet[planet.name] || []).find(m => m.n === name);
-    if (real) return real;
-    // Луна Земли — псевдо-луна: отдельный блок рисования в render.js
-    return { n: name, period: moonPeriod, r: 3 };
+    return (moonsByPlanet[planet.name] || []).find(m => m.n === name) || null;
 }
 
 /**
  * Выбрать объект (канвас или дерево): обновить state.selected, блок «Объект»
  * и подсветку в дереве. sel = null сбрасывает выбор.
- * Виды: {kind:'sun'|'planet'|'moon'|'small'|'region'|'base', p, m, small, region}.
+ * Виды: {kind:'sun'|'planet'|'moon'|'small'|'region'|'base'|'group',
+ *        p, m, small, region, group}.
  */
 export function selectBody(sel) {
     state.selected = sel;
@@ -454,24 +584,37 @@ function renderObjectInfo() {
 
     let html = '';
     if (sel.kind === 'sun') {
+        const rKm = wuToKm(SUN_R);
         html =
             '<div class="obj-title"><span class="dot" style="background:' + COLORS.sun + '"></span>' +
                 '<strong>' + RU.Sun + ' / Sun</strong></div>' +
             '<div class="obj-kind">Звезда · G2V</div>' +
-            row('Радиус отрисовки', SUN_R + ' <em>ед.</em>');
+            '<div class="obj-rows">' +
+                row('Радиус', fmtKm(rKm) + ' <em>км</em>') +
+                row('Диаметр', fmtKm(rKm * 2) + ' <em>км</em>') +
+                row('Масса', '1 M☉') +
+                row('Угловой диаметр с Земли', fmtArcsec(angularArcsec(rKm, wuToKm(au(1)))) + ' <em>(в модели)</em>') +
+            '</div>';
     } else if (sel.kind === 'planet') {
         const p = sel.p;
-        const orbitR = Math.round(p.dist * 10) / 10;
-        const mapMoons = moonsByPlanet[p.name] || [];
+        const pos = state.planetPositions.get(p.name);
+        const rAu = pos ? wuToAu(Math.hypot(pos.rawX, pos.rawY, pos.rawZ)) : p.aAu;
         html =
             '<div class="obj-title"><span class="dot" style="background:' + p.color + '"></span>' +
                 '<strong>' + (RU[p.name] || p.name) + ' / ' + p.name + '</strong></div>' +
             '<div class="obj-kind">' + (TYPES[p.type] || 'Планета') + '</div>' +
-            row('Период обращения', fmtPeriod(p.period)) +
-            row('Радиус орбиты', orbitR + ' <em>ед.</em>') +
-            row('Известных лун', moonTotals[p.name]) +
-            row('На карте (крупные)', mapMoons.length) +
-            (p.name === 'Mars' ? row('Марсианские метеориты', '≈300 <em>на Земле</em>', 'met') : '') +
+            '<div class="obj-rows">' +
+                row('Радиус', fmtKm(p.radiusKm) + ' <em>км</em>') +
+                row('Диаметр', fmtKm(p.radiusKm * 2) + ' <em>км</em>') +
+                row('Большая полуось', fmtAu(p.aAu) + ' <em>а.е.</em>') +
+                row('Расстояние до Солнца', fmtAu(rAu) + ' <em>а.е.</em>') +
+                angularFromEarthRow(p) +
+                row('Период обращения', fmtPeriod(p.period)) +
+                row('Наклонение / узел', p.inc.toFixed(2) + '° / ' + p.node.toFixed(1) + '°') +
+                row('Известных лун', moonTotals[p.name]) +
+                row('Крупных на карте', (moonsByPlanet[p.name] || []).filter(m => m.rad >= MOON_MAJOR_KM).length) +
+                (p.name === 'Mars' ? row('Марсианские метеориты', '≈300 <em>на Земле</em>', 'met') : '') +
+            '</div>' +
             basesSectionHTML('planet', p.name, null);
     } else if (sel.kind === 'asteroid') {
         html = asteroidInfoHTML(sel.small);
@@ -485,19 +628,27 @@ function renderObjectInfo() {
         html = regionInfoHTML(sel.region);
     } else if (sel.kind === 'base') {
         html = sel.local ? newBaseInfoHTML(sel.local) : '';
+    } else if (sel.kind === 'group') {
+        html = groupInfoHTML(sel.group);
     } else {
         const p = sel.p;
         const m = sel.m;
-        const idx = (moonsByPlanet[p.name] || []).findIndex(x => x.n === m.n);
-        const md = idx >= 0 ? moonOrbitRadius(p, idx) : moonDist;
+        const md = m.a != null ? m.a : wuToKm(moonOrbitRadius(p, 0));
         html =
             '<div class="obj-title"><span class="dot" style="background:' + (m.c || '#a8a8a8') + '"></span>' +
-                '<strong>' + m.n + '</strong></div>' +
+                '<strong>' + moonLabel(m) + '</strong></div>' +
             '<div class="obj-kind">Спутник · ' + (RU[p.name] || p.name) + '</div>' +
-            row('Планета', (RU[p.name] || p.name) + ' / ' + p.name) +
-            (m.period ? row('Период обращения', fmtPeriod(m.period)) : '') +
-            row('Радиус орбиты', Math.round(md * 10) / 10 + ' <em>ед.</em>') +
-            (p.name === 'Earth' && m.n.indexOf('Луна') === 0 ? row('Лунные метеориты', '≈500 <em>на Земле</em>', 'met') : '') +
+            '<div class="obj-rows">' +
+                row('Планета', (RU[p.name] || p.name) + ' / ' + p.name) +
+                row('Радиус', fmtKm(m.rad) + ' <em>км</em>') +
+                row('Диаметр', fmtKm(m.rad * 2) + ' <em>км</em>') +
+                row('Большая полуось', fmtKm(md) + ' <em>км</em> · ' + fmtAu(md / AU_KM) + ' <em>а.е.</em>') +
+                (m.period ? row('Период обращения', fmtPeriod(m.period)) : '') +
+                (m.e != null ? row('Эксцентриситет', m.e.toFixed(4)) : '') +
+                (m.inc != null ? row('Наклонение', m.inc.toFixed(2) + '°') : '') +
+                row('Угловой диаметр с планеты', fmtArcsec(angularArcsec(m.rad, md)) + ' <em>(в модели)</em>') +
+                (p.name === 'Earth' && m.n === 'Moon' ? row('Лунные метеориты', '≈500 <em>на Земле</em>', 'met') : '') +
+            '</div>' +
             basesSectionHTML('moon', p.name, m.n);
     }
     box.innerHTML = html;
@@ -509,6 +660,35 @@ function renderObjectInfo() {
     document.getElementById('objectName').textContent = title ? title.textContent : 'Объект';
 }
 
+/** Расстояние от тела до Земли в км по его raw-координатам (модель карты). */
+function bodyDistanceKm(pos) {
+    const e = state.planetPositions.get('Earth');
+    if (!e || !pos) return null;
+    return wuToKm(Math.hypot(pos.rawX - e.rawX, pos.rawY - e.rawY, pos.rawZ - e.rawZ));
+}
+
+/** Строка «угловой диаметр с Земли» для планеты; у Земли — с Солнца. */
+function angularFromEarthRow(p) {
+    const pos = state.planetPositions.get(p.name);
+    if (p.name === 'Earth') {
+        const rAu = pos ? wuToAu(Math.hypot(pos.rawX, pos.rawY, pos.rawZ)) : p.aAu;
+        return row('Угловой диаметр', fmtArcsec(angularArcsec(p.radiusKm, wuToKm(au(rAu)))) +
+            ' <em>(в модели, с Солнца)</em>');
+    }
+    const d = bodyDistanceKm(pos);
+    if (!d) return row('Угловой диаметр с Земли', '—');
+    return row('Угловой диаметр с Земли', fmtArcsec(angularArcsec(p.radiusKm, d)) + ' <em>(в модели)</em>');
+}
+
+/** Строка «угловой диаметр с Земли» для малого тела. */
+function smallAngularRow(b) {
+    if (!b.dia) return '';
+    const pos = b.rawX != null ? { rawX: b.rawX, rawY: b.rawY, rawZ: b.rawZ } : null;
+    const d = bodyDistanceKm(pos);
+    return row('Угловой диаметр с Земли',
+        (d ? fmtArcsec(angularArcsec(b.dia / 2, d)) : '—') + ' <em>(в модели)</em>');
+}
+
 const NEA_GROUPS = { amor: 'Амур', apollo: 'Аполлон', aten: 'Атон' };
 
 /** Блок «Объект» для околоземного астероида. */
@@ -518,12 +698,14 @@ function neaInfoHTML(b) {
             '<strong>' + b.name + '</strong></div>' +
         '<div class="obj-kind">Околоземный астероид · группа «' + NEA_GROUPS[b.group] + '»</div>' +
         '<div class="obj-rows">' +
+            row('Радиус', fmtKm(b.dia / 2) + ' <em>км</em>') +
+            row('Диаметр', fmtKm(b.dia) + ' <em>км</em>') +
             row('Большая полуось', b.a.toFixed(3) + ' <em>а.е.</em>') +
             row('Эксцентриситет', b.e.toFixed(3)) +
             row('Период обращения', fmtPeriod(b.T)) +
             row('Перигелий / афелий', b.q.toFixed(3) + ' / ' + b.Q.toFixed(3) + ' <em>а.е.</em>') +
             row('Пересекает орбиту Земли', crosses ? 'да' : 'сближается') +
-            row('Диаметр', (b.dia != null ? b.dia : '—') + ' <em>км</em>') +
+            smallAngularRow(b) +
         '</div>' +
         '<div class="obj-note">Околоземный объект — цель исследовательских миссий</div>';
 }
@@ -535,10 +717,13 @@ function trojanInfoHTML(b) {
             '<strong>' + b.name + '</strong></div>' +
         '<div class="obj-kind">Троянец Юпитера · точка ' + (b.camp === 4 ? 'L4' : 'L5') + '</div>' +
         '<div class="obj-rows">' +
-            row('Орбита', 'как у Юпитера · 5.2 <em>а.е.</em>') +
+            row('Радиус', fmtKm(b.dia / 2) + ' <em>км</em>') +
+            row('Диаметр', fmtKm(b.dia) + ' <em>км</em>') +
+            row('Орбита', 'как у Юпитера · ' + fmtAu(b.a) + ' <em>а.е.</em>') +
             row('Положение', b.camp === 4 ? 'опережает Юпитер на 60°' : 'отстаёт от Юпитера на 60°') +
             row('Период обращения', fmtPeriod(jupPeriod)) +
             row('Либрация', '±5° за ~150 лет') +
+            smallAngularRow(b) +
         '</div>' +
         '<div class="obj-note">Реликтовое вещество ранней Солнечной системы</div>';
 }
@@ -552,13 +737,15 @@ function cometInfoHTML(b) {
             '<strong>' + b.name + '</strong></div>' +
         '<div class="obj-kind">Комета · ' + (years < 200 ? 'короткопериодическая' : 'долгопериодическая') + '</div>' +
         '<div class="obj-rows">' +
+            row('Радиус ядра', fmtKm(b.dia / 2) + ' <em>км</em>') +
+            row('Диаметр ядра', fmtKm(b.dia) + ' <em>км</em>') +
             row('Большая полуось', b.a.toFixed(1) + ' <em>а.е.</em>') +
             row('Эксцентриситет', b.e.toFixed(4)) +
             row('Период обращения', fmtPeriod(b.T)) +
             row('Перигелий / афелий', b.q.toFixed(2) + ' / ' + b.Q.toFixed(1) + ' <em>а.е.</em>') +
             row('Источник', COMET_SRC[b.src] || '—') +
             (b.shower ? row('Метеорный поток', b.shower) : '') +
-            row('Ядро', b.dia + ' <em>км</em>') +
+            smallAngularRow(b) +
         '</div>' +
         '<div class="obj-note">Хвост направлен от Солнца и ярче всего у перигелия</div>';
 }
@@ -580,12 +767,43 @@ function asteroidInfoHTML(b) {
     return '<div class="obj-title"><span class="dot" style="background:#cfcfcf"></span>' +
             '<strong>' + b.name + '</strong></div>' +
         '<div class="obj-kind">' + b.note + ' · Пояс астероидов</div>' +
-        row('Большая полуось', b.a + ' <em>а.е.</em>') +
-        row('Эксцентриситет', b.e) +
-        row('Период обращения', fmtPeriod(b.T)) +
-        row('Перигелий / афелий', (b.a * (1 - b.e)).toFixed(2) + ' / ' + (b.a * (1 + b.e)).toFixed(2) + ' <em>а.е.</em>') +
-        row('Диаметр', fmtRu(b.dia) + ' <em>км</em>') +
+        '<div class="obj-rows">' +
+            row('Радиус', fmtKm(b.dia / 2) + ' <em>км</em>') +
+            row('Диаметр', fmtKm(b.dia) + ' <em>км</em>') +
+            row('Большая полуось', fmtAu(b.a) + ' <em>а.е.</em>') +
+            row('Эксцентриситет', b.e) +
+            row('Период обращения', fmtPeriod(b.T)) +
+            row('Перигелий / афелий', (b.a * (1 - b.e)).toFixed(2) + ' / ' + (b.a * (1 + b.e)).toFixed(2) + ' <em>а.е.</em>') +
+            smallAngularRow(b) +
+        '</div>' +
         '<div class="obj-note">Пояс астероидов — главный источник метеоритов Земли</div>';
+}
+
+/**
+ * Карточка группы тел: список участников (Солнце/планеты/луны/малые тела).
+ * Клик по строке — полёт к телу и его выбор; так с общего плана можно
+ * «разобрать» группу «Внутренние планеты · 4» или «Сатурн · 12».
+ */
+function groupInfoHTML(g) {
+    const rows = g.members.map((b, i) => {
+        const color = b.kind === 'sun' ? COLORS.sun
+            : b.kind === 'planet' ? b.p.color
+            : b.kind === 'moon' ? (b.m.c || '#a8a8a8')
+            : '#cfcfcf';
+        const kind = b.kind === 'sun' ? 'звезда'
+            : b.kind === 'planet' ? 'планета'
+            : b.kind === 'moon' ? 'луна'
+            : 'малое тело';
+        return '<div class="group-row" data-gi="' + i + '">' +
+            '<span class="dot" style="background:' + color + '"></span>' +
+            '<span class="gname">' + esc(b.label) + '</span>' +
+            '<small>' + kind + '</small></div>';
+    }).join('');
+    return '<div class="obj-title"><span class="dot" style="background:' + COLORS.tooltip + '"></span>' +
+            '<strong>' + esc(g.label) + '</strong></div>' +
+        '<div class="obj-kind">Группа тел · ' + g.members.length + '</div>' +
+        '<div class="group-list">' + rows + '</div>' +
+        '<div class="obj-note">Тела ближе 28 px на экране собраны в группу — клик по строке летит к телу</div>';
 }
 
 /* ---------- Звёздные базы: секция в карточке, кнопка создания ---------- */
@@ -594,19 +812,27 @@ function asteroidInfoHTML(b) {
 function basesSectionHTML(kind, planet, moon) {
     const rows = [];
     basesAt(kind, planet, moon).forEach(b => rows.push(baseRowHTML(b.id, b.name,
-        'орбита ' + Math.round(b.orbitRadius) + ' ед.', b)));
+        'орбита ' + fmtKm(wuToKm(b.orbitRadius)) + ' км', b)));
 
     const active = state.baseMode && state.baseMode.kind === kind &&
         state.baseMode.planet === planet && (state.baseMode.moon || null) === (moon || null);
 
+    const host = { kind, planet, moon: moon || null };
+    const allowed = canHostBase(host);
+    const list = rows.length
+        ? '<div class="base-list">' + rows.join('') + '</div>'
+        : '<div class="obj-note">' + (allowed
+            ? 'Баз пока нет — создайте первую на орбите'
+            : 'Тело слишком мало для базы (нужен радиус ≥ 50 км)') + '</div>';
+    const btn = allowed
+        ? '<button class="base-create' + (active ? ' active' : '') + '" id="baseCreateBtn"' +
+            ' data-host-kind="' + kind + '" data-host-planet="' + planet + '" data-host-moon="' + (moon || '') + '">' +
+            (active ? 'Отмена — выберите орбиту' : 'Создать базу') + '</button>'
+        : '';
+
     return '<div class="obj-sub-title"><span>Звёздные базы</span>' +
             (rows.length ? '<small>' + rows.length + '</small>' : '') + '</div>' +
-        (rows.length
-            ? '<div class="base-list">' + rows.join('') + '</div>'
-            : '<div class="obj-note">Баз пока нет — создайте первую на орбите</div>') +
-        '<button class="base-create' + (active ? ' active' : '') + '" id="baseCreateBtn"' +
-            ' data-host-kind="' + kind + '" data-host-planet="' + planet + '" data-host-moon="' + (moon || '') + '">' +
-            (active ? 'Отмена — выберите орбиту' : 'Создать базу') + '</button>';
+        list + btn;
 }
 
 /**
@@ -664,13 +890,10 @@ function selectBaseHost(rec) {
     const p = planets.find(q => q.name === rec.planet);
     if (!p) { selectBody(null); return; }
     if (rec.hostKind === 'moon') {
-        // Луна Земли рисуется отдельным блоком (render.js) — как и там
-        const m = (moonsByPlanet[rec.planet] || []).find(x => x.n === rec.moon) ||
-            { n: rec.moon, r: 3, period: moonPeriod };
-        selectBody({ kind: 'moon', name: rec.moon, p, m });
-    } else {
-        selectBody({ kind: 'planet', name: p.name, p, m: null });
+        const m = (moonsByPlanet[rec.planet] || []).find(x => x.n === rec.moon);
+        if (m) { selectBody({ kind: 'moon', name: rec.moon, p, m }); return; }
     }
+    selectBody({ kind: 'planet', name: p.name, p, m: null });
 }
 
 /**
@@ -679,6 +902,7 @@ function selectBaseHost(rec) {
  * отменяют Esc и правая кнопка; обработка — в input.js). У карточки базы —
  * «Войти на базу» (переход в интерьер базы, приложение ангара),
  * «Переместить базу» (тот же режим) и «Удалить базу» (запись убирается).
+ * У группы тел — строки участников: полёт к телу и выбор.
  */
 function wireObjectCard(box) {
     box.querySelectorAll('.base-row').forEach(el => {
@@ -691,6 +915,29 @@ function wireObjectCard(box) {
         });
     });
 
+    box.querySelectorAll('.group-row').forEach(el => {
+        el.addEventListener('click', () => {
+            const g = state.selected && state.selected.group;
+            if (!g) return;
+            const b = g.members[Number(el.dataset.gi)];
+            if (!b) return;
+            if (b.kind === 'sun') {
+                selectBody({ kind: 'sun', name: 'Солнце / Sun' });
+                flyToCamera(0, 0, viewZoomFor('sun'), 0.8);
+            } else if (b.kind === 'planet') {
+                selectBody({ kind: 'planet', p: b.p });
+                flyToCamera(b.x, b.y, viewZoomFor('planet', { p: b.p }), 0.8);
+            } else if (b.kind === 'moon') {
+                selectBody({ kind: 'moon', p: b.p, m: b.m });
+                flyToCamera(b.x, b.y, viewZoomFor('moon', { m: b.m }), 0.8);
+            } else if (b.small) {
+                selectBody({ kind: b.small.kind, name: b.label,
+                    p: null, m: null, small: b.small });
+                flyToCamera(b.x, b.y, MAX_ZOOM, 0.8);
+            }
+        });
+    });
+
     const btn = box.querySelector('#baseCreateBtn');
     if (btn) btn.addEventListener('click', () => {
         const kind = btn.dataset.hostKind;
@@ -699,9 +946,11 @@ function wireObjectCard(box) {
         // Режим уже активен (хост мог переехать к ближайшему телу) — отменяем его,
         // иначе начинаем выбор орбиты у этой планеты/луны.
         state.baseMode = state.baseMode ? null : { kind, planet, moon };
-        // Стартовый радиус 60 — но по механизму баз: коридор хоста плюс
-        // разведение с другими его базами (fitBaseRadius).
-        state.baseRadius = state.baseMode ? fitBaseRadius(60, state.baseMode, null) : 60;
+        if (state.baseMode) {
+            // Стартовый радиус — 3 радиуса хозяина, дальше коридор и разведение.
+            const r0 = BASE_ORBIT_K * hostRadius(state.baseMode);
+            state.baseRadius = fitBaseRadius(r0, state.baseMode, null);
+        }
         renderObjectInfo();   // надпись кнопки: «Создать базу» <-> «Отмена»
     });
 
@@ -841,7 +1090,7 @@ export function updateBaseTimerCard() {
 /** Блок «Объект» для звездной базы, созданной игроком на карте. */
 function newBaseInfoHTML(b) {
     const host = b.hostKind === 'moon'
-        ? 'луна ' + b.moon
+        ? 'луна ' + moonHostLabel(b.planet, b.moon)
         : 'планета ' + (RU[b.planet] || b.planet);
     const removing = b.status === 'removing';   // идёт разбор: имя краснеет, под ним полоска прогресса, кнопки выключены
     const fleet = !!b.fleet;    // стартовая LUNA-ORBIT: в карточке — купленные корабли
@@ -850,7 +1099,7 @@ function newBaseInfoHTML(b) {
         (removing ? removalBarHTML(b) : '') +
         '<div class="obj-kind">Звёздная база · ' + host + '</div>' +
         '<div class="obj-rows">' +
-            row('Радиус орбиты', b.orbitRadius + ' <em>ед.</em>') +
+            row('Радиус орбиты', fmtKm(wuToKm(b.orbitRadius)) + ' <em>км</em>') +
             row('Период обращения', fmtPeriod(b.period)) +
             row('Создана', (b.created || '').slice(0, 10)) +
             (removing ? row('Статус', 'удаляется') : '') +
@@ -862,6 +1111,12 @@ function newBaseInfoHTML(b) {
         enterBaseButtonHTML(b) +
         moveBaseButtonHTML(b) +
         deleteBaseButtonHTML(b);
+}
+
+/** Русская подпись луны-хозяина базы: «Луна / Moon» → «Луна». */
+function moonHostLabel(planet, name) {
+    const m = (moonsByPlanet[planet] || []).find(x => x.n === name);
+    return m && m.ru ? m.ru + ' / ' + m.n : (name || '—');
 }
 
 function row(k, v, cls) {
@@ -951,6 +1206,9 @@ function highlightTree() {
         return;
     }
 
+    // Группа тел: строки в дереве нет — подсвечивать нечего.
+    if (sel.kind === 'group') return;
+
     // Область: пояс астероидов — шапка группы, Койпер/Оорт — отдельные строки.
     if (sel.kind === 'region') {
         const regionLi = tree.querySelector('li[data-region="' + sel.region.key + '"]');
@@ -979,8 +1237,21 @@ function highlightTree() {
     if (sel.kind === 'planet') {
         li.classList.add('sel');
     } else if (sel.m) {
-        const mEl = Array.from(li.querySelectorAll('.loot li'))
+        // Луна могла быть не отрисована (крупные по умолчанию) — раскрываем все.
+        if (!li.dataset.built && li._drawMoons) {
+            li.dataset.built = '1';
+            li._drawMoons();
+        }
+        let mEl = Array.from(li.querySelectorAll('.loot li'))
             .find(el => el.dataset.kind === 'moon' && el.dataset.name === sel.m.n);
-        if (mEl) mEl.classList.add('sel');
+        if (!mEl && li._showMoon) {
+            li._showMoon();
+            mEl = Array.from(li.querySelectorAll('.loot li'))
+                .find(el => el.dataset.kind === 'moon' && el.dataset.name === sel.m.n);
+        }
+        if (mEl) {
+            mEl.classList.add('sel');
+            mEl.scrollIntoView({ block: 'nearest' });
+        }
     }
 }
