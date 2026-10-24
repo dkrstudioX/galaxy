@@ -1,25 +1,40 @@
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap");
 
+/* =============================================================================
+   hangar.css — стили ангара по основному правилу docs/STYLE.md.
+   Эталон — правая колонка space/: стекло, шапки 44 px, низкие строки,
+   кнопки-табы как .moon-more, карточка «ключ → значение», модалка с eyebrow.
+   ============================================================================= */
+
 :root {
-  --bg: #040810;
-  --ink: #d9e9ef;
-  --ink-soft: #a9c3cc;
-  --ink-dim: #718b97;
-  --ink-faint: #4d6572;
-  --cyan: #75dfd2;
-  --holo: #7fe8ff;
-  --ice: #bffcfc;
-  --violet: #aa88f6;
-  --gold: #e6b963;
+  --bg: #05070d;
+  --text: #dce8e8;
+  --text-soft: #9fb3b3;
+  --text-muted: #637a7a;
+  --text-dim: #7d9a9a;
+  --text-faint: #5d7575;
+
+  --accent: #75dfd2;
+  --accent-bright: #bffcfc;
+  --accent-base: #35e8d8;
+  --purple: #aa88f6;
+  --purple-soft: #9c7ee1;
+  --purple-label: #b89cff;
   --danger: #ff5f7a;
+  --danger-text: #ffb3c1;
+  --warning: #ffd79a;
+
   --line: rgba(150, 190, 255, .17);
-  --line-soft: rgba(126, 180, 210, .12);
-  --line-holo: rgba(127, 232, 255, .34);
+  --line-active: rgba(150, 190, 255, .20);
+  --line-row: rgba(120, 160, 170, .10);
+  --line-soft: rgba(120, 160, 170, .18);
+
   --mono: "IBM Plex Mono", monospace;
   --sans: "Manrope", sans-serif;
+
   color-scheme: dark;
   font-family: var(--sans);
-  color: var(--ink);
+  color: var(--text);
   background: var(--bg);
   font-synthesis: none;
 }
@@ -27,7 +42,11 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 button { font: inherit; }
-button:focus-visible { outline: 1px solid #7fe8ff; outline-offset: 2px; }
+button:focus-visible,
+[data-action]:focus-visible {
+  outline: 1px solid rgba(122, 236, 224, .55);
+  outline-offset: 2px;
+}
 
 html, body { height: 100%; }
 
@@ -39,6 +58,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ===== Сцена станции: тёмный космос, бирюза и фиолет ======================= */
+
 .app-shell {
   height: 100vh;
   height: 100dvh;
@@ -48,13 +69,13 @@ body {
   overflow: hidden;
   background-color: var(--bg);
   background-image:
-    linear-gradient(rgba(127, 232, 255, .035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(127, 232, 255, .035) 1px, transparent 1px),
-    radial-gradient(ellipse 82% 54% at 50% 104%, rgba(63, 201, 255, .20), rgba(24, 110, 160, .07) 48%, transparent 74%),
-    radial-gradient(ellipse 60% 32% at 50% 0%, rgba(45, 138, 205, .14), transparent 72%),
-    radial-gradient(ellipse 36% 46% at 6% 10%, rgba(94, 57, 170, .18), transparent 72%),
-    radial-gradient(ellipse 34% 44% at 94% 8%, rgba(32, 145, 185, .14), transparent 72%),
-    linear-gradient(180deg, #091a2a 0%, #050f1d 46%, #020812 100%);
+    linear-gradient(rgba(117, 223, 210, .028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(117, 223, 210, .028) 1px, transparent 1px),
+    radial-gradient(ellipse 82% 54% at 50% 104%, rgba(53, 232, 216, .10), rgba(24, 80, 90, .04) 48%, transparent 74%),
+    radial-gradient(ellipse 60% 32% at 50% 0%, rgba(124, 58, 237, .10), transparent 72%),
+    radial-gradient(ellipse 36% 46% at 6% 10%, rgba(124, 58, 237, .13), transparent 72%),
+    radial-gradient(ellipse 34% 44% at 94% 8%, rgba(117, 223, 210, .08), transparent 72%),
+    linear-gradient(180deg, #080b14 0%, #05070d 48%, #03040a 100%);
   background-size: 48px 48px, 48px 48px, cover, cover, cover, cover, cover;
   background-repeat: repeat, repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
 }
@@ -65,44 +86,44 @@ body {
 }
 .bay-window {
   position: absolute; top: 2%; left: 18%; width: 64%; height: 67%; overflow: hidden;
-  border: 2px solid rgba(127, 232, 255, .24);
+  border: 2px solid rgba(150, 190, 255, .20);
   border-top-width: 10px;
   clip-path: polygon(7% 0, 93% 0, 100% 13%, 100% 87%, 93% 100%, 7% 100%, 0 87%, 0 13%);
   background:
-    radial-gradient(circle at 72% 26%, rgba(170, 136, 246, .18), transparent 24%),
-    radial-gradient(circle at 32% 65%, rgba(127, 232, 255, .12), transparent 27%),
-    linear-gradient(155deg, #081b2c 0%, #04101e 52%, #020812 100%);
-  box-shadow: inset 0 0 80px rgba(1, 6, 14, .85), 0 0 70px rgba(88, 212, 255, .12);
+    radial-gradient(circle at 72% 26%, rgba(170, 136, 246, .14), transparent 24%),
+    radial-gradient(circle at 32% 65%, rgba(117, 223, 210, .08), transparent 27%),
+    linear-gradient(155deg, #0a1020 0%, #060a14 52%, #03040a 100%);
+  box-shadow: inset 0 0 80px rgba(1, 4, 10, .85), 0 0 60px rgba(117, 223, 210, .07);
 }
 .bay-window::before,
 .bay-window::after {
   content: ""; position: absolute; top: -10%; width: 3px; height: 120%;
-  background: linear-gradient(180deg, transparent, rgba(127, 232, 255, .3), transparent);
+  background: linear-gradient(180deg, transparent, rgba(117, 223, 210, .22), transparent);
 }
 .bay-window::before { left: 28%; transform: rotate(-3deg); }
 .bay-window::after { right: 28%; transform: rotate(3deg); }
 .planet {
   position: absolute; right: 7%; top: 11%; width: 200px; aspect-ratio: 1; border-radius: 50%;
   background:
-    radial-gradient(circle at 33% 28%, #b9a4ff 0, #5b4a9a 18%, #14334d 45%, #0a1a2a 68%, #020812 69%);
-  box-shadow: -22px -11px 50px rgba(170, 136, 246, .2), inset -34px -14px 45px rgba(1, 6, 14, .8);
-  opacity: .68;
+    radial-gradient(circle at 33% 28%, #b9a4ff 0, #5b4a9a 18%, #14334d 45%, #0a1a2a 68%, #03040a 69%);
+  box-shadow: -22px -11px 50px rgba(170, 136, 246, .16), inset -34px -14px 45px rgba(1, 4, 10, .8);
+  opacity: .62;
 }
 .planet::after {
   content: ""; position: absolute; left: -28%; top: 46%; width: 156%; height: 16%;
-  border: 2px solid rgba(170, 136, 246, .3); border-radius: 50%; transform: rotate(-12deg);
+  border: 2px solid rgba(170, 136, 246, .26); border-radius: 50%; transform: rotate(-12deg);
 }
 .stars { position: absolute; inset: 0; background-repeat: repeat; }
 .stars-near {
-  opacity: .6;
+  opacity: .55;
   background-image:
     radial-gradient(circle, #d9f7ff 0 1px, transparent 1.5px),
-    radial-gradient(circle, #7fe8ff 0 1px, transparent 1.5px);
+    radial-gradient(circle, #75dfd2 0 1px, transparent 1.5px);
   background-size: 97px 83px, 149px 127px;
   background-position: 18px 23px, 61px 44px;
 }
 .stars-far {
-  opacity: .32;
+  opacity: .30;
   background-image: radial-gradient(circle, #fff 0 .7px, transparent 1px);
   background-size: 53px 47px;
   background-position: 11px 7px;
@@ -110,18 +131,18 @@ body {
 .bay-beam {
   position: absolute; top: -8%; width: 23%; height: 92%;
   background:
-    linear-gradient(90deg, rgba(4, 12, 20, .98), rgba(10, 28, 44, .92) 48%, rgba(4, 10, 18, .96)),
-    linear-gradient(#16405a, #061525);
-  border: 1px solid rgba(127, 232, 255, .18);
+    linear-gradient(90deg, rgba(4, 8, 14, .98), rgba(10, 18, 30, .92) 48%, rgba(4, 8, 14, .96)),
+    linear-gradient(#16303a, #060c16);
+  border: 1px solid rgba(150, 190, 255, .16);
   box-shadow: inset 0 0 30px rgba(0, 0, 0, .75);
 }
-.beam-left { left: -7%; transform: skewX(-11deg); border-right: 9px solid rgba(127, 232, 255, .18); }
-.beam-right { right: -7%; transform: skewX(11deg); border-left: 9px solid rgba(127, 232, 255, .18); }
+.beam-left { left: -7%; transform: skewX(-11deg); border-right: 9px solid rgba(150, 190, 255, .16); }
+.beam-right { right: -7%; transform: skewX(11deg); border-left: 9px solid rgba(150, 190, 255, .16); }
 .bay-ceiling {
   position: absolute; left: 10%; top: -12%; width: 80%; height: 25%;
   background:
-    repeating-linear-gradient(90deg, transparent 0 9%, rgba(127, 232, 255, .1) 9.3% 10%, transparent 10.3% 19%),
-    linear-gradient(180deg, #040c16, rgba(8, 20, 32, .9));
+    repeating-linear-gradient(90deg, transparent 0 9%, rgba(117, 223, 210, .08) 9.3% 10%, transparent 10.3% 19%),
+    linear-gradient(180deg, #04080f, rgba(8, 14, 24, .9));
   clip-path: polygon(0 0, 100% 0, 88% 100%, 12% 100%);
 }
 .bay-floor {
@@ -129,19 +150,19 @@ body {
   transform: perspective(400px) rotateX(55deg);
   transform-origin: bottom;
   background:
-    linear-gradient(90deg, transparent 49.75%, rgba(127, 232, 255, .22) 50%, transparent 50.25%),
-    repeating-linear-gradient(90deg, transparent 0 9.8%, rgba(127, 232, 255, .1) 10% 10.2%),
-    repeating-linear-gradient(0deg, transparent 0 38px, rgba(127, 232, 255, .09) 39px 40px),
-    linear-gradient(180deg, rgba(8, 24, 38, .75), #020812);
-  border-top: 1px solid rgba(127, 232, 255, .22);
-  box-shadow: 0 -10px 80px rgba(96, 224, 255, .12);
+    linear-gradient(90deg, transparent 49.75%, rgba(117, 223, 210, .16) 50%, transparent 50.25%),
+    repeating-linear-gradient(90deg, transparent 0 9.8%, rgba(117, 223, 210, .08) 10% 10.2%),
+    repeating-linear-gradient(0deg, transparent 0 38px, rgba(117, 223, 210, .07) 39px 40px),
+    linear-gradient(180deg, rgba(8, 16, 26, .75), #03040a);
+  border-top: 1px solid rgba(117, 223, 210, .16);
+  box-shadow: 0 -10px 80px rgba(117, 223, 210, .08);
 }
 .runway-lights {
   position: absolute; left: 28%; right: 28%; bottom: 3%; display: flex; justify-content: space-between;
 }
 .runway-lights i {
-  width: 4px; height: 4px; border-radius: 50%; background: #7fe8ff;
-  box-shadow: 0 0 10px 2px rgba(127, 232, 255, .8);
+  width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 8px 1px rgba(117, 223, 210, .6);
 }
 
 .scanline {
@@ -149,9 +170,11 @@ body {
   inset: 0;
   pointer-events: none;
   z-index: 20;
-  opacity: .055;
+  opacity: .04;
   background-image: repeating-linear-gradient(0deg, transparent, transparent 3px, #000 4px);
 }
+
+/* ===== Верхняя панель ====================================================== */
 
 .topbar {
   flex: none;
@@ -160,73 +183,64 @@ body {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   padding: 0 4vw;
-  border-bottom: 1px solid rgba(150, 190, 255, .14);
+  border-bottom: 1px solid var(--line);
   position: relative; z-index: 3;
-  background: rgba(5, 14, 22, .62);
-  -webkit-backdrop-filter: blur(22px) saturate(1.6);
-  backdrop-filter: blur(22px) saturate(1.6);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10), inset 0 -1px 0 rgba(127, 232, 255, .06);
+  background: rgba(5, 7, 13, .62);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
 }
 
 .brand, .balance, .station-status { display: flex; align-items: center; }
-.balance { cursor: pointer; transition: color .14s ease, border-color .14s ease; border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; margin-right: -6px; }
-.balance:hover { border-color: rgba(127, 232, 255, .34); background: rgba(127, 232, 255, .05); }
-.balance:active { transform: translateY(1px); }
 .brand { gap: 13px; }
+.balance {
+  justify-self: end; gap: 10px; cursor: pointer;
+  padding: 2px 6px; margin-right: -6px;
+  border: 1px solid transparent; border-radius: 4px;
+  transition: color .14s ease, border-color .14s ease, background .14s ease;
+}
+.balance:hover { border-color: var(--line-active); background: rgba(122, 236, 224, .05); }
 .brand-mark {
   width: 42px; height: 42px; display: grid; place-items: center;
-  color: #b9a4ff; border: 1px solid rgba(127, 232, 255, .34); background: #101527;
-  box-shadow: 0 0 20px rgba(96, 224, 255, .1), inset 0 0 16px rgba(127, 232, 255, .06);
+  color: var(--purple); border: 1px solid var(--line-active); background: rgba(9, 14, 24, .72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
   clip-path: polygon(12% 0, 100% 0, 100% 88%, 88% 100%, 0 100%, 0 12%);
 }
 .brand div, .balance div { display: flex; flex-direction: column; }
-.brand strong { font: 600 14px "IBM Plex Mono"; letter-spacing: .11em; }
-.brand span:not(.brand-mark) { color: #4d6572; font: 500 8px "IBM Plex Mono"; letter-spacing: .18em; margin-top: 3px; }
+.brand strong { font: 600 14px var(--mono); letter-spacing: .11em; }
+.brand span:not(.brand-mark) { color: var(--text-faint); font: 500 8px var(--mono); letter-spacing: .18em; margin-top: 3px; }
 .map-link {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   height: 32px; margin-left: 4px; padding: 0 11px; flex: none;
-  color: #c6f6ff; text-decoration: none; white-space: nowrap;
-  border: 1px solid rgba(127, 232, 255, .34); border-radius: 2px;
-  background: rgba(127, 232, 255, .06);
-  box-shadow: inset 0 0 14px rgba(127, 232, 255, .05);
-  font: 600 9px var(--mono); letter-spacing: .1em; text-transform: uppercase;
-  transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+  color: var(--accent-bright); text-decoration: none; white-space: nowrap;
+  border: 1px solid rgba(150, 190, 255, .25); border-radius: 4px;
+  background: rgba(122, 236, 224, .05);
+  font: 500 9px var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  transition: background .14s ease, border-color .14s ease;
 }
-.map-link:hover {
-  background: rgba(127, 232, 255, .12); border-color: rgba(127, 232, 255, .55);
-  box-shadow: 0 0 18px rgba(127, 232, 255, .18), inset 0 0 14px rgba(127, 232, 255, .08);
-}
-.map-link svg { width: 13px; height: 13px; flex: none; color: var(--holo); }
+.map-link:hover { background: rgba(122, 236, 224, .12); border-color: rgba(143, 245, 227, .45); }
+.map-link svg { width: 13px; height: 13px; flex: none; color: var(--accent); }
 .brand .map-link .map-link-label { margin-top: 0; color: inherit; font: inherit; letter-spacing: inherit; }
-.station-status { color: #6f8b96; font: 500 9px "IBM Plex Mono"; letter-spacing: .12em; gap: 9px; }
-.pulse { width: 6px; height: 6px; border-radius: 50%; background: #7fe8ff; box-shadow: 0 0 10px #7fe8ff; }
-.divider { width: 1px; height: 12px; background: #294654; margin: 0 5px; }
-.balance { justify-self: end; gap: 10px; }
-.balance > span { width: 34px; height: 34px; display: grid; place-items: center; color: #e6b963; border: 1px solid rgba(230, 185, 99, .36); border-radius: 50%; background: rgba(230, 185, 99, .05); box-shadow: inset 0 0 12px rgba(230, 185, 99, .08); }
-.balance small { text-transform: uppercase; color: #5d7a86; font: 500 8px "IBM Plex Mono"; letter-spacing: .15em; }
-.balance strong { font: 600 16px "IBM Plex Mono"; margin-top: 2px; }
-.balance i { color: #e6b963; font-style: normal; }
+.build-badge {
+  margin-left: 6px; padding: 3px 8px;
+  border: 1px solid var(--line-soft); border-radius: 4px;
+  color: var(--text-muted); background: transparent;
+  font: 500 8px var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  white-space: nowrap;
+}
+.station-status { color: var(--text-muted); font: 500 9px var(--mono); letter-spacing: .12em; gap: 9px; }
+.pulse { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px rgba(117, 223, 210, .7); }
+.divider { width: 1px; height: 12px; background: rgba(120, 160, 170, .25); margin: 0 5px; }
+.balance > span {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  color: var(--warning); border: 1px solid rgba(255, 215, 154, .35); border-radius: 4px;
+  background: rgba(255, 215, 154, .05);
+}
+.balance small { text-transform: uppercase; color: var(--text-muted); font: 500 8px var(--mono); letter-spacing: .15em; }
+.balance strong { font: 600 16px var(--mono); margin-top: 2px; color: var(--text); }
+.balance i { color: var(--warning); font-style: normal; }
 
-.primary-tabs {
-  position: relative; z-index: 3;
-  flex: none;
-  height: 51px; display: flex; align-items: stretch; padding-left: 4vw;
-  border-bottom: 1px solid rgba(110, 130, 190, .2);
-  background: rgba(6, 18, 30, .55);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6);
-  backdrop-filter: blur(20px) saturate(1.6);
-}
-.primary-tabs button {
-  position: relative; display: flex; align-items: center; gap: 9px; padding: 0 24px;
-  border: 0; border-right: 1px solid rgba(126, 180, 210, .12); color: #66808b; background: transparent;
-  font-size: 11px; text-transform: uppercase; letter-spacing: .08em; cursor: pointer;
-  transition: color .15s ease, background .15s ease;
-}
-.primary-tabs button:first-child { border-left: 1px solid rgba(126, 180, 210, .12); }
-.primary-tabs button:hover { color: #a6c5cd; background: rgba(127, 232, 255, .05); }
-.primary-tabs button.active { color: #c6f6ff; background: rgba(127, 232, 255, .07); text-shadow: 0 0 16px rgba(127, 232, 255, .45); }
-.primary-tabs button.active svg { color: #7fe8ff; filter: drop-shadow(0 0 5px rgba(127, 232, 255, .5)); }
-.primary-tabs button.active::after { content: ""; position: absolute; inset: auto 12px -1px; height: 2px; background: #7fe8ff; box-shadow: 0 0 12px rgba(127, 232, 255, .8); }
+/* ===== Контент и общая сетка =============================================== */
 
 .content {
   flex: 1;
@@ -237,516 +251,398 @@ body {
   padding: 0 clamp(14px, 2.5vw, 44px);
   position: relative; z-index: 2;
 }
-.shop-view, .info-view {
+.shop-view {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 24px 0 18px;
+  padding: 20px 0 14px;
 }
-#infoContent { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-/* Вкладки базы и корабля прокручиваются целиком, панели не сжимаются */
-.info-view { overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(127, 232, 255, .28) transparent; }
-#infoContent, #shipViewContent { flex: none; display: block; }
-#shipViewContent > * { margin-bottom: 14px; }
-#shipViewContent > *:last-child { margin-bottom: 0; }
-.section-title { display: flex; align-items: end; justify-content: space-between; margin-bottom: 20px; flex: none; }
+.section-title { display: flex; align-items: end; justify-content: space-between; margin-bottom: 14px; flex: none; }
 .section-title-status { justify-content: flex-end; }
-.eyebrow { color: #9d8ce6; font: 500 9px "IBM Plex Mono"; letter-spacing: .19em; }
-h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; letter-spacing: -.03em; text-shadow: 0 0 34px rgba(127, 232, 255, .12); }
-.terminal-status { flex: none; white-space: nowrap; color: #6f8b96; font: 500 9px "IBM Plex Mono"; text-transform: uppercase; letter-spacing: .1em; }
-.terminal-status > span:first-child { display: inline-block; width: 5px; height: 5px; margin-right: 7px; border-radius: 50%; background: #7fe8ff; box-shadow: 0 0 8px rgba(127, 232, 255, .8); }
-
-.category-tabs,
-.subcategory-tabs {
-  flex: none;
-  display: flex;
-  border: 1px solid rgba(150, 190, 255, .16);
-  width: fit-content;
-  background: rgba(7, 21, 30, .52);
-  -webkit-backdrop-filter: blur(14px) saturate(1.5);
-  backdrop-filter: blur(14px) saturate(1.5);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
-}
-.category-tabs { margin-bottom: 12px; }
-.category-tabs button,
-.sub-chip {
-  height: 38px; min-width: 104px; display: flex; align-items: center; justify-content: center; gap: 7px;
-  color: #69838e; border: 0; border-right: 1px solid rgba(126, 180, 210, .12); background: transparent;
-  text-transform: uppercase; font: 500 9px "IBM Plex Mono"; letter-spacing: .09em; cursor: pointer;
-  transition: color .14s ease, background .14s ease;
-}
-.category-tabs button:last-child,
-.sub-chip:last-child { border-right: 0; }
-.category-tabs button:hover,
-.sub-chip:hover { color: #a6c5cd; background: rgba(127, 232, 255, .05); }
-.category-tabs button.active,
-.sub-chip.active { color: #06181b; background: var(--holo); box-shadow: 0 0 20px rgba(127, 232, 255, .32); }
-
-/* Подкатегории выбранной ветки: та же форма, что у табов, но место в вёрстке
-   зарезервировано всегда — высота не меняется при переключении. */
-.subcategory-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 40px;
-  margin: -4px 0 12px;
-}
-.subcategory-title {
-  flex: none;
-  font: 9px "IBM Plex Mono";
-  letter-spacing: .16em;
-  text-transform: uppercase;
-  color: #718b97;
-}
-.sub-chip { min-width: 0; padding: 0 14px; }
-.sub-chip .sub-count { font-size: 8px; opacity: .55; letter-spacing: 0; }
-.sub-chip.active .sub-count { opacity: .7; }
-
-/* Метка сборки в верхней панели */
-.build-badge {
-  margin-left: 6px;
-  padding: 3px 8px;
-  border: 1px solid rgba(127, 232, 255, .34);
-  border-radius: 3px;
-  color: #8fe6e0;
-  background: rgba(127, 232, 255, .06);
-  font: 600 9px "IBM Plex Mono";
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  white-space: nowrap;
+.eyebrow { color: var(--purple-soft); font: 500 9px var(--mono); letter-spacing: .19em; text-transform: uppercase; }
+h1 { margin: 5px 0 0; font-size: clamp(20px, 1.7vw, 26px); font-weight: 500; letter-spacing: -.02em; }
+.terminal-status { flex: none; white-space: nowrap; color: var(--text-muted); font: 500 9px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
+.terminal-status > span:first-child {
+  display: inline-block; width: 5px; height: 5px; margin-right: 7px;
+  border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px rgba(117, 223, 210, .7);
 }
 
-.market-grid { display: grid; grid-template-columns: 344px minmax(0, 1fr) minmax(0, 1fr) 338px; grid-template-rows: minmax(0, 1fr); flex: 1; min-height: 0; gap: 12px; }
-/* У выбранного корабля правый список скрыт — консоль занимает его место */
-.market-grid.no-cargo { grid-template-columns: 344px minmax(0, 1fr) 338px; }
-.hangar-grid { grid-template-columns: minmax(290px, 1fr) 230px minmax(290px, 1fr); }
-.inventory-panel, .trade-console {
+/* ===== Стеклянная панель =================================================== */
+
+.glass {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border: 1px solid var(--line-holo);
-  border-radius: 3px;
+  border: 1px solid var(--line);
   background:
-    radial-gradient(ellipse 80% 55% at 50% 0%, rgba(96, 224, 255, .08), transparent 70%),
-    rgba(6, 21, 36, .62);
-  -webkit-backdrop-filter: blur(18px) saturate(1.8);
-  backdrop-filter: blur(18px) saturate(1.8);
+    linear-gradient(150deg,
+      rgba(255, 255, 255, .055) 0%,
+      rgba(255, 255, 255, .015) 42%,
+      rgba(120, 90, 200, .05) 100%);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
   box-shadow:
-    0 0 0 1px rgba(127, 232, 255, .09),
-    0 24px 60px rgba(1, 4, 12, .55),
-    0 0 36px rgba(88, 212, 255, .18),
-    inset 0 0 0 1px rgba(160, 246, 255, .10),
-    inset 0 1px 0 rgba(220, 255, 255, .30),
-    inset 0 0 80px rgba(80, 220, 255, .06);
+    0 18px 50px rgba(2, 4, 12, .45),
+    0 0 44px rgba(124, 58, 237, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .15),
+    inset 0 0 50px rgba(90, 220, 200, .03);
 }
-/* Световая кромка сверху панели и угловой акцент справа сверху */
-.inventory-panel::before, .trade-console::before {
-  content: ""; position: absolute; top: 0; left: 5%; right: 5%; height: 1px;
-  background: rgba(160, 246, 255, .75);
-  box-shadow: 0 0 12px rgba(127, 232, 255, .6);
+.glass::before {
+  content: "";
+  position: absolute; top: 0; left: 7%; right: 7%; height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    rgba(122, 236, 224, .55),
+    rgba(169, 133, 245, .55),
+    transparent);
   pointer-events: none;
 }
-.inventory-panel::after, .trade-console::after {
-  content: ""; position: absolute; top: 6px; right: 6px; width: 17px; height: 17px;
-  border-top: 2px solid rgba(160, 246, 255, .9); border-right: 2px solid rgba(160, 246, 255, .9);
-  filter: drop-shadow(0 0 6px rgba(96, 224, 255, .8));
+.glass::after {
+  content: "";
+  position: absolute; top: 6px; right: 6px; width: 13px; height: 13px;
+  border-top: 2px solid rgba(122, 236, 224, .75);
+  border-right: 2px solid rgba(122, 236, 224, .75);
+  filter: drop-shadow(0 0 4px rgba(87, 216, 195, .55));
   pointer-events: none;
 }
+
+.panel-block { display: flex; flex-direction: column; min-height: 0; }
+.market-grid > .panel-block.collapsed { align-self: start; }
+.panel-block.collapsed .panel-body { display: none; }
+.panel-block.collapsed .panel-head { border-bottom-color: transparent; }
+.panel-block.collapsed .caret { transform: rotate(-90deg); }
+
 .panel-head {
   flex: none;
-  height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
-  border-bottom: 1px solid rgba(127, 232, 255, .16);
-  background: linear-gradient(90deg, rgba(10, 30, 45, .55), rgba(8, 24, 38, .45));
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  height: 44px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 14px;
+  cursor: pointer; user-select: none;
+  border-bottom: 1px solid rgba(150, 180, 255, .13);
+  background: linear-gradient(90deg, rgba(11, 28, 29, .30), rgba(28, 21, 47, .30));
+  transition: background .14s ease;
 }
+.panel-head:hover { background: linear-gradient(90deg, rgba(122, 236, 224, .06), rgba(170, 136, 246, .06)); }
 .panel-head div { display: flex; align-items: center; gap: 10px; }
-.panel-head div span { color: #a9c8ff; font: 500 9px "IBM Plex Mono"; padding: 4px 5px; border: 1px solid rgba(127, 232, 255, .34); }
-.panel-head strong { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .09em; }
-.panel-head small { color: #68828e; font: 9px "IBM Plex Mono"; text-transform: uppercase; }
-.item-list { flex: 1; min-height: 0; padding: 7px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(127, 232, 255, .28) transparent; }
-.list-empty,
-.trade-empty {
-  margin: 6px;
-  padding: 26px 14px;
-  text-align: center;
-  font-size: 13px;
-  color: #718b97;
-  border: 1px dashed rgba(150, 190, 255, .16);
-  border-radius: 3px;
-  background: rgba(7, 21, 30, .3);
+.panel-head div span {
+  color: var(--purple-label);
+  font: 500 9px var(--mono);
+  padding: 3px 5px;
+  border: 1px solid #574580;
 }
-/* Блок списка магазина: заголовок подкатегории и её позиции под ним. */
-.list-group + .list-group { margin-top: 6px; }
-.list-group-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 7px 6px;
-  border-bottom: 1px solid rgba(127, 232, 255, .16);
-}
-.list-group-icon {
-  width: 20px; height: 20px; display: grid; place-items: center;
-  color: #8fe6e0; border: 1px solid rgba(127, 232, 255, .26); background: #0b1f2c;
-  box-shadow: inset 0 0 10px rgba(127, 232, 255, .06);
-}
-.list-group-head strong {
+.panel-head strong {
   font-size: 11px; font-weight: 600;
   text-transform: uppercase; letter-spacing: .09em;
 }
-.list-group-head small {
-  margin-left: auto; color: #68828e; font: 9px "IBM Plex Mono"; text-transform: uppercase;
-}
-.item-row {
-  position: relative; width: 100%; min-height: 66px; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto 33px;
-  align-items: center; gap: 10px; padding: 7px; color: inherit; text-align: left; border: 1px solid transparent;
-  border-bottom-color: rgba(126, 180, 210, .1); border-radius: 2px; background: transparent; cursor: pointer;
-  transition: background .14s ease, border-color .14s ease, box-shadow .14s ease;
-}
-.item-row:hover { background: rgba(127, 232, 255, .05); }
-.item-row.selected { border-color: rgba(127, 232, 255, .5); background: linear-gradient(90deg, rgba(14, 40, 54, .75), rgba(10, 30, 45, .75)); box-shadow: inset 0 0 24px rgba(127, 232, 255, .07), 0 0 18px rgba(96, 224, 255, .07); }
-.item-row.selected::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; background: var(--holo); box-shadow: 0 0 8px rgba(127, 232, 255, .8); }
-.item-icon { width: 42px; height: 42px; display: grid; place-items: center; color: var(--holo); border: 1px solid rgba(127, 232, 255, .26); background: #0b1f2c; box-shadow: inset 0 0 16px rgba(127, 232, 255, .07); }
-.item-icon.weapon { color: #e6b963; }
-.item-icon.shield { color: #8fb3ff; }
-.item-icon.ship { color: #b9a4ff; }
-.item-copy, .item-meta { display: flex; flex-direction: column; min-width: 0; }
-.item-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; }
-.item-copy span { margin-top: 4px; color: #5d7a86; font: 9px "IBM Plex Mono"; white-space: nowrap; }
-.item-meta { align-items: end; }
-.item-meta small { color: #a08ce4; font: 8px "IBM Plex Mono"; text-transform: uppercase; }
-.item-meta b { margin-top: 6px; color: #dcebef; font: 500 10px "IBM Plex Mono"; }
-.stock { color: #64808b; text-align: right; font: 10px "IBM Plex Mono"; }
+.panel-head small { margin-left: auto; margin-right: 12px; color: var(--text-muted); font: 9px var(--mono); text-transform: uppercase; }
+.panel-head .caret { color: var(--text-muted); font-size: 9px; transition: transform .15s ease; }
 
-.resource-row {
-  position: relative; width: 100%; min-height: 72px; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto 16px;
-  align-items: center; gap: 11px; padding: 8px; color: inherit; text-align: left;
-  border: 1px solid transparent; border-bottom-color: rgba(126, 180, 210, .1); border-radius: 2px; background: transparent; cursor: pointer;
-  transition: background .14s ease, border-color .14s ease, box-shadow .14s ease;
-}
-.resource-row:hover { background: rgba(127, 232, 255, .05); }
-.resource-row.selected { border-color: rgba(127, 232, 255, .5); background: linear-gradient(90deg, rgba(14, 40, 54, .75), rgba(10, 30, 45, .75)); box-shadow: inset 0 0 24px rgba(127, 232, 255, .07); }
-.resource-row.selected::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; background: var(--holo); box-shadow: 0 0 8px rgba(127, 232, 255, .8); }
-.resource-row > svg { color: #4d6572; }
-.resource-row.selected > svg { color: #c5b2ff; }
-.resource-quantity { min-width: 40px; display: flex; align-items: baseline; justify-content: end; gap: 3px; }
-.resource-quantity b { color: #d8f7ff; font: 600 15px "IBM Plex Mono"; }
-.resource-quantity small { color: #4d6572; font: 7px "IBM Plex Mono"; text-transform: uppercase; }
-
-.trade-console { display: flex; flex-direction: column; align-items: center; padding: 15px 12px; }
-.console-label { color: #4d6572; font: 8px "IBM Plex Mono"; letter-spacing: .2em; }
-.trade-preview {
-  width: 100%; display: flex; flex-direction: column; align-items: center;
-  padding: 6px 0 14px; text-align: center; border-bottom: 1px solid rgba(126, 180, 210, .12);
-}
-.trade-preview-icon {
-  width: 52px; height: 52px; display: grid; place-items: center; margin-bottom: 10px;
-  color: #c5b2ff; border: 1px solid rgba(127, 232, 255, .34); background: #0b1f2c;
-  clip-path: polygon(12% 0, 100% 0, 100% 88%, 88% 100%, 0 100%, 0 12%);
-}
-.trade-preview-icon.weapon { color: #e6b963; }
-.trade-preview-icon.shield { color: #8fb3ff; }
-.trade-preview strong { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.trade-preview-stats { min-height: 24px; margin-top: 5px; color: #718b97; font: 10px/1.5 "IBM Plex Mono"; }
-.trade-preview-price { margin-top: 7px; color: #e4f6ff; font: 600 12px "IBM Plex Mono"; }
-.trade-preview-price small { color: #4d6572; font-size: 7px; }
-/* Состав контейнера в карточке: ресурс и килограммы, без переполнения */
-.trade-cargo-label {
-  width: 100%; margin-top: 9px; color: #718b97; text-align: left;
-  text-transform: uppercase; letter-spacing: .08em; font: 10px "IBM Plex Mono";
-}
-.trade-cargo-list {
-  width: 100%; margin-top: 3px; max-height: 126px; overflow-y: auto;
-  scrollbar-width: thin; scrollbar-color: rgba(127, 232, 255, .28) transparent;
-}
-.trade-cargo-row {
-  display: flex; align-items: center; gap: 6px; padding: 4px 0;
-  border-top: 1px solid rgba(126, 180, 210, .08); text-align: left;
-}
-.trade-cargo-icon {
-  flex: none; width: 17px; height: 17px; display: grid; place-items: center;
-  color: #8fe3f2; border: 1px solid rgba(127, 232, 255, .22); background: rgba(8, 22, 34, .6);
-}
-.trade-cargo-name {
-  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; color: #d9e9ef; font-size: 11px;
-}
-.trade-cargo-kg { flex: none; color: #d8f7ff; font: 600 11px "IBM Plex Mono"; }
-.trade-cargo-total { width: 100%; margin-top: 5px; color: #718b97; text-align: left; font: 10px "IBM Plex Mono"; }
-/* Итог продажи корабля: подпись слева, сумма справа. */
-.trade-sale-total {
-  width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-  margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(150, 190, 255, .16);
-  color: #e4f6ff; text-align: left; font: 600 12px "IBM Plex Mono";
-}
-.trade-sale-total b { font-weight: 600; }
-.hangar-console { padding-top: 18px; }
-.hangar-console .trade-preview { padding-bottom: 18px; }
-.hangar-console .trade-preview strong { white-space: normal; font-size: 11px; }
-.hangar-console .trade-preview p {
-  margin: 9px 0 4px; color: #718b97; font-size: 9px; line-height: 1.55;
-}
-.hangar-console .trade-preview-stats { color: #a08ce4; min-height: 0; }
-.transfer-route {
-  width: 100%; display: flex; align-items: center; justify-content: space-between;
-  margin: 16px 0 0; padding: 8px 10px; color: #aa88f6;
-  border: 1px solid rgba(150, 190, 255, .15); background: rgba(8, 24, 38, .55);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-}
-.transfer-route span { color: #718b97; font: 600 7px "IBM Plex Mono"; letter-spacing: .08em; }
-.hangar-console .amount-control { margin: 14px 0; }
-.amount-control { display: flex; align-items: center; gap: 6px; margin: 17px 0 12px; }
-.amount-control button {
-  width: 28px; height: 38px; display: grid; place-items: center; color: #e4f6ff; cursor: pointer;
-  border: 1px solid rgba(127, 232, 255, .2); background: rgba(8, 24, 38, .6);
-  transition: background .14s ease, border-color .14s ease;
-}
-.amount-control button:hover { border-color: rgba(127, 232, 255, .55); background: rgba(18, 44, 58, .7); }
-.amount-control div { width: 50px; display: flex; flex-direction: column; align-items: center; }
-.amount-control strong { font: 600 22px "IBM Plex Mono"; }
-.amount-control span { color: #4d6572; font: 7px "IBM Plex Mono"; letter-spacing: .12em; }
-.trade-total { display: flex; flex-direction: column; align-items: center; margin-bottom: 10px; }
-.trade-total span, .sell-value span { color: #5d7a86; font: 8px "IBM Plex Mono"; text-transform: uppercase; }
-.trade-total strong { color: #e6b963; font: 600 12px "IBM Plex Mono"; margin-top: 4px; }
-.trade-button { width: 100%; height: 39px; display: flex; justify-content: center; align-items: center; gap: 7px; border-radius: 2px; cursor: pointer; text-transform: uppercase; font: 600 9px "IBM Plex Mono"; letter-spacing: .1em; transition: filter .15s ease, background .15s ease, border-color .15s ease, transform .1s ease; }
-.trade-button.buy {
-  color: #041619; background: var(--holo); border: 1px solid var(--holo);
-  box-shadow: 0 0 24px rgba(127, 232, 255, .24), inset 0 1px 0 rgba(255, 255, 255, .55);
-}
-.trade-button.buy:hover { filter: brightness(1.08); box-shadow: 0 0 32px rgba(127, 232, 255, .38); }
-.trade-button.sell { color: #ff9fb0; background: rgba(255, 95, 122, .08); border: 1px solid rgba(255, 95, 122, .4); }
-.trade-button.sell:hover { background: rgba(255, 95, 122, .14); border-color: rgba(255, 95, 122, .6); }
-.trade-button:active { transform: translateY(1px); }
-.console-rule { width: 100%; height: 1px; background: rgba(127, 232, 255, .1); margin: 22px 0; position: relative; }
-.console-rule::after { content: "///"; position: absolute; top: -6px; left: calc(50% - 12px); padding: 0 5px; color: #3c7a8a; background: #040f1a; font: 8px "IBM Plex Mono"; }
-.sell-value { display: flex; width: 100%; justify-content: space-between; margin: 0 0 10px; }
-.sell-value b { color: #a9c3cc; font: 500 9px "IBM Plex Mono"; }
-
-.ship-dock { flex: none; border-top: 1px solid rgba(126, 180, 210, .12); padding: 14px 0 16px; }
-.dock-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; text-transform: uppercase; font-size: 10px; letter-spacing: .12em; }
-.dock-heading b { color: #a9c8ff; font: 500 9px "IBM Plex Mono"; padding: 2px 5px; border: 1px solid rgba(127, 232, 255, .34); }
-.ship-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.ship-list { display: flex; flex-wrap: nowrap; justify-content: flex-start; align-items: flex-start; gap: 10px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: thin; scrollbar-color: rgba(127, 232, 255, .28) transparent; }
-.ship-list::-webkit-scrollbar { height: 8px; }
-.ship-list::-webkit-scrollbar-thumb { background: rgba(127, 232, 255, .28); border-radius: 4px; }
-.ship-card { flex: 0 0 auto; }
-.ship-card {
-  width: 156px;
-  height: 156px;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px;
-  color: #a9c3cc;
-  text-align: left;
-  border: 1px solid rgba(150, 190, 255, .14);
-  border-radius: 3px;
-  background: rgba(9, 24, 36, .65);
-  -webkit-backdrop-filter: blur(14px) saturate(1.5);
-  backdrop-filter: blur(14px) saturate(1.5);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
-  cursor: pointer;
-  transition: border-color .14s ease, background .14s ease;
-}
-.ship-card:hover { border-color: rgba(127, 232, 255, .34); }
-.ship-card.active { color: #e4f6ff; border-color: rgba(127, 232, 255, .5); background: linear-gradient(120deg, rgba(16, 46, 56, .75), rgba(10, 32, 44, .75)); box-shadow: 0 0 24px rgba(96, 224, 255, .1), inset 0 1px 0 rgba(255, 255, 255, .12); }
-.ship-visual { flex: 1; min-height: 0; position: relative; display: grid; place-items: center; color: #8fe3f2; border-right: 0; border-bottom: 1px solid rgba(127, 232, 255, .1); padding: 0 0 8px; }
-.ship-card.active .ship-visual { color: #a9c8ff; }
-.ship-glyph { width: min(86%, 520px); color: #aa88f6; filter: drop-shadow(0 0 14px rgba(170, 136, 246, .22)); }
-.ship-glyph.compact { width: 104px; }
-.active-tag { position: absolute; left: 0; top: 0; padding: 2px 5px; color: #041619; background: #aa88f6; font: 600 6px "IBM Plex Mono"; text-transform: uppercase; letter-spacing: .08em; }
-.ship-card .ship-meta { display: flex; flex-direction: column; }
-.ship-card strong { font-size: 11.5px; text-transform: uppercase; }
-.ship-card span { margin-top: 3px; color: #5b7884; font-size: 8.5px; }
-.ship-card small { color: #8fe3f2; font: 9px "IBM Plex Mono"; }
-.ship-card.empty { display: flex; justify-content: center; flex-direction: column; gap: 6px; text-align: center; color: #4d6572; border-style: dashed; }
-.empty-plus { width: 29px; height: 29px; display: grid; place-items: center; margin: 0 !important; color: #8fe3f2 !important; border: 1px solid rgba(127, 232, 255, .26); border-radius: 50%; }
-
-.info-grid {
+.panel-body {
   flex: 1;
   min-height: 0;
-  display: grid; grid-template-columns: 1.35fr 1fr .52fr;
-  border: 1px solid var(--line-holo);
-  border-radius: 3px;
-  background:
-    radial-gradient(ellipse 80% 55% at 50% 0%, rgba(96, 224, 255, .08), transparent 70%),
-    rgba(6, 21, 36, .62);
-  -webkit-backdrop-filter: blur(18px) saturate(1.8);
-  backdrop-filter: blur(18px) saturate(1.8);
-  box-shadow:
-    0 0 0 1px rgba(127, 232, 255, .09),
-    0 24px 60px rgba(1, 4, 12, .55),
-    0 0 36px rgba(88, 212, 255, .18),
-    inset 0 0 0 1px rgba(160, 246, 255, .10),
-    inset 0 1px 0 rgba(220, 255, 255, .30),
-    inset 0 0 80px rgba(80, 220, 255, .06);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 160, 170, .35) transparent;
 }
-.info-tabs {
+.panel-body::-webkit-scrollbar,
+.item-list::-webkit-scrollbar,
+.ship-panel-body::-webkit-scrollbar,
+.trade-cargo-list::-webkit-scrollbar { width: 8px; }
+.panel-body::-webkit-scrollbar-thumb,
+.item-list::-webkit-scrollbar-thumb,
+.ship-panel-body::-webkit-scrollbar-thumb,
+.trade-cargo-list::-webkit-scrollbar-thumb { background: rgba(120, 160, 170, .35); border-radius: 4px; }
+.panel-body::-webkit-scrollbar-track,
+.item-list::-webkit-scrollbar-track,
+.ship-panel-body::-webkit-scrollbar-track,
+.trade-cargo-list::-webkit-scrollbar-track { background: transparent; }
+
+/* ===== Кнопки-табы ========================================================= */
+
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab {
+  height: 24px; padding: 0 8px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer; white-space: nowrap;
+  font: 500 8px var(--mono);
+  text-transform: uppercase; letter-spacing: .08em;
+  transition: color .14s ease, background .14s ease, border-color .14s ease;
+}
+.tab:hover { color: var(--text-soft); background: rgba(122, 236, 224, .06); }
+.tab.active { color: var(--accent-bright); background: rgba(122, 236, 224, .05); border-color: var(--line-active); }
+.tab.active:hover { background: rgba(122, 236, 224, .12); }
+.tab svg { flex: none; }
+
+.catalog-panel { flex: none; margin-bottom: 10px; }
+.catalog-body {
   flex: none;
-  width: fit-content; display: flex; margin-bottom: 12px; border: 1px solid rgba(150, 190, 255, .16);
-  background: rgba(7, 21, 30, .52);
-  -webkit-backdrop-filter: blur(14px) saturate(1.5);
-  backdrop-filter: blur(14px) saturate(1.5);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px;
+  overflow: visible;
 }
-.info-tabs button {
-  height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 18px;
-  color: #69838e; border: 0; border-right: 1px solid rgba(126, 180, 210, .12); background: transparent;
-  font: 500 9px "IBM Plex Mono"; text-transform: uppercase; letter-spacing: .07em; cursor: pointer;
-}
-.info-tabs button:last-child { border-right: 0; }
+.category-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.category-tabs .tab { flex: 0 0 auto; min-width: 104px; }
 
-/* На вкладке информации док кораблей прижат снизу — оставляем место под него */
-.info-view { padding-bottom: 8px; }
-
-.info-tabs button.active {
-  color: #c6f6ff; background: linear-gradient(110deg, rgba(14, 40, 54, .6), rgba(10, 32, 44, .6));
-  box-shadow: inset 0 -2px #7fe8ff;
+.subcategory-bar { display: flex; align-items: center; gap: 10px; min-height: 24px; }
+.subcategory-title {
+  flex: none;
+  font: 500 8px var(--mono);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
-.collection-panel {
+.subcategory-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.sub-chip { padding: 0 8px; }
+.sub-chip .sub-count { font-size: 8px; opacity: .55; letter-spacing: 0; }
+.sub-chip.active .sub-count { opacity: .7; }
+
+/* ===== Сетка магазина ====================================================== */
+
+.market-grid {
+  display: grid;
+  grid-template-columns: 344px minmax(0, 1fr) minmax(0, 1fr) 338px;
+  grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
-  display: flex; flex-direction: column;
-  border: 1px solid var(--line-holo);
-  border-radius: 3px;
-  background:
-    radial-gradient(ellipse 80% 55% at 50% 0%, rgba(96, 224, 255, .08), transparent 70%),
-    rgba(6, 21, 36, .62);
-  -webkit-backdrop-filter: blur(18px) saturate(1.8);
-  backdrop-filter: blur(18px) saturate(1.8);
-  box-shadow:
-    0 0 0 1px rgba(127, 232, 255, .09),
-    0 24px 60px rgba(1, 4, 12, .55),
-    0 0 36px rgba(88, 212, 255, .18),
-    inset 0 0 0 1px rgba(160, 246, 255, .10),
-    inset 0 1px 0 rgba(220, 255, 255, .30),
-    inset 0 0 80px rgba(80, 220, 255, .06);
+  gap: 10px;
 }
-.collection-head {
-  flex: none;
-  min-height: 70px; display: flex; align-items: center; justify-content: space-between; padding: 14px 20px;
-  border-bottom: 1px solid rgba(127, 232, 255, .16); background: linear-gradient(90deg, rgba(10, 30, 45, .55), rgba(8, 24, 38, .45));
-}
-.collection-head h2 { margin: 5px 0 0; font-size: 17px; font-weight: 500; }
-.collection-head > span { color: #5d7a86; font: 8px "IBM Plex Mono"; text-transform: uppercase; letter-spacing: .08em; }
-.collection-list { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 0 1px; padding: 8px; scrollbar-width: thin; scrollbar-color: rgba(127, 232, 255, .28) transparent; }
-.collection-row {
-  min-height: 84px; display: grid; grid-template-columns: 48px minmax(0, 1fr) minmax(90px, auto) 58px;
-  align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid rgba(126, 180, 210, .09);
-  background: rgba(255, 255, 255, .015);
-}
-.collection-row:nth-child(odd) { border-right: 1px solid rgba(126, 180, 210, .09); }
-.collection-row:hover { background: linear-gradient(90deg, rgba(127, 232, 255, .05), rgba(170, 136, 246, .06)); }
-
-/* Колонка 1 магазина — сведения о выбранном корабле */
-.ship-panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; scrollbar-color: rgba(127, 232, 255, .28) transparent; }
-.ship-title { font-size: 20px; font-weight: 500; }
-.ship-sub { color: #9d8ce6; font: 11px "IBM Plex Mono"; letter-spacing: .08em; text-transform: uppercase; }
-.ship-rows { display: grid; gap: 6px; }
-.ship-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 5px; border-bottom: 1px solid rgba(127, 232, 255, .09); }
-.ship-row span { color: #a9c3cc; font: 11px "IBM Plex Mono"; letter-spacing: .08em; text-transform: uppercase; }
-.ship-row b { font-size: 15px; font-weight: 500; }
-.ship-slot { display: flex; justify-content: space-between; gap: 10px; font: 8px "IBM Plex Mono"; color: #718b97; }
-.ship-slot b { color: #d9e9ef; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ship-slot span { flex: none; }
-
-/* Колонка 4 магазина — сведения о выбранном объекте в той же сетке, что у корабля */
+.market-grid.no-cargo { grid-template-columns: 344px minmax(0, 1fr) 338px; }
+.inventory-panel { min-height: 0; }
 .shop-panel { min-height: 0; }
-.shop-panel-body { padding: 14px 16px 18px; }
+
+/* ===== Строки списков ====================================================== */
+
+.item-list { flex: 1; min-height: 0; padding: 6px; overflow-y: auto; }
+.list-empty,
+.trade-empty {
+  margin: 6px;
+  padding: 22px 14px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-dim);
+  border: 1px dashed rgba(150, 190, 255, .16);
+  border-radius: 8px;
+  background: rgba(9, 24, 25, .30);
+}
+.list-group + .list-group { margin-top: 6px; }
+.list-group-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 6px 5px;
+  border-bottom: 1px solid var(--line-row);
+}
+.list-group-icon {
+  width: 18px; height: 18px; display: grid; place-items: center;
+  color: var(--accent); border: 1px solid var(--line-soft); background: rgba(9, 24, 25, .50);
+}
+.list-group-head strong {
+  font: 500 9px var(--mono);
+  text-transform: uppercase; letter-spacing: .12em;
+  color: var(--text-soft);
+}
+.list-group-head small {
+  margin-left: auto; color: var(--text-muted); font: 9px var(--mono); text-transform: uppercase;
+}
+
+.item-row {
+  position: relative; width: 100%; min-height: 52px;
+  display: grid; grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center; gap: 10px; padding: 6px;
+  color: inherit; text-align: left;
+  border: 1px solid transparent;
+  border-bottom-color: var(--line-row);
+  border-radius: 5px; background: transparent; cursor: pointer;
+  transition: background .14s ease, border-color .14s ease, box-shadow .14s ease;
+}
+.item-row:hover { background: rgba(122, 236, 224, .06); }
+.item-row.selected {
+  border-color: rgba(122, 236, 224, .35);
+  background: rgba(122, 236, 224, .10);
+  box-shadow: 0 0 12px rgba(87, 216, 195, .15);
+}
+.item-icon {
+  width: 32px; height: 32px; display: grid; place-items: center;
+  color: var(--accent); border: 1px solid var(--line-soft); background: rgba(9, 24, 25, .50);
+}
+.item-icon.weapon { color: var(--warning); }
+.item-icon.shield { color: var(--purple-soft); }
+.item-icon.ship { color: var(--purple); }
+.item-copy, .item-meta { display: flex; flex-direction: column; min-width: 0; }
+.item-copy strong {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; font-weight: 600;
+}
+.item-copy span { margin-top: 3px; color: var(--text-muted); font: 9px var(--mono); white-space: nowrap; }
+.item-meta { align-items: end; }
+.item-meta small { color: var(--purple-soft); font: 8px var(--mono); text-transform: uppercase; }
+.item-meta b { margin-top: 5px; color: var(--text); font: 500 10px var(--mono); }
+
+/* ===== Карточка объекта ==================================================== */
+
+.ship-panel-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 12px 14px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+  scrollbar-width: thin; scrollbar-color: rgba(120, 160, 170, .35) transparent;
+}
+.ship-title {
+  font: 600 13px var(--sans); letter-spacing: .02em;
+  color: var(--text); overflow-wrap: anywhere;
+}
+.ship-sub {
+  color: var(--purple-soft);
+  font: 500 8px var(--mono);
+  letter-spacing: .16em; text-transform: uppercase;
+  line-height: 1.45;
+}
+.ship-meta-line { color: var(--text-muted); letter-spacing: .08em; }
+.ship-rows { display: flex; flex-direction: column; }
+.ship-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px;
+  min-height: 28px; padding: 3px 0;
+  border-bottom: 1px solid var(--line-row);
+  font: 11px var(--mono);
+}
+.ship-row:last-child { border-bottom: 0; }
+.ship-row span {
+  color: var(--text-muted); font-size: 9px;
+  text-transform: uppercase; letter-spacing: .12em;
+}
+.ship-row b { color: var(--text); font: 500 11px var(--mono); }
+.ship-row b small { color: var(--text-muted); font-size: 8px; }
+
+.shop-panel-body { padding: 12px 14px 14px; }
 .shop-panel-body .ship-title { overflow-wrap: anywhere; }
 .shop-panel-body .ship-row b { text-align: right; }
-.shop-panel-body .ship-row b small { color: #5d7a86; font: 8px "IBM Plex Mono"; letter-spacing: .04em; }
+.shop-panel-body .ship-row b small { color: var(--text-muted); font: 8px var(--mono); letter-spacing: .04em; }
 .shop-panel-body .ship-sub { line-height: 1.45; }
 .shop-panel-body .trade-cargo-list { margin-top: 0; max-height: 180px; }
-.shop-panel-body .trade-cargo-row { padding: 5px 0; border-top: 0; border-bottom: 1px solid rgba(127, 232, 255, .09); }
+.shop-panel-body .trade-cargo-row { padding: 5px 0; border-top: 0; border-bottom: 1px solid var(--line-row); }
 .shop-panel-body .trade-cargo-row:last-child { border-bottom: 0; }
-.shop-panel-body .trade-cargo-name { color: #d9e9ef; font: 11px Manrope, sans-serif; }
+.shop-panel-body .trade-cargo-name { color: var(--text); font: 11px var(--sans); }
 .shop-panel-body .trade-cargo-kg { font-weight: 500; }
 .shop-panel-body .trade-sale-total { margin-top: 0; padding-top: 7px; }
 .shop-panel-body .trade-empty { margin: 0; }
-.shop-note { color: #718b97; text-transform: none; letter-spacing: 0; font-size: 10px; }
-.shop-price-rows .ship-row b { color: #d8f7ff; font: 600 12px "IBM Plex Mono"; }
+.shop-note {
+  color: var(--text-dim);
+  font: 10px/1.45 var(--sans);
+  text-transform: none; letter-spacing: 0;
+}
+.shop-price-rows .ship-row b { color: var(--accent-bright); font: 600 12px var(--mono); }
 .shop-actions { width: 100%; margin-top: auto; padding-top: 4px; }
 
-/* Слоты квадратами: магазин, карточка корабля, модальное окно */
-.slots-body { padding: 14px 16px 16px; }
+/* Состав контейнера в карточке */
+.trade-cargo-list {
+  width: 100%; margin-top: 3px; max-height: 126px; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: rgba(120, 160, 170, .35) transparent;
+}
+.trade-cargo-row {
+  display: flex; align-items: center; gap: 6px; padding: 4px 0;
+  border-top: 1px solid var(--line-row); text-align: left;
+}
+.trade-cargo-icon {
+  flex: none; width: 17px; height: 17px; display: grid; place-items: center;
+  color: var(--accent); border: 1px solid var(--line-soft); background: rgba(9, 24, 25, .50);
+}
+.trade-cargo-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--text); font-size: 11px;
+}
+.trade-cargo-kg { flex: none; color: var(--text); font: 600 11px var(--mono); }
+.trade-sale-total {
+  width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--line-active);
+  color: var(--text); text-align: left; font: 600 12px var(--mono);
+}
+.trade-sale-total span { color: var(--text-muted); font: 8px var(--mono); text-transform: uppercase; }
+.trade-sale-total b { font-weight: 600; }
+
+/* ===== Кнопки ============================================================== */
+
+.trade-button {
+  width: 100%; height: 32px;
+  display: flex; justify-content: center; align-items: center; gap: 7px;
+  border-radius: 4px; cursor: pointer;
+  text-transform: uppercase; font: 500 9px var(--mono); letter-spacing: .12em;
+  transition: background .14s ease, border-color .14s ease, color .14s ease;
+}
+.trade-button.buy {
+  color: var(--accent-bright);
+  background: rgba(122, 236, 224, .05);
+  border: 1px solid rgba(150, 190, 255, .25);
+}
+.trade-button.buy:hover { background: rgba(122, 236, 224, .12); border-color: rgba(143, 245, 227, .45); }
+.trade-button.sell {
+  color: var(--danger-text);
+  background: rgba(255, 95, 122, .14);
+  border: 1px solid rgba(255, 95, 122, .40);
+}
+.trade-button.sell:hover { background: rgba(255, 95, 122, .18); border-color: rgba(255, 95, 122, .60); }
+.trade-button.ghost { color: var(--text-soft); background: transparent; border: 1px solid var(--line-active); }
+.trade-button.ghost:hover { background: rgba(122, 236, 224, .06); border-color: rgba(143, 245, 227, .45); }
+
+/* ===== Слоты и трюмы ======================================================= */
+
 .slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px; }
-.slot-tile { position: relative; aspect-ratio: 1 / 1; display: grid; place-items: center; padding: 0; border: 1px solid rgba(127, 232, 255, .22); border-radius: 2px; background: rgba(8, 22, 34, .5); color: var(--holo); font-family: inherit; box-shadow: inset 0 0 12px rgba(127, 232, 255, .05); cursor: pointer; transition: border-color .15s, background .15s; }
-.slot-tile:hover { border-color: rgba(127, 232, 255, .45); background: rgba(127, 232, 255, .08); }
-.slot-tile.empty { border-style: dashed; color: rgba(127, 232, 255, .28); cursor: default; }
-.slot-tile.empty:hover { border-color: rgba(127, 232, 255, .28); background: rgba(8, 22, 34, .5); }
-/* Пустой слот, под который есть товары: клик открывает их категорию в магазине. */
+.slot-tile {
+  position: relative; aspect-ratio: 1 / 1;
+  display: grid; place-items: center; padding: 0;
+  border: 1px solid rgba(150, 190, 255, .22); border-radius: 4px;
+  background: rgba(9, 24, 25, .50); color: var(--accent);
+  font-family: inherit; cursor: pointer;
+  transition: border-color .14s ease, background .14s ease, color .14s ease;
+}
+.slot-tile:hover { border-color: rgba(122, 236, 224, .45); background: rgba(122, 236, 224, .08); }
+.slot-tile.empty { border-style: dashed; color: rgba(122, 236, 224, .28); cursor: default; }
+.slot-tile.empty:hover { border-color: rgba(122, 236, 224, .28); background: rgba(9, 24, 25, .50); }
 .slot-tile.empty.has-goods { cursor: pointer; }
 .slot-tile.empty.has-goods::after {
   content: "+"; position: absolute; right: 4px; bottom: 2px;
-  font: 10px "IBM Plex Mono"; color: rgba(127, 232, 255, .45);
+  font: 10px var(--mono); color: rgba(122, 236, 224, .45);
 }
 .slot-tile.empty.has-goods:hover {
-  border-color: rgba(127, 232, 255, .45); background: rgba(127, 232, 255, .08); color: rgba(127, 232, 255, .7);
+  border-color: rgba(122, 236, 224, .45);
+  background: rgba(122, 236, 224, .08);
+  color: rgba(122, 236, 224, .70);
 }
-.slot-tile .slot-qty { position: absolute; right: 4px; bottom: 3px; font: 8px "IBM Plex Mono"; color: #d8f7ff; }
-/* Груз контейнера: значки ресурсов в углу квадрата; клик — выбор груза. */
+.slot-tile .slot-qty { position: absolute; right: 4px; bottom: 3px; font: 8px var(--mono); color: var(--text); }
 .slot-cargo-chips {
   position: absolute; left: 2px; top: 2px; display: flex; gap: 2px;
   align-items: center; max-width: 46px; pointer-events: none;
 }
 .slot-cargo-chip {
   width: 14px; height: 14px; display: grid; place-items: center;
-  color: #8fe3f2; background: rgba(4, 14, 24, .92);
-  border: 1px solid rgba(127, 232, 255, .3); cursor: pointer; pointer-events: auto;
+  color: var(--accent); background: rgba(5, 7, 13, .92);
+  border: 1px solid rgba(150, 190, 255, .30);
+  cursor: pointer; pointer-events: auto;
 }
-.slot-cargo-chip:hover { border-color: rgba(127, 232, 255, .7); background: rgba(16, 40, 54, .95); }
+.slot-cargo-chip:hover { border-color: rgba(122, 236, 224, .70); background: rgba(9, 24, 25, .95); }
 .slot-cargo-chip svg { width: 10px; height: 10px; }
-.slot-cargo-more { color: #d8f7ff; font: 7px "IBM Plex Mono"; padding: 0 2px; }
-.slot-tip { position: fixed; z-index: 80; min-width: 140px; max-width: 240px; padding: 10px 12px; border: 1px solid rgba(127, 232, 255, .35); background: rgba(4, 14, 24, .97); box-shadow: 0 14px 32px rgba(0, 0, 0, .55); pointer-events: none; }
-.slot-tip h4 { margin: 0 0 8px; font: 9px "IBM Plex Mono"; letter-spacing: .1em; text-transform: uppercase; color: #9de7ef; }
-.slot-tip small { display: block; margin-top: 7px; font: 8px "IBM Plex Mono"; color: #718b97; }
-.tip-list { display: grid; gap: 7px; }
-.tip-item { display: flex; align-items: flex-start; gap: 7px; }
-.tip-icon { display: flex; flex: 0 0 auto; color: #8fe3f2; }
-.tip-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.tip-copy strong { font-size: 11px; font-weight: 500; }
-.tip-copy small { margin-top: 0; font: 8px "IBM Plex Mono"; letter-spacing: .04em; color: #718b97; }
-.slot-modal { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 24px; background: rgba(2, 8, 12, .68); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-.slot-dialog { width: min(480px, 100%); max-height: 78vh; overflow: auto; padding: 18px 20px 20px; border: 1px solid rgba(127, 232, 255, .34); border-radius: 3px; background: linear-gradient(150deg, rgba(6, 21, 36, .97), rgba(10, 14, 28, .97)); box-shadow: 0 24px 60px rgba(1, 4, 12, .65), 0 0 40px rgba(88, 212, 255, .16); }
-.slot-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.slot-dialog-head h3 { margin: 6px 0 0; font-size: 16px; font-weight: 500; }
-.slot-close { width: 28px; height: 28px; border: 1px solid rgba(127, 232, 255, .34); background: transparent; color: #d9e9ef; font-size: 16px; line-height: 1; cursor: pointer; }
-.slot-close:hover { border-color: rgba(127, 232, 255, .45); }
-.slot-dialog .slot-grid { grid-template-columns: repeat(4, 1fr); }
-.slot-dialog .slot-tile { cursor: default; }
-.slot-dialog .slot-tile:hover { border-color: rgba(127, 232, 255, .22); background: rgba(8, 22, 34, .5); }
+.slot-cargo-more { color: var(--text); font: 8px var(--mono); padding: 0 2px; }
 
-/* Трюмы: загрузка по массе и состав */
 .hold-list { display: grid; gap: 8px; }
 .hold-row {
-  display: grid;
-  gap: 4px;
+  display: grid; gap: 4px;
   padding: 7px 8px;
-  border: 1px solid rgba(150, 190, 255, .14);
-  background: rgba(8, 22, 34, .42);
+  border: 1px solid var(--line);
+  background: rgba(9, 24, 25, .30);
 }
 .hold-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.hold-head strong { font-size: 15px; font-weight: 500; }
-.hold-head span { color: #a9c3cc; font: 11px "IBM Plex Mono"; letter-spacing: .08em; }
-.hold-bar { display: block; height: 3px; background: rgba(127, 232, 255, .12); }
+.hold-head strong { font: 600 11px var(--sans); }
+.hold-head span { color: var(--text-muted); font: 9px var(--mono); letter-spacing: .08em; }
+.hold-bar { display: block; height: 3px; background: rgba(122, 236, 224, .12); }
 .hold-bar em {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, rgba(127, 232, 255, .75), rgba(170, 136, 246, .75));
+  display: block; height: 100%;
+  background: linear-gradient(90deg, rgba(122, 236, 224, .75), rgba(170, 136, 246, .75));
 }
-/* Предметы в трюме — те же квадраты, что и слоты; клик выбирает предмет
-   в «На корабле», подробности — в подсказке. */
 .hold-grid { margin-top: 4px; }
 .hold-tile { cursor: pointer; }
 .hold-empty {
-  color: #718b97;
-  font: 9px "IBM Plex Mono";
+  color: var(--text-muted);
+  font: 8px var(--mono);
   letter-spacing: .08em;
   text-transform: uppercase;
   padding: 8px 0;
@@ -755,113 +651,147 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
 /* Груз контейнера в модалке слота */
 .slot-cargo-wrap { display: grid; gap: 8px; margin-top: 14px; }
 .slot-cargo {
-  display: grid;
-  gap: 5px;
+  display: grid; gap: 5px;
   padding: 8px 10px;
-  border: 1px solid rgba(150, 190, 255, .14);
-  background: rgba(8, 22, 34, .42);
+  border: 1px solid var(--line);
+  background: rgba(9, 24, 25, .30);
 }
 .slot-cargo-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.slot-cargo-head strong { font-size: 12px; font-weight: 500; }
-.slot-cargo-head span { color: #a9c3cc; font: 8px "IBM Plex Mono"; letter-spacing: .08em; }
+.slot-cargo-head strong { font: 600 11px var(--sans); }
+.slot-cargo-head span { color: var(--text-muted); font: 8px var(--mono); letter-spacing: .08em; }
 .slot-cargo-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .slot-cargo-list span {
-  color: #d8f7ff;
+  color: var(--text);
   font-size: 11px;
   padding: 2px 6px;
-  border: 1px solid rgba(127, 232, 255, .25);
+  border: 1px solid var(--line-soft);
 }
 
-/* Отказ в покупке и подтверждение продажи */
+/* ===== Док кораблей ======================================================== */
+
+.dock-panel { flex: none; margin-bottom: 16px; }
+.dock-body { padding: 8px; }
+.ship-dock { border: 0; padding: 0; }
+.ship-list {
+  display: flex; flex-wrap: nowrap; justify-content: flex-start; align-items: flex-start;
+  gap: 10px; overflow-x: auto; padding-bottom: 4px;
+  scrollbar-width: thin; scrollbar-color: rgba(120, 160, 170, .35) transparent;
+}
+.ship-list::-webkit-scrollbar { height: 8px; }
+.ship-list::-webkit-scrollbar-thumb { background: rgba(120, 160, 170, .35); border-radius: 4px; }
+.ship-card {
+  width: 156px; height: 156px; flex: none;
+  display: flex; flex-direction: column; justify-content: space-between;
+  gap: 8px; padding: 10px;
+  color: var(--text-soft); text-align: left;
+  border: 1px solid var(--line); border-radius: 4px;
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .012) 60%),
+    rgba(9, 24, 25, .35);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  backdrop-filter: blur(14px) saturate(1.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  cursor: pointer;
+  transition: border-color .14s ease, background .14s ease, box-shadow .14s ease;
+}
+.ship-card:hover { border-color: rgba(122, 236, 224, .34); }
+.ship-card.active {
+  color: var(--text);
+  border-color: rgba(122, 236, 224, .50);
+  background: rgba(122, 236, 224, .10);
+  box-shadow: 0 0 12px rgba(87, 216, 195, .15), inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+.ship-visual {
+  flex: 1; min-height: 0; position: relative;
+  display: grid; place-items: center; color: var(--accent);
+  border-bottom: 1px solid var(--line-row); padding: 0 0 8px;
+}
+.ship-card.active .ship-visual { color: var(--accent-bright); }
+.ship-glyph { width: min(86%, 520px); color: var(--purple); }
+.ship-glyph.compact { width: 104px; }
+.active-tag {
+  position: absolute; left: 0; top: 0; padding: 2px 5px;
+  color: var(--bg); background: var(--purple);
+  font: 600 8px var(--mono); text-transform: uppercase; letter-spacing: .08em;
+}
+.ship-card .ship-meta { display: flex; flex-direction: column; }
+.ship-card strong { font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.ship-card span { margin-top: 3px; color: var(--text-muted); font: 8px var(--mono); }
+.ship-card small { color: var(--accent); font: 9px var(--mono); }
+
+/* ===== Модальные окна и подсказки ========================================== */
+
+.slot-modal {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center; padding: 24px;
+  background: rgba(3, 7, 12, .62);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.slot-dialog {
+  width: min(480px, 100%); max-height: 78vh; overflow: auto;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--line-active);
+  background: linear-gradient(150deg, rgba(10, 26, 30, .96), rgba(20, 14, 36, .96));
+  box-shadow: 0 24px 60px rgba(2, 4, 12, .60);
+}
+.slot-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.slot-dialog-head h3 { margin: 6px 0 0; font-size: 16px; font-weight: 500; color: var(--text); }
+.slot-close {
+  width: 28px; height: 28px; flex: none;
+  border: 1px solid var(--line-active); background: transparent;
+  color: var(--text-soft); font-size: 16px; line-height: 1; cursor: pointer;
+  transition: border-color .14s ease, color .14s ease;
+}
+.slot-close:hover { border-color: rgba(143, 245, 227, .45); color: var(--text); }
+.slot-dialog .slot-grid { grid-template-columns: repeat(4, 1fr); }
+.slot-dialog .slot-tile { cursor: default; }
+.slot-dialog .slot-tile:hover { border-color: rgba(150, 190, 255, .22); background: rgba(9, 24, 25, .50); }
+
 .dialog-body { display: grid; gap: 10px; }
-.dialog-text { margin: 0; color: #a9c3cc; font-size: 13px; line-height: 1.55; }
+.dialog-text { margin: 0; color: #8fa6a6; font-size: 11.5px; line-height: 1.55; }
+.dialog-text strong { color: var(--text); font-weight: 600; }
 .dialog-lines { display: grid; gap: 6px; }
 .dialog-line {
   display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: baseline;
   padding: 6px 8px; font-size: 11px;
-  border: 1px solid rgba(126, 180, 210, .12); background: rgba(8, 22, 34, .42);
+  border: 1px solid var(--line-row); background: rgba(9, 24, 25, .30);
 }
-.dialog-line b { color: #d9e9ef; font: 500 9px "IBM Plex Mono"; }
-.dialog-line small { color: #a08ce4; font: 8px "IBM Plex Mono"; }
-/* Разбивка продажи: подпись и цена, итог выделен. */
+.dialog-line b { color: var(--text); font: 500 9px var(--mono); }
+.dialog-line small { color: var(--purple-soft); font: 8px var(--mono); }
 .dialog-line.cost { grid-template-columns: 1fr auto; }
-.dialog-line.cost b { color: #d8f7ff; font: 600 11px "IBM Plex Mono"; }
-.dialog-line.total {
-  grid-template-columns: 1fr auto;
-  border-color: rgba(127, 232, 255, .35);
-  background: rgba(10, 32, 44, .5);
-}
-.dialog-line.total b { color: #e4f6ff; font: 600 13px "IBM Plex Mono"; }
+.dialog-line.cost b { color: var(--accent-bright); font: 600 11px var(--mono); }
+.dialog-line.total { grid-template-columns: 1fr auto; border-color: rgba(122, 236, 224, .35); background: rgba(122, 236, 224, .08); }
+.dialog-line.total b { color: var(--text); font: 600 13px var(--mono); }
 .dialog-actions { display: flex; gap: 8px; }
 .dialog-actions .trade-button { margin: 0; }
-.trade-button.ghost {
-  color: #a9c3cc; background: transparent;
-  border: 1px solid rgba(127, 232, 255, .34);
+
+.slot-tip {
+  position: fixed; z-index: 80;
+  min-width: 140px; max-width: 240px; padding: 10px 12px;
+  border: 1px solid var(--line-active);
+  background: rgba(5, 7, 13, .97);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, .55);
+  pointer-events: none;
 }
-.collection-copy { min-width: 0; display: flex; flex-direction: column; }
-.collection-copy small { color: #718b97; font: 7px "IBM Plex Mono"; letter-spacing: .1em; }
-.collection-copy strong { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-.collection-copy span { margin-top: 4px; color: #718b97; font: 8px "IBM Plex Mono"; }
-.equipment-rarity {
-  justify-self: end; color: #b9a4ff; font: 8px "IBM Plex Mono"; text-transform: uppercase;
-  padding: 4px 6px; border: 1px solid rgba(170, 136, 246, .36); background: #101527;
-}
-.collection-count { display: flex; flex-direction: column; align-items: end; padding-left: 10px; border-left: 1px solid #173a4e; }
-.collection-count b { color: #c5b2ff; font: 600 15px "IBM Plex Mono"; }
-.collection-count span { margin-top: 3px; color: #4d6572; font: 7px "IBM Plex Mono"; text-transform: uppercase; }
-.resource-description {
-  max-width: 180px; color: #718b97; font-size: 8px; line-height: 1.5;
-}
-.resource-summary {
-  display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 1px; border-bottom: 1px solid #173a4e;
-  background: #173a4e;
-}
-.resource-summary > div {
-  min-height: 60px; display: grid; grid-template-columns: 1fr auto; align-content: center; gap: 7px;
-  padding: 10px 18px; background: rgba(5, 17, 27, .95);
-}
-.resource-summary span { color: #718b97; font-size: 8px; text-transform: uppercase; }
-.resource-summary b { color: #c5b2ff; font: 500 10px "IBM Plex Mono"; }
-.resource-summary i { grid-column: 1 / -1; height: 3px; background: #102b3a; }
-.resource-summary em { display: block; height: 100%; background: linear-gradient(90deg, #75dfd2, #7fe8ff); }
-.hero-ship { position: relative; display: grid; place-items: center; overflow: hidden; border-right: 1px solid #173a4e; color: #aa88f6; }
-.hero-ship::before, .hero-ship::after { content: ""; position: absolute; background: #1b4054; }
-.hero-ship::before { width: 1px; height: 100%; }
-.hero-ship::after { width: 100%; height: 1px; }
-.orbit { position: absolute; border: 1px solid #173a4e; border-radius: 50%; }
-.orbit-one { width: 310px; height: 310px; }
-.orbit-two { width: 210px; height: 210px; }
-.hero-ship .ship-glyph { position: relative; z-index: 2; width: 78%; }
-.axis-label { position: absolute; color: #4d8398; font: 7px "IBM Plex Mono"; letter-spacing: .15em; }
-.axis-label.left { left: 13px; }.axis-label.right { right: 13px; }
-.ship-data { padding: 38px 30px; border-right: 1px solid #173a4e; }
-.ship-data h2 { margin: 9px 0; font: 500 27px "IBM Plex Mono"; letter-spacing: .06em; }
-.ship-data h2 small { color: #75dfd2; font-size: 11px; }
-.ship-data p { color: #a9c3cc; font-size: 11px; line-height: 1.7; max-width: 380px; }
-.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px 18px; margin-top: 35px; }
-.stat-grid div { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
-.stat-grid span { color: #5d7a86; font-size: 9px; text-transform: uppercase; }
-.stat-grid b { font: 500 10px "IBM Plex Mono"; }
-.stat-grid i { grid-column: 1 / -1; height: 3px; background: #102b3a; }
-.stat-grid em { display: block; height: 100%; background: #7fe8ff; }
-.base-data { display: flex; flex-direction: column; }
-.base-data div { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 18px; border-bottom: 1px solid #173a4e; }
-.base-data div:last-child { border-bottom: 0; }
-.base-data span { color: #5d7a86; font-size: 8px; text-transform: uppercase; letter-spacing: .1em; }
-.base-data strong { margin-top: 7px; font: 500 13px "IBM Plex Mono"; }
-.base-data strong.accent { color: #7fe8ff; }
+.slot-tip h4 { margin: 0 0 8px; font: 500 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.slot-tip small { display: block; margin-top: 7px; font: 8px var(--mono); color: var(--text-muted); }
+.tip-list { display: grid; gap: 7px; }
+.tip-item { display: flex; align-items: flex-start; gap: 7px; }
+.tip-icon { display: flex; flex: 0 0 auto; color: var(--accent); }
+.tip-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tip-copy strong { font-size: 11px; font-weight: 500; color: var(--text); }
+.tip-copy small { margin-top: 0; font: 8px var(--mono); letter-spacing: .04em; color: var(--text-muted); }
+
+/* ===== Адаптив ============================================================= */
 
 @media (max-width: 1000px) {
-  .market-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; }
-  .hangar-grid { grid-template-columns: 1fr 190px 1fr; }
-  .item-row { grid-template-columns: 40px 1fr 30px; }
+  .market-grid,
+  .market-grid.no-cargo { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; }
+  .item-row { grid-template-columns: 32px minmax(0, 1fr); }
   .item-meta { display: none; }
-  .ship-list { grid-template-columns: repeat(2, 1fr); }
-  .info-grid { grid-template-columns: 1fr 1fr; }
-  .base-data { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid rgba(126, 180, 210, .12); }
-  .base-data div { border-bottom: 0; border-right: 1px solid rgba(126, 180, 210, .12); }
-  .collection-list { grid-template-columns: 1fr; }
-  .collection-row:nth-child(odd) { border-right: 0; }
+  .ship-list { gap: 8px; }
+  .ship-card { width: 140px; height: 140px; }
 }
 
 @media (max-width: 720px) {
@@ -875,36 +805,16 @@ h1 { margin: 5px 0 0; font-size: clamp(22px, 2vw, 30px); font-weight: 500; lette
   .brand span:not(.brand-mark) { display: none; }
   .map-link { width: 34px; height: 34px; padding: 0; margin-left: 2px; }
   .map-link-label { display: none; }
+  .build-badge { display: none; }
   .section-title-status { display: none; }
-  .primary-tabs { padding-left: 0; overflow-x: auto; }
-  .primary-tabs button { flex: 1 0 auto; justify-content: center; padding: 0 8px; }
   .content { padding: 0 12px; }
   .section-title { align-items: start; }
   .terminal-status { display: none; }
-  .category-tabs { width: 100%; overflow-x: auto; }
-  .category-tabs button { min-width: 92px; }
-  .market-grid { grid-template-columns: 1fr; grid-template-rows: none; }
-  .hangar-grid { grid-template-columns: 1fr; }
-  .trade-console { min-height: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .console-label, .console-rule { display: none; }
-  .trade-preview { grid-column: 1 / -1; }
-  .transfer-route { margin: 0; }
-  .amount-control { margin: 0; }
-  .trade-total { margin: 0; }
-  .trade-button { grid-column: 1 / -1; }
-  .sell-value { margin: 0; align-items: center; }
-  .inventory-panel { min-height: 280px; }
-  .item-list { max-height: 260px; flex: none; }
-  .ship-list { grid-template-columns: 1fr; }
-  .info-grid { grid-template-columns: 1fr; }
-  .info-tabs { width: 100%; overflow-x: auto; }
-  .info-tabs button { flex: 1 0 auto; padding: 0 13px; }
-  .collection-head { align-items: start; }
-  .collection-head > span { display: none; }
-  .collection-row { grid-template-columns: 44px minmax(0, 1fr) 48px; }
-  .equipment-rarity, .resource-description { display: none; }
-  .resource-summary { grid-template-columns: 1fr; }
-  .hero-ship { min-height: 280px; border-right: 0; border-bottom: 1px solid rgba(126, 180, 210, .12); }
-  .ship-data { border-right: 0; }
-  .base-data { grid-column: auto; grid-template-columns: 1fr 1fr; }
+  .category-tabs { flex-wrap: nowrap; overflow-x: auto; }
+  .category-tabs .tab { flex: 0 0 auto; min-width: 92px; }
+  .subcategory-tabs { flex-wrap: nowrap; overflow-x: auto; }
+  .subcategory-bar { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .market-grid,
+  .market-grid.no-cargo { grid-template-columns: 1fr; grid-template-rows: none; }
+  .dock-panel { margin-bottom: 12px; }
 }

@@ -269,6 +269,11 @@ document.addEventListener('click', function (e) {
     closeSlotModal();
     return;
   }
+  else if (action === 'toggle-panel') {
+    var block = el.closest ? el.closest('.panel-block') : null;
+    if (block) block.classList.toggle('collapsed');
+    return;
+  }
   else return;
 
   render();

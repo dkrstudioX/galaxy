@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HELIOS // 7 — орбитальная база</title>
-<link rel="stylesheet" href="hangar.css?v=20261078">
+<link rel="stylesheet" href="hangar.css?v=20261079">
 </head>
 <body>
 <main class="app-shell">
@@ -70,39 +70,74 @@
         <div class="terminal-status"><span></span> <span id="noticeShop">Торговый терминал подключён</span></div>
       </div>
 
-      <div class="category-tabs" id="categoryTabs"></div>
-
-      <div class="subcategory-bar" id="subcategoryBar">
-        <span class="subcategory-title" id="subcategoryTitle" hidden>Подкатегории</span>
-        <div class="subcategory-tabs" id="subcategoryTabs" hidden></div>
+      <div class="panel-block glass catalog-panel">
+        <div class="panel-head" data-action="toggle-panel" title="Свернуть / развернуть">
+          <div><span>01</span><strong>Каталог</strong></div>
+          <small>CATALOG</small>
+          <span class="caret">▼</span>
+        </div>
+        <div class="panel-body catalog-body">
+          <div class="tabs category-tabs" id="categoryTabs"></div>
+          <div class="subcategory-bar" id="subcategoryBar">
+            <span class="subcategory-title" id="subcategoryTitle" hidden>Подкатегории</span>
+            <div class="tabs subcategory-tabs" id="subcategoryTabs" hidden></div>
+          </div>
+        </div>
       </div>
 
       <div class="market-grid" id="marketGrid">
-        <div class="inventory-panel" id="shipPanel">
-          <div class="ship-panel-body" id="shipInfo"></div>
+        <div class="inventory-panel panel-block glass" id="shipPanel">
+          <div class="panel-head" data-action="toggle-panel" title="Свернуть / развернуть">
+            <div><span>02</span><strong>Корабль</strong></div>
+            <small>SHIP</small>
+            <span class="caret">▼</span>
+          </div>
+          <div class="ship-panel-body panel-body" id="shipInfo"></div>
         </div>
 
-        <div class="inventory-panel">
-          <div class="item-list" id="shopList"></div>
+        <div class="inventory-panel panel-block glass">
+          <div class="panel-head" data-action="toggle-panel" title="Свернуть / развернуть">
+            <div><span>03</span><strong>В продаже</strong></div>
+            <small>MARKET</small>
+            <span class="caret">▼</span>
+          </div>
+          <div class="item-list panel-body" id="shopList"></div>
         </div>
 
-        <div class="inventory-panel" id="cargoPanel">
-          <div class="item-list" id="cargoList"></div>
+        <div class="inventory-panel panel-block glass" id="cargoPanel">
+          <div class="panel-head" data-action="toggle-panel" title="Свернуть / развернуть">
+            <div><span>04</span><strong>На корабле</strong></div>
+            <small>CARGO</small>
+            <span class="caret">▼</span>
+          </div>
+          <div class="item-list panel-body" id="cargoList"></div>
         </div>
 
-        <div class="inventory-panel shop-panel">
-          <div class="ship-panel-body shop-panel-body" id="shopConsole"></div>
+        <div class="inventory-panel shop-panel panel-block glass">
+          <div class="panel-head" data-action="toggle-panel" title="Свернуть / развернуть">
+            <div><span>05</span><strong>Выбранное</strong></div>
+            <small>SELECTION</small>
+            <span class="caret">▼</span>
+          </div>
+          <div class="ship-panel-body shop-panel-body panel-body" id="shopConsole"></div>
         </div>
       </div>
     </section>
 
-    <div id="shipDock"></div>
+    <div class="panel-block glass dock-panel">
+      <div class="panel-head" data-action="toggle-panel" title="Свернуть / развернуть">
+        <div><span>06</span><strong>Док</strong></div>
+        <small>DOCK</small>
+        <span class="caret">▼</span>
+      </div>
+      <div class="panel-body dock-body" id="shipDock"></div>
+    </div>
   </div>
 </main>
 <div class="slot-tip" id="slotTip" hidden></div>
 <div class="slot-modal" id="slotModal" hidden></div>
 <script src="../data/store.js?v=20261073"></script>
 <script src="../data/icons.js?v=20261017"></script>
-<script src="hangar.js?v=20261073"></script>
+<script src="hangar.js?v=20261079"></script>
 </body>
 </html>

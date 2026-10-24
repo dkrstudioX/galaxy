@@ -488,7 +488,7 @@ function shipPanelHTML() {
   var mass = Store.shipMass(rec);
   return '<span class="ship-sub">' + (cat ? Store.categoryPath(cat.id) : '') + '</span>' +
     '<strong class="ship-title">' + ship.name + '</strong>' +
-    '<span class="ship-sub">' + sub.join(' · ') + '</span>' +
+    '<span class="ship-sub ship-meta-line">' + sub.join(' · ') + '</span>' +
     '<div class="ship-rows">' + rows +
     '<div class="ship-row"><span>Масса</span><b>' + fmt(Math.round(mass)) + ' кг</b></div>' +
     '</div>' +
@@ -823,8 +823,8 @@ function shopItemRowHTML(item, selected) {
 
 function categoryTabsHTML() {
   return categories.map(function (c) {
-    return '<button class="' + (state.category === c.id ? 'active' : '') + '" data-action="category" data-cat="' + c.id + '">' +
-      iconMarkup(c.icon, 17) + c.label + '</button>';
+    return '<button class="tab' + (state.category === c.id ? ' active' : '') + '" data-action="category" data-cat="' + c.id + '">' +
+      iconMarkup(c.icon, 13) + c.label + '</button>';
   }).join('');
 }
 
@@ -844,7 +844,7 @@ function renderSubcategories() {
   title.hidden = false;
   tabs.hidden = false;
   tabs.innerHTML = list.map(function (s) {
-    return '<button class="sub-chip' + (state.subcategory === s.id ? ' active' : '') + '" data-action="subcategory" data-sub="' + s.id + '">' +
+    return '<button class="tab sub-chip' + (state.subcategory === s.id ? ' active' : '') + '" data-action="subcategory" data-sub="' + s.id + '">' +
       iconMarkup(s.icon, 13) + s.label + '<span class="sub-count">' + s.count + '</span></button>';
   }).join('');
 }
@@ -1632,6 +1632,11 @@ document.addEventListener('click', function (e) {
   }
   else if (action === 'close-slot') {
     closeSlotModal();
+    return;
+  }
+  else if (action === 'toggle-panel') {
+    var block = el.closest ? el.closest('.panel-block') : null;
+    if (block) block.classList.toggle('collapsed');
     return;
   }
   else return;

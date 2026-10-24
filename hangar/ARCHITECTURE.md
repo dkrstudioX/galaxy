@@ -6,8 +6,8 @@
 
 Данные мира — общие: `../data/store.js` (localStorage `galaxy_admin_db_v1`),
 иконки — `../data/icons.js`. Правила мира — `../data/RULES.md`, план работ по
-данным — `../plans/data.md`. Стиль интерфейса общий с `space/` и описан в
-корневом `AGENTS.md`.
+данным — `../plans/data.md`. Стиль интерфейса — по основному правилу
+`../docs/STYLE.md` (эталон — правая колонка `space/`).
 
 ## Примеры дизайна
 
