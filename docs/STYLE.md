@@ -117,24 +117,28 @@
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap");
 ```
 
-| Роль | Шрифт | Размер / вес | Регистр / трекинг |
-|---|---|---|---|
-| Заголовок блока | Manrope | 11 px / 600 | ВЕРХНИЙ, `.09em` |
-| Имя объекта в карточке | Manrope | 13 px / 600 | как есть, `.02em` |
-| Имя в списке / карточке | Manrope | 11 px / 600 | как есть |
-| Имя в дереве (луны, малые тела) | IBM Plex Mono | 11 px / 400 | как есть |
-| Значение свойства | IBM Plex Mono | 11 px / 400 | как есть |
-| Ключ свойства | IBM Plex Mono | 9 px / 500 | ВЕРХНИЙ, `.12em` |
-| Тип объекта (eyebrow) | IBM Plex Mono | 8 px / 500 | ВЕРХНИЙ, `.19em` |
-| Номер блока | IBM Plex Mono | 9 px / 500 | как есть |
-| Подпись блока (`PLANETS`) | IBM Plex Mono | 9 px / 400 | ВЕРХНИЙ |
-| Кнопка-таб | IBM Plex Mono | 8 px / 500 | ВЕРХНИЙ, `.08em` |
-| Обычная кнопка | IBM Plex Mono | 9 px / 500 | ВЕРХНИЙ, `.12em` |
-| Строка ввода | IBM Plex Mono | 10 px / 400 | как есть |
+| Роль | Шрифт | space | hangar | Регистр / трекинг |
+|---|---|---|---|---|
+| Заголовок блока | Manrope | 12 px / 600 | 13 px / 600 | ВЕРХНИЙ, `.09em` |
+| Имя объекта в карточке | Manrope | 14 px / 600 | 15 px / 600 | как есть, `.02em` |
+| Имя в списке / карточке | Manrope | 12 px / 600 | 13 px / 600 | как есть |
+| Имя в дереве (луны, малые тела) | IBM Plex Mono | 12 px / 400 | 13 px / 400 | как есть |
+| Значение свойства | IBM Plex Mono | 12 px / 400 | 13 px / 400 | как есть |
+| Ключ свойства | IBM Plex Mono | 10 px / 500 | 11 px / 500 | ВЕРХНИЙ, `.12em` |
+| Тип объекта (eyebrow) | IBM Plex Mono | 9 px / 500 | 10 px / 500 | ВЕРХНИЙ, `.19em` |
+| Номер блока | IBM Plex Mono | 10 px / 500 | 11 px / 500 | как есть |
+| Подпись блока (`PLANETS`) | IBM Plex Mono | 10 px / 400 | 11 px / 400 | ВЕРХНИЙ |
+| Кнопка-таб | IBM Plex Mono | 9 px / 500 | 10 px / 500 | ВЕРХНИЙ, `.08em` |
+| Обычная кнопка | IBM Plex Mono | 10 px / 500 | 11 px / 500 | ВЕРХНИЙ, `.12em` |
+| Строка ввода | IBM Plex Mono | 11 px / 400 | 12 px / 400 | как есть |
+
+Правило шкалы: **`space/` — базовая шкала, `hangar/` — та же шкала плюс
+`1 px` к каждой роли.** Это единственное отличие типографики ангара;
+цвета, стекло, отступы и геометрия у обоих модулей общие.
 
 Правила:
 
-- меньше 8 px не опускаемся;
+- меньше `9 px` не опускаемся (в ангаре — меньше `10 px`);
 - ВЕРХНИЙ РЕГИСТР — только у служебных подписей и кнопок, не у имён;
 - трекинг `.08–.19em` — только у моноширинных подписей;
 - числа, даты, единицы измерения — всегда IBM Plex Mono;
@@ -251,21 +255,21 @@
 .panel-head div { display: flex; align-items: center; gap: 10px; }
 .panel-head div span {
     color: #b89cff;
-    font: 500 9px "IBM Plex Mono", monospace;
+    font: 500 10px "IBM Plex Mono", monospace;
     padding: 3px 5px;
     border: 1px solid #574580;
 }
 .panel-head strong {
-    font-size: 11px; font-weight: 600;
+    font-size: 12px; font-weight: 600;
     text-transform: uppercase; letter-spacing: .09em;
 }
 .panel-head small {
     color: #637a7a;
-    font: 9px "IBM Plex Mono", monospace;
+    font: 10px "IBM Plex Mono", monospace;
     text-transform: uppercase;
 }
 .panel-head .caret {
-    color: #637a7a; font-size: 9px;
+    color: #637a7a; font-size: 10px;
     transition: transform .15s ease;
 }
 .panel-block.collapsed .panel-head { border-bottom-color: transparent; }
@@ -308,10 +312,10 @@
     display: flex; align-items: center; justify-content: space-between;
     gap: 8px; cursor: pointer;
     color: #9fb3b3;
-    font: 11px "IBM Plex Mono", monospace;
+    font: 12px "IBM Plex Mono", monospace;
 }
 .tree .loot li:hover { background: rgba(122, 236, 224, .06); }
-.tree .loot li i { font-style: normal; color: #637a7a; font-size: 9px; }
+.tree .loot li i { font-style: normal; color: #637a7a; font-size: 10px; }
 
 /* выбранное состояние — и в дереве, и на карте */
 .tree .sel > .node,
@@ -324,8 +328,8 @@
 
 Правила:
 
-- имя в списках и карточках — Manrope 600 11 px; в дереве луны и малые
-  тела набраны IBM Plex Mono 11 px; метаданные — IBM Plex Mono 9 px;
+- имя в списках и карточках — Manrope 600 12 px; в дереве луны и малые
+  тела набраны IBM Plex Mono 12 px; метаданные — IBM Plex Mono 10 px;
 - длинные имена обрезаются `text-overflow: ellipsis`, а не переносятся;
 - счётчик (`292`, `456`) прижат вправо и приглушён;
 - маркеры: `☾` — луна, `✦` — малое тело, цветная точка — планета/база;
@@ -341,7 +345,7 @@
 
 **Активная кнопка — 1:1 с `.moon-more`** («Показать все N»):
 24 px, рамка `rgba(150, 190, 255, .20)`, фон `rgba(122, 236, 224, .05)`,
-цвет `#bffcfc`, радиус 4 px, IBM Plex Mono 8 px, ВЕРХНИЙ РЕГИСТР,
+цвет `#bffcfc`, радиус 4 px, IBM Plex Mono 9 px, ВЕРХНИЙ РЕГИСТР,
 трекинг `.08em`.
 **Неактивная** — та же геометрия, но приглушённая: прозрачный фон,
 рамка `rgba(120, 160, 170, .18)`, цвет `#637a7a`.
@@ -373,7 +377,7 @@
     background: transparent;
     color: #637a7a;
     cursor: pointer; white-space: nowrap;
-    font: 500 8px "IBM Plex Mono", monospace;
+    font: 500 9px "IBM Plex Mono", monospace;
     text-transform: uppercase; letter-spacing: .08em;
     transition: color .14s ease, background .14s ease, border-color .14s ease;
 }
@@ -428,12 +432,12 @@
     width: 11px; height: 11px; border-radius: 50%; flex: none;
     box-shadow: 0 0 8px rgba(255, 255, 255, .3);
 }
-.obj-title strong { font: 600 13px "Manrope", sans-serif; letter-spacing: .02em; }
+.obj-title strong { font: 600 14px "Manrope", sans-serif; letter-spacing: .02em; }
 .obj-title.danger strong { color: #ff5f7a; }
 
 .obj-kind {
     color: #9c7ee1;
-    font: 500 8px "IBM Plex Mono", monospace;
+    font: 500 9px "IBM Plex Mono", monospace;
     letter-spacing: .19em; text-transform: uppercase;
     margin: 0 0 10px 20px;
 }
@@ -444,21 +448,21 @@
     gap: 10px;
     min-height: 28px; padding: 3px 0;
     border-bottom: 1px solid rgba(120, 160, 170, .10);
-    font: 11px "IBM Plex Mono", monospace;
+    font: 12px "IBM Plex Mono", monospace;
 }
 .obj-row:last-child { border-bottom: 0; }
 .obj-row .k {
-    color: #637a7a; font-size: 9px;
+    color: #637a7a; font-size: 10px;
     text-transform: uppercase; letter-spacing: .12em;
 }
 .obj-row .v { color: #dce8e8; text-align: right; }
-.obj-row .v em { font-style: normal; color: #637a7a; font-size: 9px; margin-left: 4px; }
+.obj-row .v em { font-style: normal; color: #637a7a; font-size: 10px; margin-left: 4px; }
 ```
 
 - Ключ — слева, приглушённый, ВЕРХНИЙ РЕГИСТР; значение — справа,
   основным цветом.
 - Единицы измерения — в `<em>` или отдельным `<small>`, приглушённо.
-- Подзаголовок секции — `.obj-sub-title`: IBM Plex Mono 9 px,
+- Подзаголовок секции — `.obj-sub-title`: IBM Plex Mono 10 px,
   `#b89cff`, трекинг `.16em`, линия сверху.
 - Пустое состояние — пунктирная рамка `rgba(150, 190, 255, .16)`,
   фон `rgba(9, 24, 25, .30)`, текст `#7d9a9a`, радиус 8 px.
@@ -480,7 +484,7 @@
     border-radius: 4px;
     background: rgba(9, 24, 25, .50);
     color: #dce8e8;
-    font: 10px "IBM Plex Mono", monospace;
+    font: 11px "IBM Plex Mono", monospace;
     outline: none;
 }
 .field::placeholder { color: #637a7a; }
@@ -496,7 +500,7 @@
     background: rgba(122, 236, 224, .05);
     color: #bffcfc;
     cursor: pointer;
-    font: 500 9px "IBM Plex Mono", monospace;
+    font: 500 10px "IBM Plex Mono", monospace;
     text-transform: uppercase; letter-spacing: .12em;
     transition: background .14s ease, border-color .14s ease;
 }
@@ -506,7 +510,7 @@
 }
 ```
 
-- Кнопка создания базы — крупнее (`padding: 9px 10px`, Manrope 600 10 px),
+- Кнопка создания базы — крупнее (`padding: 9px 10px`, Manrope 600 11 px),
   бирюзовая рамка `rgba(53, 232, 216, .35)`.
 - Опасное действие — красный `#ff5f7a`:
   фон `rgba(255, 95, 122, .14)`, рамка `rgba(255, 95, 122, .40)`,
@@ -544,18 +548,18 @@
 }
 .dlg-eyebrow {
     color: #9c7ee1;
-    font: 500 9px "IBM Plex Mono", monospace;
+    font: 500 10px "IBM Plex Mono", monospace;
     letter-spacing: .19em; text-transform: uppercase;
 }
-.dlg-head h3 { margin: 6px 0 0; font-size: 16px; font-weight: 500; color: #dce8e8; }
+.dlg-head h3 { margin: 6px 0 0; font-size: 17px; font-weight: 500; color: #dce8e8; }
 .dlg-close {
     width: 28px; height: 28px; flex: none;
     border: 1px solid rgba(150, 190, 255, .2);
     background: transparent; color: #cdd9dc;
-    font-size: 16px; line-height: 1; cursor: pointer;
+    font-size: 17px; line-height: 1; cursor: pointer;
 }
 .dlg-close:hover { border-color: rgba(143, 245, 227, .45); }
-.dlg-text { color: #8fa6a6; font-size: 11.5px; line-height: 1.55; }
+.dlg-text { color: #8fa6a6; font-size: 12.5px; line-height: 1.55; }
 .dlg-text b { color: #dce8e8; font-weight: 600; }
 .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 ```
@@ -589,7 +593,7 @@ eyebrow фиолетовый, «×» 28×28.
 - Яркие заливные плоскости, неоновые тени, толстые рамки.
 - Вложенные стеклянные панели и «карточки в карточках».
 - Крупные отступы и воздух «как на лендинге»: интерфейс плотный.
-- Текст меньше `8px`; трекинг у обычного текста.
+- Текст меньше `9px` (в ангаре — меньше `10px`); трекинг у обычного текста.
 - Анимации появления, пружины, параллакс в UI.
 - Инлайновые стили, кроме динамических значений (ширина линейки масштаба,
   цвет точки планеты).
@@ -607,7 +611,7 @@ eyebrow фиолетовый, «×» 28×28.
 - [ ] Цвета — из токенов, без новых оттенков.
 - [ ] Строки с разделителем `rgba(120, 160, 170, .10)` и hover.
 - [ ] Активный таб 1:1 с `.moon-more`, неактивные приглушены.
-- [ ] Карточка: имя Manrope 600 13, тип — фиолетовый eyebrow 8 px,
+- [ ] Карточка: имя Manrope 600 14, тип — фиолетовый eyebrow 9 px,
       свойства — строки «ключ → значение».
 - [ ] Модалка — оверлей с blur, панель без радиуса, квадратная «×».
 - [ ] Проверено рядом с `space/`: элемент не выбивается из стиля.
@@ -619,7 +623,7 @@ eyebrow фиолетовый, «×» 28×28.
 | Модуль | Что делаем |
 |---|---|
 | `space/` | Эталон. Новые блоки — строго по этому файлу. |
-| `hangar/` | Сохраняем сетку и сценарий, но панели, шапки, строки, кнопки и модалки приводим к токенам. |
+| `hangar/` | Сохраняем сетку и сценарий, но панели, строки, кнопки и модалки приводим к токенам; шрифт — на 1 px крупнее, чем в `space/`. |
 | `admin/` | Таблицы и формы — те же рамки, типографика, hover; плотные строки, без крупных карточек. |
 | `demo/` | HUD-панели — стекло, моноширинные подписи, тонкие разделители. |
 | `index.html` | Навигационные блоки — стекло + eyebrow + заголовок; без новых палитр. |

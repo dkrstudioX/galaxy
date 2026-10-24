@@ -48,7 +48,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
 #ui {
     position: fixed; top: 14px; left: 14px; z-index: 10;
     padding: 12px 16px;
-    font: 500 10px "IBM Plex Mono", monospace;
+    font: 500 11px "IBM Plex Mono", monospace;
     letter-spacing: .12em; text-transform: uppercase;
     color: #688080; line-height: 1.9;
     pointer-events: none;
@@ -71,7 +71,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
     display: flex; align-items: center; justify-content: center;
     border: 1px solid rgba(120, 160, 170, .18); border-radius: 4px;
     background: transparent; color: #637a7a; cursor: pointer;
-    font: 500 8px "IBM Plex Mono", monospace;
+    font: 500 9px "IBM Plex Mono", monospace;
     text-transform: uppercase; letter-spacing: .08em; white-space: nowrap;
     transition: color .14s ease, background .14s ease, border-color .14s ease;
 }
@@ -84,7 +84,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
 
 /* ===== Пресеты камеры: колонка под HUD, те же сегменты, что у скорости ====== */
 #presets {
-    position: fixed; top: 196px; left: 14px; z-index: 10;
+    position: fixed; top: 220px; left: 14px; z-index: 10;
     display: flex; flex-direction: column;
     border: 1px solid rgba(150, 190, 255, .16);
     background: rgba(9, 24, 25, .42);
@@ -97,7 +97,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
     display: flex; align-items: center; justify-content: flex-start;
     color: #637d7d; border: 0; border-bottom: 1px solid rgba(120, 160, 170, .12);
     background: transparent; cursor: pointer;
-    font: 500 9px "IBM Plex Mono", monospace;
+    font: 500 10px "IBM Plex Mono", monospace;
     text-transform: uppercase; letter-spacing: .09em;
     transition: color .14s ease, background .14s ease;
 }
@@ -113,7 +113,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
     position: fixed; bottom: 20px; left: 14px; z-index: 10;
     display: flex; align-items: center; gap: 8px;
     pointer-events: none;
-    color: #688080; font: 500 9px "IBM Plex Mono", monospace;
+    color: #688080; font: 500 10px "IBM Plex Mono", monospace;
     letter-spacing: .12em; text-transform: uppercase;
 }
 #scalebar .scale-line {
@@ -150,15 +150,15 @@ canvas { display: block; width: 100vw; height: 100vh; }
 }
 .panel-head div { display: flex; align-items: center; gap: 10px; }
 .panel-head div span {
-    color: #b89cff; font: 500 9px "IBM Plex Mono", monospace;
+    color: #b89cff; font: 500 10px "IBM Plex Mono", monospace;
     padding: 3px 5px; border: 1px solid #574580;
 }
-.panel-head strong { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .09em; }
+.panel-head strong { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .09em; }
 /* имя выбранного в шапке «02»: длинное имя режется «…», шапка не растёт */
 #objectBlock .panel-head div { min-width: 0; }
 #objectBlock .panel-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.panel-head small { color: #637a7a; font: 9px "IBM Plex Mono", monospace; text-transform: uppercase; }
-.panel-head .caret { transition: transform .15s ease; color: #637a7a; font-size: 9px; }
+.panel-head small { color: #637a7a; font: 10px "IBM Plex Mono", monospace; text-transform: uppercase; }
+.panel-head .caret { transition: transform .15s ease; color: #637a7a; font-size: 10px; }
 .panel-block.collapsed .panel-head { border-bottom-color: transparent; }
 .panel-block.collapsed .panel-body { display: none; }
 .panel-block.collapsed .caret { transform: rotate(-90deg); }
@@ -176,22 +176,22 @@ canvas { display: block; width: 100vw; height: 100vh; }
 .tree .planet > .node:hover { background: rgba(122, 236, 224, .06); }
 .tree .caret {
     width: 10px; color: #637a7a; transition: transform .15s;
-    display: inline-block; font-size: 9px;
+    display: inline-block; font-size: 10px;
 }
 .tree .planet.open > .node .caret { transform: rotate(90deg); }
 .tree .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: 0 0 6px rgba(255, 255, 255, .25); }
-.tree .pname { font: 500 11px "IBM Plex Mono", monospace; letter-spacing: .05em; }
-.tree .cnt { margin-left: auto; color: #637a7a; font: 9px "IBM Plex Mono", monospace; }
+.tree .pname { font: 500 12px "IBM Plex Mono", monospace; letter-spacing: .05em; }
+.tree .cnt { margin-left: auto; color: #637a7a; font: 10px "IBM Plex Mono", monospace; }
 .tree .loot { display: none; padding: 1px 0 6px 27px; }
 .tree .planet.open > .loot { display: block; }
 .tree .loot li {
     min-height: 26px; padding: 3px 8px; border-radius: 5px;
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     cursor: pointer;
-    color: #9fb3b3; font: 11px "IBM Plex Mono", monospace;
+    color: #9fb3b3; font: 12px "IBM Plex Mono", monospace;
 }
 .tree .loot li:hover { background: rgba(122, 236, 224, .06); }
-.tree .loot li i { font-style: normal; color: #637a7a; font-size: 9px; }
+.tree .loot li i { font-style: normal; color: #637a7a; font-size: 10px; }
 .tree .loot li::before { content: "☾"; color: #6e8b8b; margin-right: 2px; }
 
 /* малые тела: свой маркер, длинные имена режутся «…», тип — справа */
@@ -213,7 +213,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
     flex: 1; min-width: 0; height: 24px; padding: 0 8px;
     border: 1px solid rgba(120, 160, 170, .18); border-radius: 4px;
     background: rgba(9, 24, 25, .50); color: #dce8e8;
-    font: 10px "IBM Plex Mono", monospace; outline: none;
+    font: 11px "IBM Plex Mono", monospace; outline: none;
 }
 .tree .moon-filter::placeholder { color: #637a7a; }
 .tree .moon-filter:focus { border-color: rgba(122, 236, 224, .40); }
@@ -221,7 +221,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
     flex: none; height: 24px; padding: 0 8px;
     border: 1px solid rgba(150, 190, 255, .20); border-radius: 4px;
     background: rgba(122, 236, 224, .05); color: #bffcfc;
-    font: 500 8px "IBM Plex Mono", monospace; text-transform: uppercase;
+    font: 500 9px "IBM Plex Mono", monospace; text-transform: uppercase;
     letter-spacing: .08em; cursor: pointer; white-space: nowrap;
 }
 .tree .moon-more:hover { background: rgba(122, 236, 224, .12); }
@@ -232,7 +232,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
 }
 .tree .loot li.moon-empty {
     justify-content: center; cursor: default;
-    color: #637a7a; font: 9px "IBM Plex Mono", monospace;
+    color: #637a7a; font: 10px "IBM Plex Mono", monospace;
     text-transform: uppercase; letter-spacing: .10em;
 }
 .tree .loot li.moon-empty::before { content: none; }
@@ -249,16 +249,16 @@ canvas { display: block; width: 100vw; height: 100vh; }
 #objectInfo { padding: 12px 14px 14px; }
 .obj-empty {
     padding: 18px 12px; text-align: center;
-    color: #7d9a9a; font: 11px "IBM Plex Mono", monospace;
+    color: #7d9a9a; font: 12px "IBM Plex Mono", monospace;
     border: 1px dashed rgba(150, 190, 255, .16); border-radius: 8px;
     background: rgba(9, 24, 25, .30);
 }
 .obj-title { display: flex; align-items: center; gap: 9px; margin-bottom: 2px; }
 .obj-title .dot { width: 11px; height: 11px; border-radius: 50%; flex: none; box-shadow: 0 0 8px rgba(255, 255, 255, .3); }
-.obj-title strong { font: 600 13px "Manrope", sans-serif; letter-spacing: .02em; }
+.obj-title strong { font: 600 14px "Manrope", sans-serif; letter-spacing: .02em; }
 .obj-title.danger strong { color: #ff5f7a; }
 .obj-kind {
-    color: #9c7ee1; font: 500 8px "IBM Plex Mono", monospace;
+    color: #9c7ee1; font: 500 9px "IBM Plex Mono", monospace;
     letter-spacing: .19em; text-transform: uppercase;
     margin: 0 0 10px 20px;
 }
@@ -267,27 +267,27 @@ canvas { display: block; width: 100vw; height: 100vh; }
     display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
     min-height: 28px; padding: 3px 0;
     border-bottom: 1px solid rgba(120, 160, 170, .10);
-    font: 11px "IBM Plex Mono", monospace;
+    font: 12px "IBM Plex Mono", monospace;
 }
 .obj-row:last-child { border-bottom: 0; }
-.obj-row .k { color: #637a7a; font-size: 9px; text-transform: uppercase; letter-spacing: .12em; }
+.obj-row .k { color: #637a7a; font-size: 10px; text-transform: uppercase; letter-spacing: .12em; }
 .obj-row .v { color: #dce8e8; text-align: right; }
-.obj-row .v em { font-style: normal; color: #637a7a; font-size: 9px; margin-left: 4px; }
+.obj-row .v em { font-style: normal; color: #637a7a; font-size: 10px; margin-left: 4px; }
 
 /* ===== База: купленные корабли (формат списка «В продаже» из ангара) ======== */
 .obj-sub-title {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     margin: 14px 0 8px; padding-top: 10px;
     border-top: 1px solid rgba(150, 180, 255, .13);
-    color: #b89cff; font: 500 9px "IBM Plex Mono", monospace;
+    color: #b89cff; font: 500 10px "IBM Plex Mono", monospace;
     letter-spacing: .16em; text-transform: uppercase;
 }
-.obj-sub-title small { color: #637a7a; letter-spacing: .08em; font-size: 8.5px; }
+.obj-sub-title small { color: #637a7a; letter-spacing: .08em; font-size: 9.5px; }
 .obj-note {
     padding: 12px 10px; text-align: center; border-radius: 7px;
     border: 1px dashed rgba(150, 190, 255, .16);
     background: rgba(9, 24, 25, .30);
-    color: #7d9a9a; font: 10px "IBM Plex Mono", monospace;
+    color: #7d9a9a; font: 11px "IBM Plex Mono", monospace;
 }
 .ship-list { display: flex; flex-direction: column; }
 .ship-row {
@@ -301,11 +301,11 @@ canvas { display: block; width: 100vw; height: 100vh; }
     color: #7bdcca; border: 1px solid #274846; background: #0a191a;
 }
 .ship-copy, .ship-meta { display: flex; flex-direction: column; min-width: 0; }
-.ship-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 11px "Manrope", sans-serif; }
-.ship-copy span { margin-top: 3px; color: #5d7575; font: 9px "IBM Plex Mono", monospace; white-space: nowrap; }
+.ship-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px "Manrope", sans-serif; }
+.ship-copy span { margin-top: 3px; color: #5d7575; font: 10px "IBM Plex Mono", monospace; white-space: nowrap; }
 .ship-meta { align-items: end; text-align: right; }
-.ship-meta small { color: #a98be8; font: 8px "IBM Plex Mono", monospace; text-transform: uppercase; }
-.ship-meta b { margin-top: 5px; color: #d7e3e3; font: 600 10px "IBM Plex Mono", monospace; }
+.ship-meta small { color: #a98be8; font: 9px "IBM Plex Mono", monospace; text-transform: uppercase; }
+.ship-meta b { margin-top: 5px; color: #d7e3e3; font: 600 11px "IBM Plex Mono", monospace; }
 
 /* ===== Звёздные базы: список в карточке планеты/луны и кнопка создания ===== */
 .base-list { display: flex; flex-direction: column; }
@@ -324,9 +324,9 @@ canvas { display: block; width: 100vw; height: 100vh; }
 .base-row .b-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .base-row .b-name {
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 600 11px "Manrope", sans-serif; color: #dce8e8;
+    font: 600 12px "Manrope", sans-serif; color: #dce8e8;
 }
-.base-row small { margin-left: auto; color: #637a7a; font: 9px "IBM Plex Mono", monospace; white-space: nowrap; }
+.base-row small { margin-left: auto; color: #637a7a; font: 10px "IBM Plex Mono", monospace; white-space: nowrap; }
 .base-row.removing .b-name { color: #ff5f7a; }
 
 /* ===== Разбор базы: красная полоска прогресса под именем =====================
@@ -347,7 +347,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
     margin-top: 10px; width: 100%; padding: 9px 10px;
     border: 1px solid rgba(53, 232, 216, .35); border-radius: 6px;
     background: rgba(53, 232, 216, .07); color: #bffcfc;
-    font: 600 10px "Manrope", sans-serif; letter-spacing: .1em; text-transform: uppercase;
+    font: 600 11px "Manrope", sans-serif; letter-spacing: .1em; text-transform: uppercase;
     cursor: pointer; transition: background .12s ease, border-color .12s ease;
 }
 .base-create:not(:disabled):hover { background: rgba(53, 232, 216, .16); }
@@ -374,9 +374,9 @@ canvas { display: block; width: 100vw; height: 100vh; }
 .group-row .gname {
     flex: 1; min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 600 11px "Manrope", sans-serif; color: #dce8e8;
+    font: 600 12px "Manrope", sans-serif; color: #dce8e8;
 }
-.group-row small { margin-left: auto; color: #637a7a; font: 9px "IBM Plex Mono", monospace; white-space: nowrap; }
+.group-row small { margin-left: auto; color: #637a7a; font: 10px "IBM Plex Mono", monospace; white-space: nowrap; }
 
 /* ===== Диалог подтверждения: как .slot-modal/.slot-dialog в ангаре ========== */
 .dlg-overlay {
@@ -392,25 +392,25 @@ canvas { display: block; width: 100vw; height: 100vh; }
     box-shadow: 0 24px 60px rgba(2, 4, 12, .6);
 }
 .dlg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.dlg-head h3 { margin: 6px 0 0; font-size: 16px; font-weight: 500; color: #dce8e8; }
+.dlg-head h3 { margin: 6px 0 0; font-size: 17px; font-weight: 500; color: #dce8e8; }
 .dlg-eyebrow {
     color: #9c7ee1;
-    font: 500 9px "IBM Plex Mono", monospace; letter-spacing: .19em; text-transform: uppercase;
+    font: 500 10px "IBM Plex Mono", monospace; letter-spacing: .19em; text-transform: uppercase;
 }
 .dlg-close {
     width: 28px; height: 28px; flex: none;
     border: 1px solid rgba(150, 190, 255, .2); background: transparent;
-    color: #cdd9dc; font-size: 16px; line-height: 1; cursor: pointer;
+    color: #cdd9dc; font-size: 17px; line-height: 1; cursor: pointer;
 }
 .dlg-close:hover { border-color: rgba(143, 245, 227, .45); }
-.dlg-text { color: #8fa6a6; font-size: 11.5px; line-height: 1.55; }
+.dlg-text { color: #8fa6a6; font-size: 12.5px; line-height: 1.55; }
 .dlg-text b { color: #dce8e8; font-weight: 600; }
 .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .dlg-btn {
     padding: 9px 16px;
     border: 1px solid rgba(150, 190, 255, .25); background: rgba(122, 236, 224, .05);
     color: #bffcfc; cursor: pointer;
-    font: 500 9px "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: .12em;
+    font: 500 10px "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: .12em;
     transition: background .14s ease, border-color .14s ease;
 }
 .dlg-btn:hover { background: rgba(122, 236, 224, .12); border-color: rgba(143, 245, 227, .45); }
@@ -427,15 +427,15 @@ canvas { display: block; width: 100vw; height: 100vh; }
 }
 .sb-row:last-child { border-bottom: 0; }
 .sb-row:hover { background: rgba(122, 236, 224, .06); }
-.sb-row .sb-name { font: 600 11px "Manrope", sans-serif; color: #dce8e8; }
-.sb-row .sb-note { color: #637a7a; font: 9px "IBM Plex Mono", monospace; text-align: right; }
+.sb-row .sb-name { font: 600 12px "Manrope", sans-serif; color: #dce8e8; }
+.sb-row .sb-note { color: #637a7a; font: 10px "IBM Plex Mono", monospace; text-align: right; }
 .sb-row:hover .sb-name { color: #eafcfa; }
 .sb-row.met .sb-name { color: #ffd79a; }
 .sb-row.met .sb-note { color: #b9946a; }
 .sb-fact {
     margin-top: 9px; padding: 9px 2px 2px;
     border-top: 1px dashed rgba(150, 190, 255, .14);
-    color: #7d9a9a; font: 9px "IBM Plex Mono", monospace; line-height: 1.5;
+    color: #7d9a9a; font: 10px "IBM Plex Mono", monospace; line-height: 1.5;
 }
 /* метеоритные строки в карточках Марса и Луны — отдельный тип (акцент) */
 .obj-row.met .k { color: #b9946a; }
