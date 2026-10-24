@@ -19,7 +19,6 @@
   --accent-base: #35e8d8;
   --purple: #aa88f6;
   --purple-soft: #9c7ee1;
-  --purple-label: #b89cff;
   --danger: #ff5f7a;
   --danger-text: #ffb3c1;
   --warning: #ffd79a;
@@ -228,7 +227,15 @@ body {
   font: 500 8px var(--mono); letter-spacing: .12em; text-transform: uppercase;
   white-space: nowrap;
 }
-.station-status { color: var(--text-muted); font: 500 9px var(--mono); letter-spacing: .12em; gap: 9px; }
+.station-status {
+  color: var(--text-muted); font: 500 9px var(--mono); letter-spacing: .12em; gap: 9px;
+  min-width: 0; overflow: hidden; white-space: nowrap;
+}
+.station-status #noticeShop {
+  flex: 0 1 auto; min-width: 0; max-width: 46vw;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-soft);
+}
 .pulse { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px rgba(117, 223, 210, .7); }
 .divider { width: 1px; height: 12px; background: rgba(120, 160, 170, .25); margin: 0 5px; }
 .balance > span {
@@ -256,17 +263,9 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 20px 0 14px;
+  padding: 16px 0 14px;
 }
-.section-title { display: flex; align-items: end; justify-content: space-between; margin-bottom: 14px; flex: none; }
-.section-title-status { justify-content: flex-end; }
 .eyebrow { color: var(--purple-soft); font: 500 9px var(--mono); letter-spacing: .19em; text-transform: uppercase; }
-h1 { margin: 5px 0 0; font-size: clamp(20px, 1.7vw, 26px); font-weight: 500; letter-spacing: -.02em; }
-.terminal-status { flex: none; white-space: nowrap; color: var(--text-muted); font: 500 9px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
-.terminal-status > span:first-child {
-  display: inline-block; width: 5px; height: 5px; margin-right: 7px;
-  border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px rgba(117, 223, 210, .7);
-}
 
 /* ===== Стеклянная панель =================================================== */
 
@@ -306,35 +305,6 @@ h1 { margin: 5px 0 0; font-size: clamp(20px, 1.7vw, 26px); font-weight: 500; let
 }
 
 .panel-block { display: flex; flex-direction: column; min-height: 0; }
-.market-grid > .panel-block.collapsed { align-self: start; }
-.panel-block.collapsed .panel-body { display: none; }
-.panel-block.collapsed .panel-head { border-bottom-color: transparent; }
-.panel-block.collapsed .caret { transform: rotate(-90deg); }
-
-.panel-head {
-  flex: none;
-  height: 44px;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 14px;
-  cursor: pointer; user-select: none;
-  border-bottom: 1px solid rgba(150, 180, 255, .13);
-  background: linear-gradient(90deg, rgba(11, 28, 29, .30), rgba(28, 21, 47, .30));
-  transition: background .14s ease;
-}
-.panel-head:hover { background: linear-gradient(90deg, rgba(122, 236, 224, .06), rgba(170, 136, 246, .06)); }
-.panel-head div { display: flex; align-items: center; gap: 10px; }
-.panel-head div span {
-  color: var(--purple-label);
-  font: 500 9px var(--mono);
-  padding: 3px 5px;
-  border: 1px solid #574580;
-}
-.panel-head strong {
-  font-size: 11px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: .09em;
-}
-.panel-head small { margin-left: auto; margin-right: 12px; color: var(--text-muted); font: 9px var(--mono); text-transform: uppercase; }
-.panel-head .caret { color: var(--text-muted); font-size: 9px; transition: transform .15s ease; }
 
 .panel-body {
   flex: 1;
@@ -415,7 +385,7 @@ h1 { margin: 5px 0 0; font-size: clamp(20px, 1.7vw, 26px); font-weight: 500; let
 
 /* ===== Строки списков ====================================================== */
 
-.item-list { flex: 1; min-height: 0; padding: 6px; overflow-y: auto; }
+.item-list { flex: 1; min-height: 0; padding: 10px 6px 6px; overflow-y: auto; }
 .list-empty,
 .trade-empty {
   margin: 6px;
@@ -806,10 +776,7 @@ h1 { margin: 5px 0 0; font-size: clamp(20px, 1.7vw, 26px); font-weight: 500; let
   .map-link { width: 34px; height: 34px; padding: 0; margin-left: 2px; }
   .map-link-label { display: none; }
   .build-badge { display: none; }
-  .section-title-status { display: none; }
   .content { padding: 0 12px; }
-  .section-title { align-items: start; }
-  .terminal-status { display: none; }
   .category-tabs { flex-wrap: nowrap; overflow-x: auto; }
   .category-tabs .tab { flex: 0 0 auto; min-width: 92px; }
   .subcategory-tabs { flex-wrap: nowrap; overflow-x: auto; }
