@@ -295,15 +295,6 @@ body {
     transparent);
   pointer-events: none;
 }
-.glass::after {
-  content: "";
-  position: absolute; top: 6px; right: 6px; width: 13px; height: 13px;
-  border-top: 2px solid rgba(122, 236, 224, .75);
-  border-right: 2px solid rgba(122, 236, 224, .75);
-  filter: drop-shadow(0 0 4px rgba(87, 216, 195, .55));
-  pointer-events: none;
-}
-
 .panel-block { display: flex; flex-direction: column; min-height: 0; }
 
 .panel-body {
@@ -346,7 +337,6 @@ body {
 .tab.active:hover { background: rgba(122, 236, 224, .12); }
 .tab svg { flex: none; }
 
-.catalog-panel { flex: none; margin-bottom: 10px; }
 .catalog-body {
   flex: none;
   display: flex; flex-direction: column; gap: 6px;
@@ -371,15 +361,27 @@ body {
 
 /* ===== Сетка магазина ====================================================== */
 
+/* Каталог стоит над вторым и третьим столбцом; первый и четвёртый идут
+   во всю высоту — от верха каталога до низа сетки. */
 .market-grid {
   display: grid;
   grid-template-columns: 344px minmax(0, 1fr) minmax(0, 1fr) 338px;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: max-content minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   gap: 10px;
 }
 .market-grid.no-cargo { grid-template-columns: 344px minmax(0, 1fr) 338px; }
+.catalog-panel { grid-column: 2 / 4; grid-row: 1; }
+.ship-column { grid-column: 1; grid-row: 1 / 3; }
+.market-column { grid-column: 2; grid-row: 2; }
+.cargo-column { grid-column: 3; grid-row: 2; }
+.selection-column { grid-column: 4; grid-row: 1 / 3; }
+
+.market-grid.no-cargo .catalog-panel { grid-column: 2 / 3; }
+.market-grid.no-cargo .market-column { grid-column: 2; }
+.market-grid.no-cargo .selection-column { grid-column: 3; }
+
 .inventory-panel { min-height: 0; }
 .shop-panel { min-height: 0; }
 
@@ -757,7 +759,15 @@ body {
 
 @media (max-width: 1000px) {
   .market-grid,
-  .market-grid.no-cargo { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; }
+  .market-grid.no-cargo {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: max-content;
+    grid-auto-rows: minmax(0, 1fr);
+  }
+  .market-grid > .panel-block,
+  .market-grid.no-cargo > .panel-block { grid-column: auto; grid-row: auto; }
+  .market-grid .catalog-panel,
+  .market-grid.no-cargo .catalog-panel { grid-column: 1 / -1; grid-row: 1; }
   .item-row { grid-template-columns: 32px minmax(0, 1fr); }
   .item-meta { display: none; }
   .ship-list { gap: 8px; }
@@ -782,6 +792,10 @@ body {
   .subcategory-tabs { flex-wrap: nowrap; overflow-x: auto; }
   .subcategory-bar { align-items: flex-start; flex-direction: column; gap: 6px; }
   .market-grid,
-  .market-grid.no-cargo { grid-template-columns: 1fr; grid-template-rows: none; }
+  .market-grid.no-cargo {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+  }
   .dock-panel { margin-bottom: 12px; }
 }
