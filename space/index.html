@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Solar System - Realistic</title>
-    <link rel="stylesheet" href="css/style.css?v=20261047">
+    <link rel="stylesheet" href="css/style.css?v=20261048">
 </head>
 <body>
 <div id="ui" class="glass">
@@ -34,10 +34,18 @@
     <span class="scale-label">—</span>
 </div>
 
-<div id="controls">
-    <button class="btn" id="slowBtn">Медленнее</button>
-    <button class="btn active" id="normalBtn">Нормально</button>
-    <button class="btn" id="fastBtn">Быстрее</button>
+<!-- Скорость времени: та же стеклянная панель, что у блоков правой колонки. -->
+<div class="panel-block glass" id="controls">
+    <div class="panel-head" title="Свернуть / развернуть">
+        <div><span>04</span><strong>Скорость</strong></div>
+        <small>TIME</small>
+        <span class="caret">▼</span>
+    </div>
+    <div class="panel-body">
+        <button class="btn" id="slowBtn">Медленнее</button>
+        <button class="btn active" id="normalBtn">Нормально</button>
+        <button class="btn" id="fastBtn">Быстрее</button>
+    </div>
 </div>
 
 <div id="sidePanel">
@@ -93,6 +101,6 @@ window.addEventListener('unhandledrejection', e => window.__bootErrs.push('promi
 <script src="../data/store.js?v=20261070"></script>
 <script src="../data/icons.js?v=20261017"></script>
 <!-- app.js = сборка js/*.js (py build.py), без модулей — чтобы страница открывалась напрямую с file:// -->
-<script src="app.js?v=20261047"></script>
+<script src="app.js?v=20261048"></script>
 </body>
 </html>

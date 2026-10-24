@@ -56,31 +56,31 @@ canvas { display: block; width: 100vw; height: 100vh; }
 #ui b { color: #dce8e8; font-weight: 600; letter-spacing: .06em; }
 #ui .hud-title { color: #9c7ee1; margin-bottom: 2px; }
 
-/* ===== Кнопки скорости времени (сегменты как .category-tabs) ================ */
+/* ===== Скорость времени: стеклянный блок как «01 Солнечная система» =========
+   Панель остаётся снизу по центру, ширина — как у блоков правой колонки.
+   Кнопки повторяют .moon-more: активная 1:1, неактивные приглушены. */
 #controls {
     position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-    display: flex; z-index: 10;
-    border: 1px solid rgba(150, 190, 255, .16);
-    background: rgba(9, 24, 25, .42);
-    -webkit-backdrop-filter: blur(14px) saturate(1.5);
-    backdrop-filter: blur(14px) saturate(1.5);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
+    z-index: 10; width: 288px;
 }
+#controls .panel-body { display: flex; gap: 6px; padding: 8px; }
+/* id-селектор выше сильнее общего .panel-block.collapsed — гасим тело явно */
+#controls.collapsed .panel-body { display: none; }
 #controls .btn {
-    height: 38px; min-width: 104px; padding: 0 20px;
+    flex: 1 1 0; min-width: 0; height: 24px; padding: 0 8px;
     display: flex; align-items: center; justify-content: center;
-    color: #637d7d; border: 0; border-right: 1px solid rgba(120, 160, 170, .12);
-    background: transparent; cursor: pointer;
-    font: 500 9px "IBM Plex Mono", monospace;
-    text-transform: uppercase; letter-spacing: .09em;
-    transition: color .14s ease, background .14s ease;
+    border: 1px solid rgba(120, 160, 170, .18); border-radius: 4px;
+    background: transparent; color: #637a7a; cursor: pointer;
+    font: 500 8px "IBM Plex Mono", monospace;
+    text-transform: uppercase; letter-spacing: .08em; white-space: nowrap;
+    transition: color .14s ease, background .14s ease, border-color .14s ease;
 }
-#controls .btn:last-child { border-right: 0; }
 #controls .btn:hover { color: #9fb3b3; background: rgba(122, 236, 224, .06); }
 #controls .btn.active {
-    color: #100b1b; background: linear-gradient(100deg, #75dfd2, #aa88f6);
-    box-shadow: 0 0 18px rgba(169, 133, 245, .45);
+    color: #bffcfc; background: rgba(122, 236, 224, .05);
+    border-color: rgba(150, 190, 255, .20);
 }
+#controls .btn.active:hover { background: rgba(122, 236, 224, .12); }
 
 /* ===== Пресеты камеры: колонка под HUD, те же сегменты, что у скорости ====== */
 #presets {

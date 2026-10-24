@@ -446,8 +446,9 @@ export function buildSidePanel() {
         });
     });
 
-    // Шапки блоков сворачивают своё тело: отдельные кнопки «скрыть/показать» не нужны.
-    document.querySelectorAll('#sidePanel .panel-head').forEach(head => {
+    // Шапки блоков (правая колонка и нижняя панель скорости) сворачивают
+    // своё тело: отдельные кнопки «скрыть/показать» не нужны.
+    document.querySelectorAll('.panel-head').forEach(head => {
         head.addEventListener('click', () => head.parentElement.classList.toggle('collapsed'));
     });
 
