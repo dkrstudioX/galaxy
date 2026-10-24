@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HELIOS // 7 — орбитальная база</title>
-<link rel="stylesheet" href="hangar.css?v=20261081">
+<link rel="stylesheet" href="hangar.css?v=20261083">
 </head>
 <body>
 <main class="app-shell">
@@ -66,30 +66,30 @@
 
   <div class="content">
     <section class="shop-view" id="view-shop">
-      <div class="panel-block glass catalog-panel">
-        <div class="panel-body catalog-body">
-          <div class="tabs category-tabs" id="categoryTabs"></div>
-          <div class="subcategory-bar" id="subcategoryBar">
-            <span class="subcategory-title" id="subcategoryTitle" hidden>Подкатегории</span>
-            <div class="tabs subcategory-tabs" id="subcategoryTabs" hidden></div>
+      <div class="market-grid" id="marketGrid">
+        <div class="panel-block glass catalog-panel">
+          <div class="panel-body catalog-body">
+            <div class="tabs category-tabs" id="categoryTabs"></div>
+            <div class="subcategory-bar" id="subcategoryBar">
+              <span class="subcategory-title" id="subcategoryTitle" hidden>Подкатегории</span>
+              <div class="tabs subcategory-tabs" id="subcategoryTabs" hidden></div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="market-grid" id="marketGrid">
-        <div class="inventory-panel panel-block glass" id="shipPanel">
+        <div class="inventory-panel panel-block glass ship-column" id="shipPanel">
           <div class="ship-panel-body panel-body" id="shipInfo"></div>
         </div>
 
-        <div class="inventory-panel panel-block glass">
+        <div class="inventory-panel panel-block glass market-column" id="shopPanel">
           <div class="item-list panel-body" id="shopList"></div>
         </div>
 
-        <div class="inventory-panel panel-block glass" id="cargoPanel">
+        <div class="inventory-panel panel-block glass cargo-column" id="cargoPanel">
           <div class="item-list panel-body" id="cargoList"></div>
         </div>
 
-        <div class="inventory-panel shop-panel panel-block glass">
+        <div class="inventory-panel shop-panel panel-block glass selection-column">
           <div class="ship-panel-body shop-panel-body panel-body" id="shopConsole"></div>
         </div>
       </div>
@@ -104,6 +104,6 @@
 <div class="slot-modal" id="slotModal" hidden></div>
 <script src="../data/store.js?v=20261073"></script>
 <script src="../data/icons.js?v=20261017"></script>
-<script src="hangar.js?v=20261081"></script>
+<script src="hangar.js?v=20261083"></script>
 </body>
 </html>
