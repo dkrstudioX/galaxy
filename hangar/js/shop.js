@@ -25,8 +25,8 @@ function shopItemRowHTML(item, selected) {
 
 function categoryTabsHTML() {
   return categories.map(function (c) {
-    return '<button class="' + (state.category === c.id ? 'active' : '') + '" data-action="category" data-cat="' + c.id + '">' +
-      iconMarkup(c.icon, 17) + c.label + '</button>';
+    return '<button class="tab' + (state.category === c.id ? ' active' : '') + '" data-action="category" data-cat="' + c.id + '">' +
+      iconMarkup(c.icon, 13) + c.label + '</button>';
   }).join('');
 }
 
@@ -46,7 +46,7 @@ function renderSubcategories() {
   title.hidden = false;
   tabs.hidden = false;
   tabs.innerHTML = list.map(function (s) {
-    return '<button class="sub-chip' + (state.subcategory === s.id ? ' active' : '') + '" data-action="subcategory" data-sub="' + s.id + '">' +
+    return '<button class="tab sub-chip' + (state.subcategory === s.id ? ' active' : '') + '" data-action="subcategory" data-sub="' + s.id + '">' +
       iconMarkup(s.icon, 13) + s.label + '<span class="sub-count">' + s.count + '</span></button>';
   }).join('');
 }

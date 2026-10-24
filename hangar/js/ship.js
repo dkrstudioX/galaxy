@@ -189,7 +189,7 @@ export function shipPanelHTML() {
   var mass = Store.shipMass(rec);
   return '<span class="ship-sub">' + (cat ? Store.categoryPath(cat.id) : '') + '</span>' +
     '<strong class="ship-title">' + ship.name + '</strong>' +
-    '<span class="ship-sub">' + sub.join(' · ') + '</span>' +
+    '<span class="ship-sub ship-meta-line">' + sub.join(' · ') + '</span>' +
     '<div class="ship-rows">' + rows +
     '<div class="ship-row"><span>Масса</span><b>' + fmt(Math.round(mass)) + ' кг</b></div>' +
     '</div>' +
